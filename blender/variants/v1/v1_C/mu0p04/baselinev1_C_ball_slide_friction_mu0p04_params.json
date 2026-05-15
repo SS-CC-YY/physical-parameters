@@ -1,0 +1,71 @@
+{
+  "experiment_id": "v1_C",
+  "level": "L1",
+  "fps": 24,
+  "frame_end": 192,
+  "variant": {
+    "variant_id": "mu0p04",
+    "overrides": {
+      "mu_hidden": 0.04
+    }
+  },
+  "hidden_params": {
+    "mu_hidden": 0.04
+  },
+  "known_params": {
+    "g_known": 9.81
+  },
+  "all_physics": {
+    "x0": -5.8,
+    "y": 0.0,
+    "z0": 0.44,
+    "radius": 0.24,
+    "v0": 4.2,
+    "g_known": 9.81,
+    "mu_hidden": 0.04
+  },
+  "cameras": [
+    {
+      "name": "CAM_Main",
+      "location": [
+        3.79999995,
+        -15.0,
+        3.20000005
+      ],
+      "rotation_euler": [
+        1.41243565,
+        1e-08,
+        0.3805064
+      ],
+      "lens": 32.0
+    },
+    {
+      "name": "CAM_Side",
+      "location": [
+        0.0,
+        -16.0,
+        3.0
+      ],
+      "rotation_euler": [
+        1.46607661,
+        0.0,
+        0.0
+      ],
+      "lens": 38.0
+    },
+    {
+      "name": "CAM_Top",
+      "location": [
+        -6.0,
+        -13.5,
+        4.80000019
+      ],
+      "rotation_euler": [
+        1.33817136,
+        -2e-08,
+        -0.41822433
+      ],
+      "lens": 48.0
+    }
+  ]
+}

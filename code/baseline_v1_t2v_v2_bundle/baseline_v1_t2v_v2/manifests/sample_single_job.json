@@ -1,0 +1,28 @@
+{
+  "id": "freefall_g9p8_h5_v0_0__structured_raw__wan2.2_ti2v_5b__s42",
+  "base_id": "freefall_g9p8_h5_v0_0",
+  "task": "free_fall",
+  "parameters": {
+    "g": 9.8,
+    "h0": 5.0,
+    "v0": 0.0,
+    "color": "bright red",
+    "object_name": "sphere"
+  },
+  "model": "wan2.2_ti2v_5b",
+  "model_id": "Wan-AI/Wan2.2-TI2V-5B-Diffusers",
+  "prompt_style": "structured_raw",
+  "prompt": "Subject: one single bright red sphere. Scene: clean indoor laboratory, plain background, empty scene. Camera: static side view, fixed tripod, medium-wide shot, full trajectory stays in frame. Motion: The object starts at a visible height of 5 meters with initial vertical velocity 0 m/s and then falls vertically downward under constant gravity 9.8 m/s^2 in vacuum. Physics: Single-object ideal free fall under constant downward gravity. Constraints: No air resistance, no bounce, no rotation, no collision, no extra objects. No people, no hands, no text, no subtitles.",
+  "negative_prompt": "cartoon, animation, illustration, painting, CGI, stylized motion, surreal motion, camera shake, camera pan, camera zoom, camera roll, moving camera, handheld, slow motion, time-lapse, motion blur, extra objects, multiple objects, occlusion, partial visibility, cropped object, deformed object, flicker, frame inconsistency, background clutter, text overlay, subtitles",
+  "width": 1280,
+  "height": 704,
+  "num_frames": 121,
+  "fps": 24,
+  "num_inference_steps": 50,
+  "guidance_scale": 5.0,
+  "guidance_scale_2": 5.0,
+  "seed": 42,
+  "output_subdir": "free_fall",
+  "metadata": {},
+  "init_image": "assets/freefall_anchor.png"
+}

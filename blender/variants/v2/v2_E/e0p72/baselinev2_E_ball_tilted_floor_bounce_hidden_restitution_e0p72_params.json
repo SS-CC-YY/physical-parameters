@@ -1,0 +1,77 @@
+{
+  "experiment_id": "v2_E",
+  "level": "L2",
+  "fps": 24,
+  "frame_end": 240,
+  "variant": {
+    "variant_id": "e0p72",
+    "overrides": {
+      "e_hidden": 0.72
+    }
+  },
+  "hidden_params": {
+    "e_hidden": 0.72
+  },
+  "known_params": {
+    "g_known": 9.81,
+    "floor_angle_deg": 4.0,
+    "tangent_retention_known": 0.68
+  },
+  "all_physics": {
+    "anchor_x": -5.6,
+    "anchor_y": 0.0,
+    "anchor_z": 1.12,
+    "floor_angle_deg": 4.0,
+    "floor_length": 18.0,
+    "radius": 0.24,
+    "x0": -3.2,
+    "z0": 4.4,
+    "g_known": 9.81,
+    "tangent_retention_known": 0.68,
+    "e_hidden": 0.72
+  },
+  "cameras": [
+    {
+      "name": "CAM_Main",
+      "location": [
+        6.5999999,
+        -17.79999924,
+        4.19999981
+      ],
+      "rotation_euler": [
+        1.42251778,
+        0.0,
+        0.25815314
+      ],
+      "lens": 32.0
+    },
+    {
+      "name": "CAM_Side",
+      "location": [
+        1.89999998,
+        -17.0,
+        2.70000005
+      ],
+      "rotation_euler": [
+        1.46607661,
+        0.0,
+        0.0
+      ],
+      "lens": 34.0
+    },
+    {
+      "name": "CAM_Top",
+      "location": [
+        -6.5,
+        -14.5,
+        5.0
+      ],
+      "rotation_euler": [
+        1.34202564,
+        -1e-08,
+        -0.42141926
+      ],
+      "lens": 48.0
+    }
+  ]
+}

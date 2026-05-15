@@ -1,0 +1,32 @@
+[
+  {
+    "id": "freefall_g9p8_h5_v0_0",
+    "task": "free_fall",
+    "parameters": {
+      "g": 9.8,
+      "h0": 5.0,
+      "v0": 0.0,
+      "color": "bright red",
+      "object_name": "sphere"
+    },
+    "models": ["wan2.2_ti2v_5b", "wan2.1_t2v_1.3b"],
+    "prompt_styles": ["short_raw", "structured_raw", "structured_detailed"],
+    "init_image": "assets/freefall_anchor.png"
+  },
+  {
+    "id": "projectile_g9p8_x0_0_y0_1p5_v0_4_theta_35",
+    "task": "projectile",
+    "parameters": {
+      "g": 9.8,
+      "x0": 0.0,
+      "y0": 1.5,
+      "v0": 4.0,
+      "theta_deg": 35.0,
+      "color": "bright blue",
+      "object_name": "sphere"
+    },
+    "models": ["wan2.2_ti2v_5b"],
+    "prompt_styles": ["structured_raw", "structured_detailed"],
+    "init_image": "assets/projectile_anchor.png"
+  }
+]

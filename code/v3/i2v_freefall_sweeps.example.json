@@ -1,0 +1,27 @@
+{
+  "id": "i2v_freefall_anchor01",
+  "init_image": "/mnt/data/i2v_v1_freefall.png",
+  "base_parameters": {
+    "g": 9.8,
+    "h0": 5.0,
+    "v0": 0.0,
+    "color": "bright red",
+    "object_name": "matte ball"
+  },
+  "sweeps": {
+    "g": [
+      4.9,
+      7.35,
+      9.8,
+      12.25,
+      14.7
+    ],
+    "v0": [
+      -2.0,
+      -1.0,
+      0.0,
+      1.0,
+      2.0
+    ]
+  }
+}

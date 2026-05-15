@@ -1,0 +1,94 @@
+[
+  {
+    "id": "freefall_g9p8_h5_v0_0",
+    "task": "free_fall",
+    "parameters": {
+      "g": 9.8,
+      "h0": 5.0,
+      "v0": 0.0,
+      "color": "bright red",
+      "object_name": "matte ball"
+    },
+    "models": ["wan2.2_ti2v_5b"]
+  },
+  {
+    "id": "projectile_horizontal_g9p8_y2_vx4",
+    "task": "projectile",
+    "parameters": {
+      "g": 9.8,
+      "x0": 0.0,
+      "y0": 2.0,
+      "v0x": 4.0,
+      "v0y": 0.0,
+      "color": "bright blue",
+      "object_name": "matte ball"
+    },
+    "models": ["wan2.2_ti2v_5b"]
+  },
+  {
+    "id": "projectile_oblique_g9p8_y1p5_v6_theta45",
+    "task": "projectile",
+    "parameters": {
+      "g": 9.8,
+      "x0": 0.0,
+      "y0": 1.5,
+      "v0": 6.0,
+      "theta_deg": 45.0,
+      "color": "bright blue",
+      "object_name": "matte ball"
+    },
+    "models": ["wan2.2_ti2v_5b"]
+  },
+  {
+    "id": "spring_k20_m1_A0p4_phi0",
+    "task": "spring",
+    "parameters": {
+      "k": 20.0,
+      "m": 1.0,
+      "A": 0.4,
+      "phi": 0.0,
+      "duration_s": 5.0,
+      "color": "bright yellow",
+      "object_name": "rectangular block"
+    },
+    "models": ["wan2.2_ti2v_5b"]
+  },
+  {
+    "id": "pendulum_L1_theta10_g9p8",
+    "task": "pendulum",
+    "parameters": {
+      "L": 1.0,
+      "theta_max_deg": 10.0,
+      "phi": 0.0,
+      "g": 9.8,
+      "duration_s": 6.0,
+      "color": "bright green",
+      "object_name": "pendulum bob"
+    },
+    "models": ["wan2.2_ti2v_5b"]
+  },
+  {
+    "id": "rotation_uniform_theta0_0_omega120",
+    "task": "rotation",
+    "parameters": {
+      "theta0_deg": 0.0,
+      "omega0_deg_s": 120.0,
+      "alpha_deg_s2": 0.0,
+      "color": "white",
+      "object_name": "flat circular disk"
+    },
+    "models": ["wan2.2_ti2v_5b"]
+  },
+  {
+    "id": "rotation_accel_theta0_0_omega60_alpha40",
+    "task": "rotation",
+    "parameters": {
+      "theta0_deg": 0.0,
+      "omega0_deg_s": 60.0,
+      "alpha_deg_s2": 40.0,
+      "color": "white",
+      "object_name": "flat circular disk"
+    },
+    "models": ["wan2.2_ti2v_5b"]
+  }
+]

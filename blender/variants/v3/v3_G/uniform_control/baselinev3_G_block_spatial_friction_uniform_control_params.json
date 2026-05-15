@@ -1,0 +1,76 @@
+{
+  "experiment_id": "v3_G",
+  "level": "L3",
+  "fps": 24,
+  "frame_end": 240,
+  "variant": {
+    "variant_id": "uniform_control",
+    "overrides": {
+      "mu_1_hidden": 0.16,
+      "mu_2_hidden": 0.16
+    }
+  },
+  "hidden_params": {
+    "mu_1_hidden": 0.16,
+    "mu_2_hidden": 0.16
+  },
+  "known_params": {
+    "v0_known": 4.6,
+    "g_known": 9.81
+  },
+  "all_physics": {
+    "x_start": -6.6,
+    "y": 0.0,
+    "z_center": 0.25,
+    "half_x": 0.36,
+    "v0_known": 4.6,
+    "g_known": 9.81,
+    "mu_1_hidden": 0.16,
+    "mu_2_hidden": 0.16,
+    "x_boundary": -0.2
+  },
+  "cameras": [
+    {
+      "name": "CAM_Main",
+      "location": [
+        3.79999995,
+        -16.5,
+        3.4000001
+      ],
+      "rotation_euler": [
+        1.41049445,
+        2e-08,
+        0.35943466
+      ],
+      "lens": 34.0
+    },
+    {
+      "name": "CAM_Side",
+      "location": [
+        0.0,
+        -17.20000076,
+        2.9000001
+      ],
+      "rotation_euler": [
+        1.46607661,
+        0.0,
+        0.0
+      ],
+      "lens": 38.0
+    },
+    {
+      "name": "CAM_Top",
+      "location": [
+        -6.5,
+        -14.5,
+        5.0
+      ],
+      "rotation_euler": [
+        1.34202564,
+        -1e-08,
+        -0.42141926
+      ],
+      "lens": 48.0
+    }
+  ]
+}

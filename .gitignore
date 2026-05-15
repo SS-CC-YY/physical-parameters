@@ -1,0 +1,24 @@
+# Local research materials and office docs
+/*.pdf
+/*.docx
+/*.pptx
+
+# Local scratch outputs
+/annotated*.mp4
+/log.txt
+/开源场景/
+
+# Large third-party scene assets kept locally
+/blender/scenario/
+/blender/.claude/
+
+# Local logs
+/blender/*.log
+/blender/*.err.log
+
+# Blender backup files
+*.blend[0-9]*
+
+# Python cache
+__pycache__/
+*.pyc
