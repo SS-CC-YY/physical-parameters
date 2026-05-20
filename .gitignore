@@ -6,6 +6,7 @@
 # Local scratch outputs
 /annotated*.mp4
 /log.txt
+/outputs/
 /开源场景/
 
 # Large third-party scene assets kept locally
