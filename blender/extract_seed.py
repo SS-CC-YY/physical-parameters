@@ -77,8 +77,11 @@ def iter_rendered_videos(render_root, versions, exps, variants, cameras):
                     camera = camera_dir.name
                     if cameras and camera not in cameras:
                         continue
-                    for mp4 in sorted(camera_dir.glob("*.mp4")):
-                        yield mp4, version, exp_id, variant_id, camera
+                    mp4_files = sorted(camera_dir.glob("*.mp4"))
+                    if not mp4_files:
+                        continue
+                    mp4 = max(mp4_files, key=lambda p: (p.stat().st_mtime, p.name))
+                    yield mp4, version, exp_id, variant_id, camera
 
 
 def extract_video_seed(src_mp4, dst_mp4, n_frames, force):
