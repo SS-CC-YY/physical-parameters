@@ -10,5 +10,6 @@ numpy
 opencv-python
 matplotlib
 
-# Wan2.2 I2V support may require the latest diffusers source build.
-git+https://github.com/huggingface/diffusers
+# Wan2.2 I2V Diffusers model card recommends an up-to-date PyPI build.
+# Avoid git+https here because some servers have unstable GitHub TLS access.
+diffusers>=0.36.0
