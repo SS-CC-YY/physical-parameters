@@ -25,7 +25,15 @@ git lfs pull
 pip install -r code/phase1_wan22_i2v_baseline/requirements.txt
 ```
 
-如果服务器环境没有合适的 PyTorch，请先按 CUDA 版本安装 PyTorch。Wan2.2 官方 Diffusers 示例使用 `WanImageToVideoPipeline`，并提示该模型可能需要安装 diffusers 源码版。
+`requirements.txt` 只包含 benchmark 评估脚本需要的最小依赖。Wan2.2 官方推理依赖在 `../Wan2.2/requirements.txt` 里单独安装。
+
+如果你使用 Diffusers 格式权重，才需要安装：
+
+```bash
+pip install -r code/phase1_wan22_i2v_baseline/requirements_diffusers.txt
+```
+
+不要在官方 ModelScope 权重路线里安装 `requirements_diffusers.txt`，否则 pip 可能会因为 `accelerate -> torch` 自动下载大量 `nvidia-*` CUDA wheels。
 
 ## 1. Build Manifest
 
@@ -66,6 +74,8 @@ git clone --depth 1 https://github.com/Wan-Video/Wan2.2.git
 cd Wan2.2
 pip install -r requirements.txt
 ```
+
+如果这里也开始安装大量 CUDA 包，说明当前环境没有合适的 PyTorch，pip 正在补装 torch。建议先中断，按本机 CUDA/驱动版本单独安装或复用已有 PyTorch，再重新安装 Wan2.2 其他依赖。
 
 如果服务器连 GitHub 不稳定，先试：
 

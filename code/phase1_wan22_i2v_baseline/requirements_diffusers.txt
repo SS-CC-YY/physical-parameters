@@ -1,0 +1,16 @@
+# Dependencies for the Hugging Face Diffusers checkpoint path only.
+# Install a CUDA-matched PyTorch build separately if the server environment
+# does not already provide one.
+accelerate
+transformers
+safetensors
+imageio
+imageio-ffmpeg
+pillow
+numpy
+opencv-python
+matplotlib
+
+# Wan2.2 I2V Diffusers model card recommends an up-to-date PyPI build.
+# Avoid git+https here because some servers have unstable GitHub TLS access.
+diffusers>=0.36.0
