@@ -8,6 +8,7 @@
 
 - `build_manifest.py`：从 `blender/seeds` 生成阶段一 manifest。
 - `run_wan22_i2v.py`：调用本地 Wan2.2 I2V A14B Diffusers 模型生成视频。
+- `run_wan22_official_i2v.py`：调用 Wan2.2 官方 `generate.py`，适配 ModelScope/Hugging Face 官方原始权重目录 `Wan2.2-I2V-A14B`。
 - `evaluate_freefall.py`：颜色分割跟踪球心，拟合二次轨迹，输出 `g_hat_D_per_s2`。
 - `requirements.txt`：服务器环境依赖。
 
@@ -41,13 +42,92 @@ python code/phase1_wan22_i2v_baseline/build_manifest.py \
 
 ## 2. Generate Videos On GPU 7
 
+先确认你下载的是哪种模型目录：
+
+- ModelScope 官方原始权重：通常目录名是 `Wan2.2-I2V-A14B`，使用 `run_wan22_official_i2v.py`。
+- Hugging Face Diffusers 权重：通常目录名是 `Wan2.2-I2V-A14B-Diffusers`，使用 `run_wan22_i2v.py`。
+
+如果你是从 ModelScope 下载的 `Wan2.2-I2V-A14B`，使用下面的官方权重流程。
+
+### Option A: ModelScope / official checkpoint
+
 假设你的模型在 repo 同级目录：
+
+```text
+~/data/heyuanyu/yefei/chenyu/data/models/Wan2.2-I2V-A14B
+```
+
+你还需要 Wan2.2 官方代码仓库，它提供 `generate.py`：
+
+```bash
+cd ~/data/heyuanyu/yefei/chenyu/data
+
+git clone --depth 1 https://github.com/Wan-Video/Wan2.2.git
+cd Wan2.2
+pip install -r requirements.txt
+```
+
+如果服务器连 GitHub 不稳定，先试：
+
+```bash
+git config --global http.version HTTP/1.1
+git clone --depth 1 https://github.com/Wan-Video/Wan2.2.git
+```
+
+然后回到本 benchmark repo：
+
+```bash
+cd ~/data/heyuanyu/yefei/chenyu/data/physical-parameters
+```
+
+先跑 1 个 smoke test：
+
+```bash
+python code/phase1_wan22_i2v_baseline/run_wan22_official_i2v.py \
+  --manifest code/phase1_wan22_i2v_baseline/manifests/v1a_cam_side_explicit_g.jsonl \
+  --wan-repo ../Wan2.2 \
+  --ckpt-dir ../models/Wan2.2-I2V-A14B \
+  --outdir outputs/phase1_wan22_i2v_v1a_official_smoke \
+  --gpu-id 7 \
+  --size '832*480' \
+  --max-jobs 1
+```
+
+确认能生成后跑完整 4 个任务：
+
+```bash
+python code/phase1_wan22_i2v_baseline/run_wan22_official_i2v.py \
+  --manifest code/phase1_wan22_i2v_baseline/manifests/v1a_cam_side_explicit_g.jsonl \
+  --wan-repo ../Wan2.2 \
+  --ckpt-dir ../models/Wan2.2-I2V-A14B \
+  --outdir outputs/phase1_wan22_i2v_v1a_official \
+  --gpu-id 7 \
+  --size '832*480'
+```
+
+默认参数会传给官方脚本：
+
+```text
+--task i2v-A14B
+--offload_model True
+--convert_model_dtype
+--frame_num 81
+--size 832*480
+```
+
+如果 GPU 7 是 80GB 以上显存，可以尝试 720P：
+
+```bash
+--size '1280*720' --no-offload-model
+```
+
+### Option B: Diffusers checkpoint
+
+如果你的模型目录是 Diffusers 格式：
 
 ```text
 ~/data/heyuanyu/yefei/chenyu/data/models/Wan2.2-I2V-A14B-Diffusers
 ```
-
-注意：这套脚本针对 Hugging Face Diffusers 格式的 `Wan-AI/Wan2.2-I2V-A14B-Diffusers`。如果你下载的是官方原始权重目录 `Wan2.2-I2V-A14B`，需要先改用 Diffusers 版本，或者走 Wan2.2 官方 repo 的 `generate.py`。
 
 执行：
 
@@ -55,7 +135,7 @@ python code/phase1_wan22_i2v_baseline/build_manifest.py \
 python code/phase1_wan22_i2v_baseline/run_wan22_i2v.py \
   --manifest code/phase1_wan22_i2v_baseline/manifests/v1a_cam_side_explicit_g.jsonl \
   --model-path ../models/Wan2.2-I2V-A14B-Diffusers \
-  --outdir outputs/phase1_wan22_i2v_v1a \
+  --outdir outputs/phase1_wan22_i2v_v1a_diffusers \
   --gpu-id 7 \
   --force-local-only \
   --cpu-offload \
@@ -65,9 +145,9 @@ python code/phase1_wan22_i2v_baseline/run_wan22_i2v.py \
 输出位置：
 
 ```text
-outputs/phase1_wan22_i2v_v1a/videos/*.mp4
-outputs/phase1_wan22_i2v_v1a/metadata/*.json
-outputs/phase1_wan22_i2v_v1a/generation_log.jsonl
+outputs/phase1_wan22_i2v_v1a_diffusers/videos/*.mp4
+outputs/phase1_wan22_i2v_v1a_diffusers/metadata/*.json
+outputs/phase1_wan22_i2v_v1a_diffusers/generation_log.jsonl
 ```
 
 如果显存足够，可以去掉 `--cpu-offload`。如果想先只跑一个视频：
@@ -86,11 +166,22 @@ python code/phase1_wan22_i2v_baseline/run_wan22_i2v.py \
 
 ## 3. Evaluate Generated Videos
 
+ModelScope / official checkpoint 输出：
+
 ```bash
 python code/phase1_wan22_i2v_baseline/evaluate_freefall.py \
   --manifest code/phase1_wan22_i2v_baseline/manifests/v1a_cam_side_explicit_g.jsonl \
-  --generated-root outputs/phase1_wan22_i2v_v1a \
-  --eval-outdir outputs/phase1_wan22_i2v_v1a_eval
+  --generated-root outputs/phase1_wan22_i2v_v1a_official \
+  --eval-outdir outputs/phase1_wan22_i2v_v1a_official_eval
+```
+
+Diffusers checkpoint 输出：
+
+```bash
+python code/phase1_wan22_i2v_baseline/evaluate_freefall.py \
+  --manifest code/phase1_wan22_i2v_baseline/manifests/v1a_cam_side_explicit_g.jsonl \
+  --generated-root outputs/phase1_wan22_i2v_v1a_diffusers \
+  --eval-outdir outputs/phase1_wan22_i2v_v1a_diffusers_eval
 ```
 
 主要输出：
@@ -113,8 +204,8 @@ outputs/phase1_wan22_i2v_v1a_eval/per_video/<job_id>/tracked_overlay.mp4
 
 - `g_hat_D_per_s2` 是球直径单位下的加速度 proxy，不是严格米制重力值。阶段一先看相关性和可跟踪性。
 - 如果视频生成正常但 tracker 失败，先打开 `tracked_overlay.mp4` 看颜色分割是否跟住球；可以调 `--color red_orange`、`--min-area`。
-- 如果生成视频太慢，可以临时降低 `--num-frames` 或 `--num-inference-steps`。正式记录实验时要把参数写进 metadata。
-- 如果模型路径不是 `../models/Wan2.2-I2V-A14B-Diffusers`，改 `--model-path` 即可。
+- 如果官方权重生成太慢，可以先用 `--max-jobs 1` 做 smoke test，或用 `--size '832*480'` 固定 480P。
+- 如果 Diffusers 生成太慢，可以临时降低 `--num-frames` 或 `--num-inference-steps`。正式记录实验时要把参数写进 metadata。
 
 ## References
 
