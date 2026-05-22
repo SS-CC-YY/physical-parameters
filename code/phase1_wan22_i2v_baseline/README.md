@@ -217,6 +217,33 @@ outputs/phase1_wan22_i2v_v1a_eval/per_video/<job_id>/tracked_overlay.mp4
 - 如果官方权重生成太慢，可以先用 `--max-jobs 1` 做 smoke test，或用 `--size '832*480'` 固定 480P。
 - 如果 Diffusers 生成太慢，可以临时降低 `--num-frames` 或 `--num-inference-steps`。正式记录实验时要把参数写进 metadata。
 
+## Flash-Attn Fallback For Smoke Tests
+
+Wan2.2 官方 `wan/modules/model.py` 会直接调用 `flash_attention()`。如果 `flash_attn` 没有安装成功，推理会在第一个 denoise step 报：
+
+```text
+AssertionError: FLASH_ATTN_2_AVAILABLE
+```
+
+优先方案是安装 `flash-attn`。如果服务器无法从 GitHub release 下载 wheel，也无法本地编译，可以先 patch 官方 Wan2.2 代码，改用 PyTorch SDPA fallback：
+
+```bash
+cd ~/data/heyuanyu/yefei/chenyu/data/physical-parameters
+
+python code/phase1_wan22_i2v_baseline/patch_wan22_attention_fallback.py \
+  --wan-repo ../Wan2.2
+```
+
+恢复官方文件：
+
+```bash
+python code/phase1_wan22_i2v_baseline/patch_wan22_attention_fallback.py \
+  --wan-repo ../Wan2.2 \
+  --restore
+```
+
+注意：fallback 只建议用于 smoke test。它会更慢，也可能更吃显存；如果 480P 仍 OOM，需要安装 `flash-attn` 或进一步降低 `--frame-num`。
+
 ## References
 
 - Wan2.2 I2V Diffusers model card: https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B-Diffusers
