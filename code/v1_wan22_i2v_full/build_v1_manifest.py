@@ -51,7 +51,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--experiments", nargs="+", default=sorted(EXPERIMENTS))
     parser.add_argument("--cameras", nargs="+", default=["CAM_Side"])
     parser.add_argument("--frame-name", default="frame_10.png")
-    parser.add_argument("--prompt-mode", choices=["explicit", "hidden"], default="explicit")
+    parser.add_argument("--prompt-mode", choices=["explicit", "hidden", "visual_trace"], default="explicit")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--max-jobs", type=int, default=None)
     return parser.parse_args()
@@ -77,8 +77,13 @@ def variant_sort_key(experiment: str, path: Path) -> tuple[int, float | str]:
 def explicit_sentence(meta: dict[str, str], value: float, prompt_mode: str) -> str:
     if prompt_mode == "hidden":
         return (
-            f"The hidden parameter is {meta['target']}; infer the motion from the conditioning frame "
-            "and keep the continuation physically consistent."
+            "No numeric value for the hidden physical setting is provided. Infer the continuation "
+            "from the conditioning frame and keep the motion physically consistent."
+        )
+    if prompt_mode == "visual_trace":
+        return (
+            "No numeric physical value is provided. Use only the visual motion cues in the "
+            "conditioning input to infer the continuation; do not assume a standard Earth-like value."
         )
     unit = f" {meta['unit']}" if meta["unit"] else ""
     return f"For this feasibility baseline, use {meta['target']} = {value:g}{unit}."
@@ -92,7 +97,9 @@ def make_prompt(experiment: str, value: float, camera: str, prompt_mode: str) ->
         f"{camera} camera, orange rubber-matte ball, gray floor, white walls, lighting, object scale, "
         "and background. The input image is frame 10 of the original seed sequence, so the object is "
         "already in motion at the start of this generated clip. Keep the object compact and easy to "
-        "track by color segmentation. "
+        "track by color segmentation. If the conditioning image contains small center markers from "
+        "earlier seed frames, treat them only as motion-history cues; they are not physical objects "
+        "and must not appear in the generated continuation. "
     )
 
     if experiment == "v1_A":
@@ -192,4 +199,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
