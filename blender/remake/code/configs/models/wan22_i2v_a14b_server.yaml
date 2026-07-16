@@ -1,0 +1,21 @@
+model_id: wan2.2-i2v-a14b
+model_revision: server-install
+adapter: wan22_official
+capabilities: [i2v]
+runtime:
+  repo: ${WAN_REPO:-/root/data/heyuanyu/yefei/chenyu/data/Wan2.2}
+  checkpoint: ${WAN_CKPT_DIR:-/root/data/heyuanyu/yefei/chenyu/models/Wan2.2-I2V-A14B}
+  python: ${WAN_PYTHON:-python}
+  gpu_ids: ${GPU_ID:-7}
+  pytorch_cuda_alloc_conf: expandable_segments:True,max_split_size_mb:128
+generation:
+  task: i2v-A14B
+  size: 832*480
+  frame_num: 81
+  sample_steps: 40
+  sample_shift: null
+  sample_guide_scale: null
+  offload_model: true
+  convert_model_dtype: true
+  t5_cpu: false
+  negative_prompt_strategy: append

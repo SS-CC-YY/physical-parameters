@@ -1,0 +1,31 @@
+experiment_id: v1_A
+release_id: ppb-remake-1.0.0
+task_type: i2v
+builder: directory_grid_v1
+input_root: first_frames_v1_0/images
+source_fps: 24
+conditioning_frame_index: 1
+selection:
+  random_scene_sampling:
+    always_include: [baseline]
+    indoor_candidates: [indoor1, indoor2, indoor3, indoor4]
+    outdoor_candidates: [outdoor1, outdoor2, outdoor3, outdoor4]
+    indoor_count: 2
+    outdoor_count: 2
+    seed: 36
+  objects: [standard_ball, standard_cube, volleyball, cardboard_box]
+  cameras: [CAM_Side]
+  seeds: [36]
+  target_assignment: object_values
+targets:
+  gravity_g:
+    unit: m/s^2
+    values: [2.0, 4.9, 9.81, 14.7]
+known_params:
+  initial_vertical_velocity_mps: 0.0
+generation:
+  width: 832
+  height: 480
+  num_frames: 81
+  fps: 16
+evaluation_tags: [basic_video, v1a_freefall]

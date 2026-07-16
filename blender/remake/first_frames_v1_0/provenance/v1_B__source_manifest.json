@@ -1,0 +1,639 @@
+{
+  "output_dir": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames",
+  "render_count": 27,
+  "scene_files": [
+    {
+      "scene": "base",
+      "file": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_base.blend"
+    },
+    {
+      "scene": "indoor1",
+      "file": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_indoor1.blend"
+    },
+    {
+      "scene": "indoor2",
+      "file": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_indoor2.blend"
+    },
+    {
+      "scene": "indoor3",
+      "file": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_indoor3.blend"
+    },
+    {
+      "scene": "indoor4",
+      "file": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_indoor4.blend"
+    },
+    {
+      "scene": "outdoor1",
+      "file": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_outdoor1.blend"
+    },
+    {
+      "scene": "outdoor2",
+      "file": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_outdoor2.blend"
+    },
+    {
+      "scene": "outdoor3",
+      "file": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_outdoor3.blend"
+    },
+    {
+      "scene": "outdoor4",
+      "file": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_outdoor4.blend"
+    }
+  ],
+  "cameras": [
+    "CAM_Main",
+    "CAM_Side",
+    "CAM_Top"
+  ],
+  "object": "standard_ball",
+  "restitution_e": 0.3,
+  "cycles": {
+    "engine": "CYCLES",
+    "cycles_device": "GPU",
+    "compute_device_type": "OPTIX",
+    "enabled_gpu_devices": [
+      {
+        "name": "NVIDIA GeForce GTX 1080",
+        "type": "CUDA"
+      },
+      {
+        "name": "NVIDIA GeForce GTX 1080",
+        "type": "OPTIX"
+      }
+    ],
+    "samples": 96
+  },
+  "resolution": {
+    "x": 1920,
+    "y": 1080,
+    "percent": 100
+  },
+  "results": [
+    {
+      "scene": "base",
+      "camera": "CAM_Main",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_base.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\base__CAM_Main__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "base",
+      "camera": "CAM_Side",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_base.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\base__CAM_Side__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "base",
+      "camera": "CAM_Top",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_base.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\base__CAM_Top__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "indoor1",
+      "camera": "CAM_Main",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_indoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\indoor1__CAM_Main__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "indoor1",
+      "camera": "CAM_Side",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_indoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\indoor1__CAM_Side__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "indoor1",
+      "camera": "CAM_Top",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_indoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\indoor1__CAM_Top__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "indoor2",
+      "camera": "CAM_Main",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_indoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\indoor2__CAM_Main__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "indoor2",
+      "camera": "CAM_Side",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_indoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\indoor2__CAM_Side__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "indoor2",
+      "camera": "CAM_Top",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_indoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\indoor2__CAM_Top__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "indoor3",
+      "camera": "CAM_Main",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_indoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\indoor3__CAM_Main__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "indoor3",
+      "camera": "CAM_Side",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_indoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\indoor3__CAM_Side__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "indoor3",
+      "camera": "CAM_Top",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_indoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\indoor3__CAM_Top__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "indoor4",
+      "camera": "CAM_Main",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_indoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\indoor4__CAM_Main__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "indoor4",
+      "camera": "CAM_Side",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_indoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\indoor4__CAM_Side__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "indoor4",
+      "camera": "CAM_Top",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_indoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\indoor4__CAM_Top__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "outdoor1",
+      "camera": "CAM_Main",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_outdoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\outdoor1__CAM_Main__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "outdoor1",
+      "camera": "CAM_Side",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_outdoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\outdoor1__CAM_Side__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "outdoor1",
+      "camera": "CAM_Top",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_outdoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\outdoor1__CAM_Top__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "outdoor2",
+      "camera": "CAM_Main",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_outdoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\outdoor2__CAM_Main__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "outdoor2",
+      "camera": "CAM_Side",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_outdoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\outdoor2__CAM_Side__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "outdoor2",
+      "camera": "CAM_Top",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_outdoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\outdoor2__CAM_Top__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "outdoor3",
+      "camera": "CAM_Main",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_outdoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\outdoor3__CAM_Main__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "outdoor3",
+      "camera": "CAM_Side",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_outdoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\outdoor3__CAM_Side__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "outdoor3",
+      "camera": "CAM_Top",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_outdoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\outdoor3__CAM_Top__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "outdoor4",
+      "camera": "CAM_Main",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_outdoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\outdoor4__CAM_Main__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "outdoor4",
+      "camera": "CAM_Side",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_outdoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\outdoor4__CAM_Side__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    },
+    {
+      "scene": "outdoor4",
+      "camera": "CAM_Top",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\generated_scenarios\\baselinev1_B_outdoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\B\\cycles_gpu_first_frame_three_views_20260710_27frames\\outdoor4__CAM_Top__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "selected_object": "standard_ball",
+        "restitution_e": 0.3,
+        "motion_method": "computed_keyframes_no_rigidbody_single_wall_collision",
+        "options": [
+          "standard_ball",
+          "standard_cube",
+          "volleyball",
+          "cardboard_box"
+        ],
+        "collision_frame": 96,
+        "wall_contact_face_x": 3.2
+      }
+    }
+  ]
+}

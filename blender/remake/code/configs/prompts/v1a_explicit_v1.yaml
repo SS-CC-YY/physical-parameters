@@ -1,0 +1,20 @@
+extends: configs/prompts/common_physics_video_v1.yaml
+prompt_template_id: v1a_explicit_gravity
+version: 1.1.0
+mode: explicit
+experiment_templates:
+  dynamics: >-
+    The object starts from rest and falls vertically under constant gravity, with no horizontal
+    drift, no spin, and no air drag.
+  parameter: >-
+    For this explicit-prompt condition, use gravity_g = {gravity_g:g} m/s^2.
+  terminal: >-
+    After the first floor contact, keep the object at rest on the floor for the remainder of the video.
+experiment_constraints:
+  - starts_from_rest
+  - vertical_free_fall
+  - constant_gravity
+  - no_air_drag
+  - no_bounce_after_contact
+additional_negative_prompt: >-
+  horizontal object motion, object spin, bounce after floor contact

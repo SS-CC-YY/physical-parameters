@@ -1,0 +1,30 @@
+prompt_framework_id: ppb_common_physics_video_v1
+framework_version: 1.0.0
+section_order: [task, scene, camera, dynamics, parameter, terminal, quality]
+object_descriptions:
+  standard_ball: standard smooth ball
+  standard_cube: standard rigid cube
+  cardboard_box: cardboard box
+  volleyball: volleyball
+shared_templates:
+  task: >-
+    Continue the provided conditioning input as a clean, single-shot physics benchmark video.
+  scene: >-
+    Preserve the same {object_description}, scene geometry, lighting, object scale, material
+    appearance, spatial layout, and background from the conditioning input.
+  camera: >-
+    Preserve the static {camera} camera with no camera motion, reframing, zoom, or scene cut.
+  quality: >-
+    Keep the primary object rigid, compact, visually consistent, temporally coherent, and easy
+    to track throughout the video. Do not introduce any new visible entity.
+shared_constraints:
+  - single_continuous_shot
+  - preserve_conditioning_scene
+  - static_camera
+  - preserve_primary_object_identity
+  - no_new_entities
+  - temporal_consistency
+negative_prompt: >-
+  extra objects, people, text, subtitles, watermark, camera movement, camera shake, pan, zoom,
+  reframing, scene cut, duplicated object, object replacement, object morphing, severe deformation,
+  background change, lighting flicker, temporal discontinuity

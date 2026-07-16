@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://physical-parameter-benchmark.local/schemas/job.schema.json",
+  "title": "Remake canonical generation job",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "job_id", "build_id", "experiment_id", "case_id",
+    "repeat_id", "task_type", "seed", "inputs", "prompt_spec", "prompt",
+    "negative_prompt", "prompt_mode", "prompt_template_id",
+    "prompt_template_version", "targets", "known_params", "factors",
+    "units", "generation", "evaluation_tags"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "job_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"},
+    "build_id": {"type": "string", "minLength": 1},
+    "release_id": {"type": "string"},
+    "experiment_id": {"type": "string", "minLength": 1},
+    "case_id": {"type": "string", "minLength": 1},
+    "repeat_id": {"type": "string", "minLength": 1},
+    "task_type": {"enum": ["t2v", "i2v", "v2v"]},
+    "seed": {"type": "integer", "minimum": 0},
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {"type": "string"},
+        "image": {"type": "string", "minLength": 1},
+        "video": {"type": "string", "minLength": 1},
+        "source_fps": {"type": "number", "exclusiveMinimum": 0},
+        "conditioning_frame_index": {"type": "integer", "minimum": 0}
+      }
+    },
+    "prompt_spec": {"type": "object"},
+    "prompt": {"type": "string", "minLength": 1},
+    "negative_prompt": {"type": "string"},
+    "prompt_mode": {"type": "string", "minLength": 1},
+    "prompt_template_id": {"type": "string", "minLength": 1},
+    "prompt_template_version": {"type": "string", "minLength": 1},
+    "targets": {"type": "object", "minProperties": 1, "additionalProperties": {"type": "number"}},
+    "known_params": {"type": "object"},
+    "factors": {"type": "object"},
+    "units": {"type": "object", "additionalProperties": {"type": "string"}},
+    "generation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height", "num_frames", "fps"],
+      "properties": {
+        "width": {"type": "integer", "minimum": 1},
+        "height": {"type": "integer", "minimum": 1},
+        "num_frames": {"type": "integer", "minimum": 1},
+        "fps": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "evaluation_tags": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"task_type": {"const": "i2v"}}},
+      "then": {"properties": {"inputs": {"required": ["image"]}}}
+    },
+    {
+      "if": {"properties": {"task_type": {"const": "v2v"}}},
+      "then": {"properties": {"inputs": {"required": ["video"]}}}
+    }
+  ]
+}

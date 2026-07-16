@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0.0",
+  "release_id": "ppb-remake-1.0.0",
+  "dataset_id": "ppb-remake-first-frames-1.0.0",
+  "image_size": [
+    1280,
+    720
+  ],
+  "image_format": "PNG RGB",
+  "expected_per_experiment": 108,
+  "total_images": 1404,
+  "counts_by_experiment": {
+    "v1_A": 108,
+    "v1_B": 108,
+    "v1_C": 108,
+    "v1_D": 108,
+    "v2_A": 108,
+    "v2_B": 108,
+    "v2_C": 108,
+    "v2_D": 108,
+    "v2_E": 108,
+    "v3_A": 108,
+    "v3_B": 108,
+    "v3_C": 108,
+    "v3_D": 108
+  },
+  "scenario_ids": [
+    "baseline",
+    "indoor1",
+    "indoor2",
+    "indoor3",
+    "indoor4",
+    "outdoor1",
+    "outdoor2",
+    "outdoor3",
+    "outdoor4"
+  ],
+  "object_ids": [
+    "standard_ball",
+    "standard_cube",
+    "cardboard_box",
+    "volleyball"
+  ],
+  "camera_names": [
+    "CAM_Main",
+    "CAM_Side",
+    "CAM_Top"
+  ],
+  "all_expected_images_present": true,
+  "records_file": "records.jsonl",
+  "contact_sheet_directory": "contact_sheets"
+}

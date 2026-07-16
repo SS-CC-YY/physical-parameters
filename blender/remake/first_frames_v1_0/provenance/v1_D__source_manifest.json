@@ -1,0 +1,2427 @@
+{
+  "output_dir": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames",
+  "render_count": 108,
+  "scenes": [
+    "base",
+    "indoor1",
+    "indoor2",
+    "indoor3",
+    "indoor4",
+    "outdoor1",
+    "outdoor2",
+    "outdoor3",
+    "outdoor4"
+  ],
+  "cameras": [
+    "CAM_Main",
+    "CAM_Side",
+    "CAM_Top"
+  ],
+  "objects": [
+    "standard_ball",
+    "standard_cube",
+    "volleyball",
+    "cardboard_box"
+  ],
+  "damping_beta_per_second": 0.18,
+  "gravity_used": false,
+  "cycles": {
+    "engine": "CYCLES",
+    "cycles_device": "GPU",
+    "compute_device_type": "OPTIX",
+    "enabled_gpu_devices": [
+      {
+        "name": "NVIDIA GeForce GTX 1080",
+        "type": "CUDA"
+      },
+      {
+        "name": "NVIDIA GeForce GTX 1080",
+        "type": "OPTIX"
+      }
+    ],
+    "samples": 96
+  },
+  "resolution": {
+    "x": 1920,
+    "y": 1080,
+    "percent": 100
+  },
+  "results": [
+    {
+      "scene": "base",
+      "camera": "CAM_Main",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_base.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\base__CAM_Main__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "base",
+      "camera": "CAM_Side",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_base.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\base__CAM_Side__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "base",
+      "camera": "CAM_Top",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_base.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\base__CAM_Top__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "base",
+      "camera": "CAM_Main",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_base.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\base__CAM_Main__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "base",
+      "camera": "CAM_Side",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_base.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\base__CAM_Side__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "base",
+      "camera": "CAM_Top",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_base.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\base__CAM_Top__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "base",
+      "camera": "CAM_Main",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_base.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\base__CAM_Main__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "base",
+      "camera": "CAM_Side",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_base.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\base__CAM_Side__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "base",
+      "camera": "CAM_Top",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_base.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\base__CAM_Top__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "base",
+      "camera": "CAM_Main",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_base.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\base__CAM_Main__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "base",
+      "camera": "CAM_Side",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_base.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\base__CAM_Side__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "base",
+      "camera": "CAM_Top",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_base.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\base__CAM_Top__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor1",
+      "camera": "CAM_Main",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor1__CAM_Main__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor1",
+      "camera": "CAM_Side",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor1__CAM_Side__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor1",
+      "camera": "CAM_Top",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor1__CAM_Top__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor1",
+      "camera": "CAM_Main",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor1__CAM_Main__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor1",
+      "camera": "CAM_Side",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor1__CAM_Side__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor1",
+      "camera": "CAM_Top",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor1__CAM_Top__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor1",
+      "camera": "CAM_Main",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor1__CAM_Main__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor1",
+      "camera": "CAM_Side",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor1__CAM_Side__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor1",
+      "camera": "CAM_Top",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor1__CAM_Top__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor1",
+      "camera": "CAM_Main",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor1__CAM_Main__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor1",
+      "camera": "CAM_Side",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor1__CAM_Side__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor1",
+      "camera": "CAM_Top",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor1__CAM_Top__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor2",
+      "camera": "CAM_Main",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor2__CAM_Main__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor2",
+      "camera": "CAM_Side",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor2__CAM_Side__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor2",
+      "camera": "CAM_Top",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor2__CAM_Top__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor2",
+      "camera": "CAM_Main",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor2__CAM_Main__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor2",
+      "camera": "CAM_Side",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor2__CAM_Side__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor2",
+      "camera": "CAM_Top",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor2__CAM_Top__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor2",
+      "camera": "CAM_Main",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor2__CAM_Main__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor2",
+      "camera": "CAM_Side",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor2__CAM_Side__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor2",
+      "camera": "CAM_Top",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor2__CAM_Top__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor2",
+      "camera": "CAM_Main",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor2__CAM_Main__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor2",
+      "camera": "CAM_Side",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor2__CAM_Side__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor2",
+      "camera": "CAM_Top",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor2__CAM_Top__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor3",
+      "camera": "CAM_Main",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor3__CAM_Main__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor3",
+      "camera": "CAM_Side",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor3__CAM_Side__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor3",
+      "camera": "CAM_Top",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor3__CAM_Top__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor3",
+      "camera": "CAM_Main",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor3__CAM_Main__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor3",
+      "camera": "CAM_Side",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor3__CAM_Side__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor3",
+      "camera": "CAM_Top",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor3__CAM_Top__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor3",
+      "camera": "CAM_Main",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor3__CAM_Main__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor3",
+      "camera": "CAM_Side",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor3__CAM_Side__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor3",
+      "camera": "CAM_Top",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor3__CAM_Top__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor3",
+      "camera": "CAM_Main",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor3__CAM_Main__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor3",
+      "camera": "CAM_Side",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor3__CAM_Side__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor3",
+      "camera": "CAM_Top",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor3__CAM_Top__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor4",
+      "camera": "CAM_Main",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor4__CAM_Main__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor4",
+      "camera": "CAM_Side",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor4__CAM_Side__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor4",
+      "camera": "CAM_Top",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor4__CAM_Top__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor4",
+      "camera": "CAM_Main",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor4__CAM_Main__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor4",
+      "camera": "CAM_Side",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor4__CAM_Side__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor4",
+      "camera": "CAM_Top",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor4__CAM_Top__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor4",
+      "camera": "CAM_Main",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor4__CAM_Main__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor4",
+      "camera": "CAM_Side",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor4__CAM_Side__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor4",
+      "camera": "CAM_Top",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor4__CAM_Top__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor4",
+      "camera": "CAM_Main",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor4__CAM_Main__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor4",
+      "camera": "CAM_Side",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor4__CAM_Side__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "indoor4",
+      "camera": "CAM_Top",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_indoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\indoor4__CAM_Top__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor1",
+      "camera": "CAM_Main",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor1__CAM_Main__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor1",
+      "camera": "CAM_Side",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor1__CAM_Side__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor1",
+      "camera": "CAM_Top",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor1__CAM_Top__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor1",
+      "camera": "CAM_Main",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor1__CAM_Main__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor1",
+      "camera": "CAM_Side",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor1__CAM_Side__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor1",
+      "camera": "CAM_Top",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor1__CAM_Top__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor1",
+      "camera": "CAM_Main",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor1__CAM_Main__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor1",
+      "camera": "CAM_Side",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor1__CAM_Side__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor1",
+      "camera": "CAM_Top",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor1__CAM_Top__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor1",
+      "camera": "CAM_Main",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor1__CAM_Main__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor1",
+      "camera": "CAM_Side",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor1__CAM_Side__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor1",
+      "camera": "CAM_Top",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor1.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor1__CAM_Top__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor2",
+      "camera": "CAM_Main",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor2__CAM_Main__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor2",
+      "camera": "CAM_Side",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor2__CAM_Side__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor2",
+      "camera": "CAM_Top",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor2__CAM_Top__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor2",
+      "camera": "CAM_Main",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor2__CAM_Main__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor2",
+      "camera": "CAM_Side",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor2__CAM_Side__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor2",
+      "camera": "CAM_Top",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor2__CAM_Top__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor2",
+      "camera": "CAM_Main",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor2__CAM_Main__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor2",
+      "camera": "CAM_Side",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor2__CAM_Side__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor2",
+      "camera": "CAM_Top",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor2__CAM_Top__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor2",
+      "camera": "CAM_Main",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor2__CAM_Main__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor2",
+      "camera": "CAM_Side",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor2__CAM_Side__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor2",
+      "camera": "CAM_Top",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor2.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor2__CAM_Top__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor3",
+      "camera": "CAM_Main",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor3__CAM_Main__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor3",
+      "camera": "CAM_Side",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor3__CAM_Side__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor3",
+      "camera": "CAM_Top",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor3__CAM_Top__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor3",
+      "camera": "CAM_Main",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor3__CAM_Main__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor3",
+      "camera": "CAM_Side",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor3__CAM_Side__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor3",
+      "camera": "CAM_Top",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor3__CAM_Top__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor3",
+      "camera": "CAM_Main",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor3__CAM_Main__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor3",
+      "camera": "CAM_Side",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor3__CAM_Side__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor3",
+      "camera": "CAM_Top",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor3__CAM_Top__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor3",
+      "camera": "CAM_Main",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor3__CAM_Main__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor3",
+      "camera": "CAM_Side",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor3__CAM_Side__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor3",
+      "camera": "CAM_Top",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor3.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor3__CAM_Top__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor4",
+      "camera": "CAM_Main",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor4__CAM_Main__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor4",
+      "camera": "CAM_Side",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor4__CAM_Side__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor4",
+      "camera": "CAM_Top",
+      "object": "standard_ball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor4__CAM_Top__standard_ball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_ball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor4",
+      "camera": "CAM_Main",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor4__CAM_Main__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor4",
+      "camera": "CAM_Side",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor4__CAM_Side__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor4",
+      "camera": "CAM_Top",
+      "object": "standard_cube",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor4__CAM_Top__standard_cube__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "standard_cube",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor4",
+      "camera": "CAM_Main",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor4__CAM_Main__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor4",
+      "camera": "CAM_Side",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor4__CAM_Side__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor4",
+      "camera": "CAM_Top",
+      "object": "volleyball",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor4__CAM_Top__volleyball__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "volleyball",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor4",
+      "camera": "CAM_Main",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor4__CAM_Main__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor4",
+      "camera": "CAM_Side",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor4__CAM_Side__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    },
+    {
+      "scene": "outdoor4",
+      "camera": "CAM_Top",
+      "object": "cardboard_box",
+      "input": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\generated_scenarios\\baselinev1_D_outdoor4.blend",
+      "output": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\D\\cycles_gpu_first_frames_20260710_108frames\\outdoor4__CAM_Top__cardboard_box__frame001.png",
+      "frame": 1,
+      "state": {
+        "object_option": "cardboard_box",
+        "damping_beta_per_second": 0.18,
+        "initial_angle_degrees": 24.000000000000004,
+        "fixed_period_seconds": 3.0,
+        "fixed_pendulum_length_m": 2.3,
+        "final_envelope_degrees": 5.729074,
+        "gravity_used": false,
+        "frame_range": [
+          1,
+          192
+        ],
+        "motion_method": "computed_per_frame_keyframes_gravity_independent_fixed_period_damped_angle"
+      }
+    }
+  ]
+}

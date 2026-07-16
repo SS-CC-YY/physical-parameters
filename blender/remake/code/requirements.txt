@@ -1,0 +1,5 @@
+PyYAML>=6.0,<7
+jsonschema>=4.20,<5
+numpy>=1.26,<3
+opencv-python-headless>=4.9,<5
+matplotlib>=3.8,<4

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://physical-parameter-benchmark.local/schemas/build.schema.json",
+  "title": "Remake benchmark build profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "build_id", "workspace_root", "output_root", "profiles"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "build_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"},
+    "description": {"type": "string"},
+    "workspace_root": {"type": "string", "minLength": 1},
+    "output_root": {"type": "string", "minLength": 1},
+    "profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["experiment", "prompt", "model", "evaluation"],
+      "properties": {
+        "experiment": {"type": "string", "minLength": 1},
+        "prompt": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1},
+        "evaluation": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

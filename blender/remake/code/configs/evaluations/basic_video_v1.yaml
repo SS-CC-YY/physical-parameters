@@ -1,0 +1,22 @@
+evaluation_id: basic_video_v1
+evaluators:
+  - id: basic_video
+    version: 1.0.0
+    min_bytes: 1024
+    ffprobe: true
+    ffprobe_required: false
+  - id: v1a_freefall
+    version: 1.0.0
+    tracker: auto
+    min_template_score: 0.18
+    min_detection_rate: 0.70
+    min_fit_points: 12
+    min_fit_r2: 0.70
+    fit_max_frame_fraction: 0.72
+    floor_percentile: 92
+    smoothing_window: 5
+    motion_threshold: 14
+    overlay_video_count: 5
+    overlay_tail_frames: 24
+    selection_seed: 36
+    pixels_per_meter: null

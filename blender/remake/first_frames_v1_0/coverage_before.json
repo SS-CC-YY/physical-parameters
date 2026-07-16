@@ -1,0 +1,32 @@
+{
+  "release_id": "ppb-remake-1.0.0",
+  "target_size": [
+    1280,
+    720
+  ],
+  "expected_total": 1404,
+  "reused_total": 1146,
+  "missing_total": 258,
+  "reused_by_experiment": {
+    "v1_A": 36,
+    "v1_B": 27,
+    "v1_C": 27,
+    "v1_D": 108,
+    "v2_A": 96,
+    "v2_B": 96,
+    "v2_C": 108,
+    "v2_D": 108,
+    "v2_E": 108,
+    "v3_A": 108,
+    "v3_B": 108,
+    "v3_C": 108,
+    "v3_D": 108
+  },
+  "missing_by_experiment": {
+    "v1_A": 72,
+    "v1_B": 81,
+    "v1_C": 81,
+    "v2_A": 12,
+    "v2_B": 12
+  }
+}

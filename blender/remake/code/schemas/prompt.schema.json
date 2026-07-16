@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://physical-parameter-benchmark.local/schemas/prompt.schema.json",
+  "title": "Resolved common physics-video prompt profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "prompt_framework_id", "framework_version", "section_order", "prompt_template_id",
+    "version", "mode", "object_descriptions", "shared_templates", "experiment_templates",
+    "shared_constraints", "experiment_constraints", "negative_prompt"
+  ],
+  "properties": {
+    "prompt_framework_id": {"const": "ppb_common_physics_video_v1"},
+    "framework_version": {"const": "1.0.0"},
+    "section_order": {
+      "const": ["task", "scene", "camera", "dynamics", "parameter", "terminal", "quality"]
+    },
+    "prompt_template_id": {"type": "string", "minLength": 1},
+    "version": {"type": "string", "minLength": 1},
+    "mode": {"enum": ["explicit", "hidden", "visual_trace", "control"]},
+    "object_descriptions": {"type": "object", "additionalProperties": {"type": "string"}},
+    "shared_templates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task", "scene", "camera", "quality"],
+      "properties": {
+        "task": {"type": "string", "minLength": 1},
+        "scene": {"type": "string", "minLength": 1},
+        "camera": {"type": "string", "minLength": 1},
+        "quality": {"type": "string", "minLength": 1}
+      }
+    },
+    "experiment_templates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dynamics", "parameter", "terminal"],
+      "properties": {
+        "dynamics": {"type": "string", "minLength": 1},
+        "parameter": {"type": "string", "minLength": 1},
+        "terminal": {"type": "string", "minLength": 1}
+      }
+    },
+    "shared_constraints": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "experiment_constraints": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "negative_prompt": {"type": "string"},
+    "additional_negative_prompt": {"type": "string"}
+  }
+}
