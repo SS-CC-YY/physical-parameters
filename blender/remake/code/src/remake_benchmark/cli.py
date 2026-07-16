@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from remake_benchmark.core.errors import BenchmarkError
-from remake_benchmark.orchestration import evaluate_run, generate_run, prepare_run
+from remake_benchmark.orchestration import evaluate_run, generate_run, prepare_run, run_sequential
 
 
 def _add_generation_options(parser: argparse.ArgumentParser) -> None:
@@ -33,6 +33,14 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--run-dir", type=Path, required=True)
     _add_generation_options(generate_parser)
 
+    sequence_parser = subparsers.add_parser(
+        "sequence",
+        help="for each prepared job: generate, physics-gate/evaluate, visualize, then continue",
+    )
+    sequence_parser.add_argument("--run-dir", type=Path, required=True)
+    _add_generation_options(sequence_parser)
+    sequence_parser.add_argument("--stop-on-invalid", action="store_true")
+
     evaluate_parser = subparsers.add_parser("evaluate", help="evaluate canonical output videos")
     evaluate_parser.add_argument("--run-dir", type=Path, required=True)
 
@@ -41,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--run-dir", type=Path, required=True)
     run_parser.add_argument("--workspace-root", type=Path, default=None)
     _add_generation_options(run_parser)
+    run_parser.add_argument("--stop-on-invalid", action="store_true")
     return parser
 
 
@@ -71,6 +80,17 @@ def dispatch(args: argparse.Namespace) -> dict[str, object]:
             overwrite=args.overwrite,
             fail_fast=args.fail_fast,
         )
+    if args.command == "sequence":
+        _positive_int_or_none(args.max_jobs, "--max-jobs")
+        return run_sequential(
+            args.run_dir,
+            dry_run=args.dry_run,
+            max_jobs=args.max_jobs,
+            start_index=args.start_index,
+            overwrite=args.overwrite,
+            fail_fast=args.fail_fast,
+            stop_on_invalid=args.stop_on_invalid,
+        )
     if args.command == "evaluate":
         return evaluate_run(args.run_dir)
     if args.command == "run":
@@ -82,17 +102,15 @@ def dispatch(args: argparse.Namespace) -> dict[str, object]:
             max_jobs=args.max_jobs,
             overwrite=args.overwrite,
         )
-        generation = generate_run(
+        sequence = run_sequential(
             args.run_dir,
             dry_run=args.dry_run,
             start_index=args.start_index,
             overwrite=args.overwrite,
             fail_fast=args.fail_fast,
+            stop_on_invalid=args.stop_on_invalid,
         )
-        result: dict[str, object] = {"build_id": resolved["build_id"], "jobs": len(jobs), "generation": generation}
-        if not args.dry_run:
-            result["evaluation"] = evaluate_run(args.run_dir)
-        return result
+        return {"build_id": resolved["build_id"], "jobs": len(jobs), "sequence": sequence}
     raise AssertionError(args.command)
 
 

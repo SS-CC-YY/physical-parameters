@@ -6,7 +6,8 @@ runtime:
   repo: ${WAN_REPO:-/root/data/heyuanyu/yefei/chenyu/data/Wan2.2}
   checkpoint: ${WAN_CKPT_DIR:-/root/data/heyuanyu/yefei/chenyu/models/Wan2.2-I2V-A14B}
   python: ${WAN_PYTHON:-python}
-  gpu_ids: ${GPU_ID:-7}
+  gpu_ids: ${GPU_ID:-0}
+  execution_mode: persistent_worker
   pytorch_cuda_alloc_conf: expandable_segments:True,max_split_size_mb:128
 generation:
   task: i2v-A14B
@@ -15,7 +16,9 @@ generation:
   sample_steps: 40
   sample_shift: null
   sample_guide_scale: null
-  offload_model: true
+  # H20 96 GB fast path. If the server build reports CUDA OOM, export
+  # WAN_OFFLOAD_MODEL=true before prepare/run; output quality is unchanged.
+  offload_model: ${WAN_OFFLOAD_MODEL:-false}
   convert_model_dtype: true
   t5_cpu: false
   negative_prompt_strategy: append

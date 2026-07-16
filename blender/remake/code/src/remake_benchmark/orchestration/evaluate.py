@@ -21,30 +21,52 @@ def _one_config(configs: list[dict[str, Any]], evaluator_id: str, *, required: b
 
 
 def _overlay_job_ids(jobs: list[dict[str, Any]], count: int, seed: int) -> set[str]:
+    """Choose overlay videos across both scene and camera instead of side view only."""
     if count <= 0:
         return set()
-    by_scene: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    by_view_scene: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for job in jobs:
-        by_scene[str(job["factors"]["scene_id"])].append(job)
-    representatives: list[dict[str, Any]] = []
-    for scene_index, scene in enumerate(by_scene):
-        scene_jobs = by_scene[scene]
-        representatives.append(scene_jobs[scene_index % len(scene_jobs)])
+        key = (str(job["factors"].get("camera")), str(job["factors"].get("scene_id")))
+        by_view_scene[key].append(job)
+    cameras = sorted({key[0] for key in by_view_scene})
+    if not cameras:
+        return set()
     rng = random.Random(seed)
-    if count < len(representatives):
-        representatives = rng.sample(representatives, count)
-    elif count > len(representatives):
-        chosen = {job["job_id"] for job in representatives}
-        remaining = [job for job in jobs if job["job_id"] not in chosen]
-        representatives.extend(rng.sample(remaining, min(count - len(representatives), len(remaining))))
-    return {job["job_id"] for job in representatives[:count]}
+    base, extra = divmod(count, len(cameras))
+    selected: list[dict[str, Any]] = []
+    for camera_index, camera in enumerate(cameras):
+        target = base + (1 if camera_index < extra else 0)
+        camera_groups = [key for key in sorted(by_view_scene) if key[0] == camera]
+        representatives = [
+            by_view_scene[key][group_index % len(by_view_scene[key])]
+            for group_index, key in enumerate(camera_groups)
+        ]
+        if target < len(representatives):
+            representatives = rng.sample(representatives, target)
+        elif target > len(representatives):
+            chosen = {job["job_id"] for job in representatives}
+            remaining = [
+                job
+                for job in jobs
+                if str(job["factors"].get("camera")) == camera and job["job_id"] not in chosen
+            ]
+            representatives.extend(rng.sample(remaining, min(target - len(representatives), len(remaining))))
+        selected.extend(representatives[:target])
+    return {job["job_id"] for job in selected[:count]}
 
 
-def _error_row(job: dict[str, Any], evaluator_id: str, error: Exception | str, status: str = "error") -> dict[str, Any]:
+def _error_row(
+    job: dict[str, Any],
+    evaluator_id: str,
+    error: Exception | str,
+    *,
+    version: str,
+    status: str = "error",
+) -> dict[str, Any]:
     return {
         "job_id": job["job_id"],
         "evaluator_id": evaluator_id,
-        "evaluator_version": "1.0.0",
+        "evaluator_version": version,
         "status": status,
         "quality_flags": ["missing_video" if status == "invalid" else "evaluator_error"],
         "metrics": {},
@@ -54,55 +76,76 @@ def _error_row(job: dict[str, Any], evaluator_id: str, error: Exception | str, s
     }
 
 
-def evaluate_run(run_dir: Path) -> dict[str, int]:
+def _ordered_rows(
+    jobs: list[dict[str, Any]],
+    rows_by_key: dict[tuple[str, str], dict[str, Any]],
+) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    for job in jobs:
+        for evaluator_id in ("basic_video", "v1a_freefall"):
+            row = rows_by_key.get((job["job_id"], evaluator_id))
+            if row is not None:
+                output.append(row)
+    return output
+
+
+def _evaluate_selected(run_dir: Path, selected_job_ids: set[str] | None) -> dict[str, Any]:
     run_dir = run_dir.resolve()
     resolved = read_yaml(run_dir / "resolved_build.yaml")
     jobs = read_jsonl(run_dir / "manifest.jsonl")
-    evaluator_configs = resolved["evaluation"]["evaluators"]
-    basic_config = _one_config(evaluator_configs, "basic_video")
-    freefall_config = _one_config(evaluator_configs, "v1a_freefall", required=False)
-    all_results: list[dict[str, Any]] = []
-    basic_rows: list[dict[str, Any]] = []
+    selected_jobs = jobs if selected_job_ids is None else [job for job in jobs if job["job_id"] in selected_job_ids]
+    if selected_job_ids is not None and len(selected_jobs) != len(selected_job_ids):
+        known = {job["job_id"] for job in jobs}
+        missing = sorted(selected_job_ids - known)
+        raise ConfigError(f"job id(s) not found in manifest: {missing}")
 
-    for job in jobs:
+    evaluator_configs = resolved["evaluation"]["evaluators"]
+    basic_config = _one_config(evaluator_configs, "basic_video") or {}
+    freefall_config = _one_config(evaluator_configs, "v1a_freefall", required=False)
+    eval_dir = run_dir / "eval"
+    sample_path = eval_dir / "sample_metrics.jsonl"
+    existing = read_jsonl(sample_path) if selected_job_ids is not None and sample_path.is_file() else []
+    rows_by_key = {(row["job_id"], row["evaluator_id"]): row for row in existing}
+
+    for job in selected_jobs:
         video_path = run_dir / "videos" / f"{job['job_id']}.mp4"
         try:
-            result = evaluate_video(job, video_path, basic_config or {})
+            result = evaluate_video(job, video_path, basic_config)
             row = {
                 "job_id": job["job_id"],
                 "evaluator_id": "basic_video",
-                "evaluator_version": str((basic_config or {}).get("version", "1.0.0")),
+                "evaluator_version": str(basic_config.get("version", "1.0.0")),
                 **result,
                 "artifacts": {},
                 "factors": dict(job["factors"]),
             }
         except Exception as exc:
-            row = _error_row(job, "basic_video", exc)
-        basic_rows.append(row)
-        all_results.append(row)
+            row = _error_row(
+                job,
+                "basic_video",
+                exc,
+                version=str(basic_config.get("version", "1.0.0")),
+            )
+        rows_by_key[(job["job_id"], "basic_video")] = row
 
-    freefall_rows: list[dict[str, Any]] = []
-    freefall_aggregate: dict[str, Any] | None = None
     if freefall_config is not None:
-        from remake_benchmark.evaluators.freefall import (
-            aggregate_freefall,
-            evaluate_freefall_job,
-            write_freefall_html_report,
-            write_freefall_summary_csv,
-        )
+        from remake_benchmark.evaluators.freefall import evaluate_freefall_job
 
-        freefall_jobs = [job for job in jobs if "v1a_freefall" in job.get("evaluation_tags", [])]
+        all_freefall_jobs = [job for job in jobs if "v1a_freefall" in job.get("evaluation_tags", [])]
         overlay_ids = _overlay_job_ids(
-            freefall_jobs,
-            int(freefall_config.get("overlay_video_count", 5)),
+            all_freefall_jobs,
+            int(freefall_config.get("overlay_video_count", 9)),
             int(freefall_config.get("selection_seed", 36)),
         )
-        freefall_root = run_dir / "eval" / "freefall"
         workspace_root = Path(resolved["workspace_root"])
-        for job in freefall_jobs:
+        freefall_root = eval_dir / "freefall"
+        for job in selected_jobs:
+            if "v1a_freefall" not in job.get("evaluation_tags", []):
+                continue
             video_path = run_dir / "videos" / f"{job['job_id']}.mp4"
+            version = str(freefall_config.get("version", "2.0.0"))
             if not video_path.is_file():
-                row = _error_row(job, "v1a_freefall", f"video not found: {video_path}", status="invalid")
+                row = _error_row(job, "v1a_freefall", f"video not found: {video_path}", version=version, status="invalid")
             else:
                 try:
                     row = evaluate_freefall_job(
@@ -114,13 +157,25 @@ def evaluate_run(run_dir: Path) -> dict[str, int]:
                         make_overlay=job["job_id"] in overlay_ids,
                     )
                 except Exception as exc:
-                    row = _error_row(job, "v1a_freefall", exc)
-            freefall_rows.append(row)
-            all_results.append(row)
+                    row = _error_row(job, "v1a_freefall", exc, version=version)
+            rows_by_key[(job["job_id"], "v1a_freefall")] = row
+
+    all_results = _ordered_rows(jobs, rows_by_key)
+    basic_rows = [row for row in all_results if row["evaluator_id"] == "basic_video"]
+    freefall_rows = [row for row in all_results if row["evaluator_id"] == "v1a_freefall"]
+    freefall_aggregate: dict[str, Any] | None = None
+    if freefall_config is not None:
+        from remake_benchmark.evaluators.freefall import (
+            aggregate_freefall,
+            write_freefall_html_report,
+            write_freefall_summary_csv,
+        )
+
+        freefall_root = eval_dir / "freefall"
         freefall_aggregate = aggregate_freefall(freefall_rows)
         write_freefall_summary_csv(freefall_root / "summary.csv", freefall_rows)
         write_json(freefall_root / "aggregate.json", freefall_aggregate)
-        write_freefall_html_report(run_dir / "eval" / "report" / "index.html", freefall_rows, freefall_aggregate)
+        write_freefall_html_report(eval_dir / "report" / "index.html", freefall_rows, freefall_aggregate)
 
     counts = {
         "ok": sum(row["status"] == "ok" for row in all_results),
@@ -128,13 +183,21 @@ def evaluate_run(run_dir: Path) -> dict[str, int]:
         "error": sum(row["status"] == "error" for row in all_results),
         "total": len(all_results),
     }
-    eval_dir = run_dir / "eval"
-    write_jsonl(eval_dir / "sample_metrics.jsonl", all_results)
+    selected_rows = [row for row in all_results if row["job_id"] in {job["job_id"] for job in selected_jobs}]
+    selected_counts = {
+        "ok": sum(row["status"] == "ok" for row in selected_rows),
+        "invalid": sum(row["status"] == "invalid" for row in selected_rows),
+        "error": sum(row["status"] == "error" for row in selected_rows),
+        "total": len(selected_rows),
+    }
+    write_jsonl(sample_path, all_results)
     write_json(
         eval_dir / "aggregate.json",
         {
             **counts,
             "evaluated_at": datetime.now(timezone.utc).isoformat(),
+            "completed_manifest_jobs": len({row["job_id"] for row in all_results}),
+            "planned_manifest_jobs": len(jobs),
             "per_evaluator": {
                 "basic_video": {
                     "ok": sum(row["status"] == "ok" for row in basic_rows),
@@ -145,4 +208,13 @@ def evaluate_run(run_dir: Path) -> dict[str, int]:
             },
         },
     )
-    return counts
+    return {**counts, "selected": selected_counts}
+
+
+def evaluate_job(run_dir: Path, job_id: str) -> dict[str, Any]:
+    """Evaluate exactly one generated job and upsert it into cumulative reports."""
+    return _evaluate_selected(run_dir, {job_id})
+
+
+def evaluate_run(run_dir: Path) -> dict[str, Any]:
+    return _evaluate_selected(run_dir, None)

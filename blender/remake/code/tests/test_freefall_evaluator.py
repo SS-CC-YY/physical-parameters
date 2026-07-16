@@ -13,7 +13,7 @@ try:
     import cv2
     import numpy as np
 
-    from remake_benchmark.evaluators.freefall import evaluate_freefall_job, fit_vertical_quadratic
+    from remake_benchmark.evaluators.freefall import _physical_gate, evaluate_freefall_job, fit_vertical_quadratic
 
     HAS_VISION_DEPS = True
 except ImportError:
@@ -84,6 +84,62 @@ class FreefallEvaluatorTests(unittest.TestCase):
             self.assertTrue(Path(result["artifacts"]["track_csv"]).is_file())
             self.assertTrue(Path(result["artifacts"]["trajectory_plot"]).is_file())
             self.assertTrue(Path(result["artifacts"]["overlay_video"]).is_file())
+
+            top_job = {
+                **job,
+                "job_id": "synthetic_freefall_top",
+                "factors": {**job["factors"], "camera": "CAM_Top"},
+            }
+            top_result = evaluate_freefall_job(
+                top_job,
+                video_path,
+                root,
+                output_root,
+                config,
+                make_overlay=False,
+            )
+            self.assertEqual(
+                top_result["metrics"]["parameter_identifiability"],
+                "image_plane_only_projective_view",
+            )
+            self.assertIsNone(top_result["metrics"]["estimated_gravity_m_s2"])
+            self.assertGreater(top_result["metrics"]["fit_r2"], 0.95)
+
+    def test_support_penetration_is_a_severe_pre_fit_gate(self) -> None:
+        with tempfile.TemporaryDirectory(dir=CODE_ROOT / "tests") as temporary:
+            root = Path(temporary)
+            image_path = root / "conditioning_with_plank.png"
+            width, height = 320, 240
+            image = np.full((height, width, 3), 45, dtype=np.uint8)
+            cv2.rectangle(image, (24, 180), (296, 208), (40, 95, 150), -1)
+            cv2.circle(image, (160, 42), 13, (0, 140, 255), -1)
+            self.assertTrue(cv2.imwrite(str(image_path), image))
+            tracks = []
+            for frame_index in range(28):
+                center_y = 42 + 7 * frame_index
+                tracks.append(
+                    {
+                        "found": True,
+                        "center_x_px": 160.0,
+                        "center_y_px": float(center_y),
+                        "bbox_x0": 147,
+                        "bbox_y0": center_y - 13,
+                        "bbox_x1": 173,
+                        "bbox_y1": center_y + 13,
+                        "bbox_width_px": 26,
+                        "bbox_height_px": 26,
+                        "bbox_area_px2": 676,
+                        "bbox_aspect_ratio": 1.0,
+                    }
+                )
+            metrics, flags = _physical_gate(
+                tracks,
+                (height, width),
+                image_path,
+                {"min_detection_rate": 0.70, "max_penetration_object_heights": 0.60, "min_penetration_frames": 3},
+            )
+            self.assertTrue(metrics["support_surface_detected"])
+            self.assertIn("severe_support_penetration", flags)
 
 
 if __name__ == "__main__":

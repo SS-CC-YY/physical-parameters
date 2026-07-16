@@ -14,7 +14,7 @@ selection:
     outdoor_count: 2
     seed: 36
   objects: [standard_ball, standard_cube, volleyball, cardboard_box]
-  cameras: [CAM_Side]
+  cameras: [CAM_Main, CAM_Side, CAM_Top]
   seeds: [36]
   target_assignment: object_values
 targets:

@@ -26,8 +26,8 @@ prepare_args=(
   --run-dir "${RUN_DIR}"
   --workspace-root "${REMAKE_ROOT}"
 )
-generate_args=(
-  -m remake_benchmark generate
+sequence_args=(
+  -m remake_benchmark sequence
   --run-dir "${RUN_DIR}"
 )
 
@@ -35,20 +35,20 @@ if [[ -n "${MAX_JOBS:-}" ]]; then
   prepare_args+=(--max-jobs "${MAX_JOBS}")
 fi
 if [[ "${DRY_RUN:-0}" == "1" ]]; then
-  generate_args+=(--dry-run)
+  sequence_args+=(--dry-run)
 fi
 if [[ "${OVERWRITE:-0}" == "1" ]]; then
   prepare_args+=(--overwrite)
-  generate_args+=(--overwrite)
+  sequence_args+=(--overwrite)
 fi
 if [[ "${FAIL_FAST:-1}" == "1" ]]; then
-  generate_args+=(--fail-fast)
+  sequence_args+=(--fail-fast)
+fi
+if [[ "${STOP_ON_INVALID:-0}" == "1" ]]; then
+  sequence_args+=(--stop-on-invalid)
 fi
 
 "${PYTHON_BIN}" "${prepare_args[@]}"
-"${PYTHON_BIN}" "${generate_args[@]}"
-if [[ "${DRY_RUN:-0}" != "1" ]]; then
-  "${PYTHON_BIN}" -m remake_benchmark evaluate --run-dir "${RUN_DIR}"
-fi
+"${PYTHON_BIN}" "${sequence_args[@]}"
 
 echo "run_dir=${RUN_DIR}"

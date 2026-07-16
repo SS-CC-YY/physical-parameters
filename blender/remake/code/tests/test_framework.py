@@ -15,6 +15,7 @@ from remake_benchmark.core.manifest import build_jobs  # noqa: E402
 from remake_benchmark.core.schema import validate_job  # noqa: E402
 from remake_benchmark.models import get_adapter  # noqa: E402
 from remake_benchmark.evaluators import evaluate_video  # noqa: E402
+from remake_benchmark.orchestration.evaluate import _overlay_job_ids  # noqa: E402
 
 
 class FrameworkTests(unittest.TestCase):
@@ -22,15 +23,16 @@ class FrameworkTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.resolved = resolve_build(CODE_ROOT / "builds" / "v1a_wan22_demo.yaml", WORKSPACE_ROOT)
 
-    def test_demo_build_creates_twenty_jobs_from_five_sampled_scenes(self) -> None:
+    def test_demo_build_creates_sixty_three_view_jobs_from_five_sampled_scenes(self) -> None:
         jobs = build_jobs(self.resolved)
-        self.assertEqual(len(jobs), 20)
+        self.assertEqual(len(jobs), 60)
         self.assertEqual({job["targets"]["gravity_g"] for job in jobs}, {2.0, 4.9, 9.81, 14.7})
         self.assertTrue(all(job["task_type"] == "i2v" for job in jobs))
         scenes = {job["factors"]["scene_id"] for job in jobs}
         self.assertIn("baseline", scenes)
         self.assertEqual(len([scene for scene in scenes if scene.startswith("indoor")]), 2)
         self.assertEqual(len([scene for scene in scenes if scene.startswith("outdoor")]), 2)
+        self.assertEqual({job["factors"]["camera"] for job in jobs}, {"CAM_Main", "CAM_Side", "CAM_Top"})
 
     def test_object_values_assignment_avoids_full_cross_product(self) -> None:
         jobs = build_jobs(self.resolved)
@@ -61,6 +63,16 @@ class FrameworkTests(unittest.TestCase):
             self.assertIn("static_camera", spec["constraints"])
             self.assertIn("vertical_free_fall", spec["constraints"])
 
+    def test_overlay_selection_covers_all_three_cameras(self) -> None:
+        jobs = build_jobs(self.resolved)
+        selected_ids = _overlay_job_ids(jobs, 9, 36)
+        selected = [job for job in jobs if job["job_id"] in selected_ids]
+        counts = {
+            camera: sum(job["factors"]["camera"] == camera for job in selected)
+            for camera in ("CAM_Main", "CAM_Side", "CAM_Top")
+        }
+        self.assertEqual(counts, {"CAM_Main": 3, "CAM_Side": 3, "CAM_Top": 3})
+
     def test_job_schema_requires_i2v_image(self) -> None:
         job = build_jobs(self.resolved, max_jobs=1)[0]
         del job["inputs"]["image"]
@@ -76,7 +88,9 @@ class FrameworkTests(unittest.TestCase):
         self.assertIn("i2v-A14B", invocation.command)
         self.assertIn("--ckpt_dir", invocation.command)
         self.assertIn("--save_file", invocation.command)
-        self.assertEqual(invocation.environment["CUDA_VISIBLE_DEVICES"], "7")
+        self.assertEqual(invocation.environment["CUDA_VISIBLE_DEVICES"], "0")
+        offload_index = invocation.command.index("--offload_model")
+        self.assertEqual(invocation.command[offload_index + 1], "False")
 
     def test_basic_evaluator_marks_missing_video_invalid(self) -> None:
         job = build_jobs(self.resolved, max_jobs=1)[0]

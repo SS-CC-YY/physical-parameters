@@ -29,9 +29,11 @@ build profile 选择模型与运行参数
         ↓
 model adapter（Wan / Cosmos / 其他模型）
         ↓
-统一 videos + metadata + logs
+单个 job 的 videos + metadata + logs
         ↓
-通用质量检查 + 实验专属物理评估
+该 job 的严重物理门控 + 轨迹拟合 + 可视化
+        ↓
+下一个 job（Wan2.2 模型进程保持常驻）
         ↓
 逐样本结果 + 跨模型汇总报告
 ```
@@ -83,10 +85,11 @@ builds/v1a_new_model_explicit.yaml
 prepare   --build <build.yaml> --run-dir <dir>
 generate  --run-dir <dir> [--max-jobs N] [--dry-run]
 evaluate  --run-dir <dir>
+sequence  --run-dir <dir> [--max-jobs N] [--dry-run]
 run       --build <build.yaml> --run-dir <dir>
 ```
 
-`run` 只是依次调用 prepare、generate 和 evaluate；每一步都可以单独重跑。生成阶段不得修改已经固化的 manifest，只把实际运行信息写入 metadata 和 run state。跨模型 summarize/report 仍属于下一阶段。
+`sequence` 严格执行“生成一个 → 门控/评估 → 拟合/可视化 → 下一个”。`run` 依次调用 prepare 和 sequence。保留 `generate`/`evaluate` 是为了诊断和兼容，但本次正式 Wan2.2 流程使用 sequence。生成阶段不得修改已经固化的 manifest，只把实际运行信息写入 metadata 和 run state。
 
 无需安装 package 也可通过薄入口运行：
 
@@ -102,17 +105,17 @@ demo build 为 `builds/v1a_wan22_demo.yaml`，使用：
 - 固定包含 `baseline`；
 - 使用 scene selection seed 36，从 `indoor1–4` 随机选 2 个、从 `outdoor1–4` 随机选 2 个；
 - 4 个物体分别绑定 4 个重力值，不运行 object × gravity 全组合；
-- `CAM_Side`；
+- `CAM_Main`、`CAM_Side`、`CAM_Top` 三视角；
 - 4 个显式重力值 `2.0, 4.9, 9.81, 14.7 m/s^2`；
 - seed 36；
-- 共 `5 场景 × 4 物体 = 20` 个 I2V 任务。
+- 共 `5 场景 × 4 物体 × 3 视角 = 60` 个 I2V 任务。
 
-测试和正式实验使用相同的五场景抽样规则，均运行这 20 个任务。`MAX_JOBS=2` 只用于检查环境和命令的基础 smoke test，不作为实验结果。每次 prepare 都会把计划抽取的场景和实际写入 manifest 的场景记录到 `manifest.selection.json`，因此随机选择可检查、可复现。
+测试和正式实验使用相同的五场景抽样规则，均运行这 60 个任务。`MAX_JOBS=3` 只用于覆盖三个视角的基础设施 smoke，不作为实验结果。每次 prepare 都会把计划抽取的场景和实际写入 manifest 的场景记录到 `manifest.selection.json`，因此随机选择可检查、可复现。
 
 服务器配置和运行命令见 [docs/server_setup.md](docs/server_setup.md)。建议第一次先运行两个任务的 dry-run：
 
 ```bash
-MAX_JOBS=2 DRY_RUN=1 bash code/scripts/run_wan22_demo.sh
+MAX_JOBS=3 DRY_RUN=1 bash code/scripts/run_wan22_demo.sh
 ```
 
 dry-run 会完成 schema 校验、build 展开、输入检查、manifest 写入和完整模型命令生成，但不会加载模型。
@@ -124,6 +127,7 @@ outputs/<run_id>/
 ├── resolved_build.yaml          # 展开后的完整 build 快照
 ├── manifest.jsonl               # 不可变的 canonical jobs
 ├── run_state.jsonl              # pending/running/ok/error/skip
+├── sequential_summary.json      # 逐样本生成/评估累计计数
 ├── videos/<job_id>.mp4
 ├── metadata/<job_id>.json
 ├── logs/<job_id>.*.log
@@ -144,8 +148,8 @@ outputs/<run_id>/
 
 1. 已完成 canonical manifest schema、build 解析和校验；
 2. 已完成显式参数 prompt renderer 和 Wan2.2 reference adapter；
-3. 已完成基础输出质量检查和自由落体轨迹/加速度代理拟合；
-4. 下一步用服务器生成结果校准检测阈值，并决定是否加入相机尺度标定；
+3. 已完成三视角逐样本严重异常门控、轨迹/加速度代理拟合及可视化；
+4. 下一步用服务器真实输出复核检测阈值，并补充相机内外参与尺度标定；
 5. 在服务器安装第二个模型并增加对应 adapter/model profile；
 6. 最后补齐并行 GPU、跨模型汇总报告和打包。
 

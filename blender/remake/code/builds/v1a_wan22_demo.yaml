@@ -1,7 +1,7 @@
 schema_version: 1.0.0
 build_id: v1a_wan22_i2v_explicit_demo
-description: Reproducibly sampled 20-job v1_A explicit-gravity demo using the official Wan2.2 I2V A14B runner.
-workspace_root: ${REMAKE_ROOT:-/root/data/heyuanyu/yefei/chenyu/data/physical-parameters/blender/remake}
+description: Reproducibly sampled 60-job, three-view v1_A run with per-job Wan2.2 generation, physics gate, fitting and visualization.
+workspace_root: ${REMAKE_ROOT:-/root/data/heyuanyu/yefei/chenyu/remake/data/blender/remake}
 output_root: ${OUTPUT_ROOT:-outputs}
 profiles:
   experiment: configs/experiments/v1a_wan22_demo.yaml

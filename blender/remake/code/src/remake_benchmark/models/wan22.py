@@ -8,6 +8,21 @@ from remake_benchmark.core.errors import ConfigError
 from .base import Invocation, ModelAdapter
 
 
+def as_bool(value: Any, *, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off", ""}:
+        return False
+    raise ConfigError(f"expected a boolean value, got {value!r}")
+
+
 class Wan22Adapter(ModelAdapter):
     """Reference adapter for the official Wan2.2 generate.py I2V interface."""
 
@@ -94,11 +109,12 @@ class Wan22Adapter(ModelAdapter):
             value = self.generation.get(key)
             if value is not None:
                 command.extend([flag, str(value)])
-        if bool(self.generation.get("offload_model", True)):
-            command.extend(["--offload_model", "True"])
-        if bool(self.generation.get("convert_model_dtype", True)):
+        command.extend(
+            ["--offload_model", "True" if as_bool(self.generation.get("offload_model"), default=True) else "False"]
+        )
+        if as_bool(self.generation.get("convert_model_dtype"), default=True):
             command.append("--convert_model_dtype")
-        if bool(self.generation.get("t5_cpu", False)):
+        if as_bool(self.generation.get("t5_cpu"), default=False):
             command.append("--t5_cpu")
         environment = {
             "CUDA_VISIBLE_DEVICES": str(self.runtime.get("gpu_ids", "0")),
@@ -108,6 +124,48 @@ class Wan22Adapter(ModelAdapter):
             "TOKENIZERS_PARALLELISM": "false",
         }
         return Invocation(command=command, cwd=self._repo(), environment=environment, output_video=output_video)
+
+    def persistent_worker_invocation(self) -> Invocation:
+        code_root = Path(__file__).resolve().parents[3]
+        command = [
+            str(self.runtime.get("python", "python")),
+            str(code_root / "scripts" / "wan22_persistent_worker.py"),
+            "--wan-repo",
+            str(self._repo()),
+            "--ckpt-dir",
+            str(self._checkpoint()),
+            "--task",
+            str(self.generation.get("task", "i2v-A14B")),
+            "--offload-model",
+            "true" if as_bool(self.generation.get("offload_model"), default=False) else "false",
+            "--convert-model-dtype",
+            "true" if as_bool(self.generation.get("convert_model_dtype"), default=True) else "false",
+            "--t5-cpu",
+            "true" if as_bool(self.generation.get("t5_cpu"), default=False) else "false",
+        ]
+        environment = {
+            "CUDA_VISIBLE_DEVICES": str(self.runtime.get("gpu_ids", "0")),
+            "PYTORCH_CUDA_ALLOC_CONF": str(
+                self.runtime.get("pytorch_cuda_alloc_conf", "expandable_segments:True,max_split_size_mb:128")
+            ),
+            "TOKENIZERS_PARALLELISM": "false",
+        }
+        return Invocation(command=command, cwd=self._repo(), environment=environment)
+
+    def persistent_request(self, job: dict[str, Any], output_video: Path) -> dict[str, Any]:
+        return {
+            "job_id": job["job_id"],
+            "image": str(self._input_image(job)),
+            "prompt": self._model_prompt(job),
+            "output": str(output_video),
+            "size": str(self.generation.get("size", "832*480")),
+            "frame_num": int(self.generation.get("frame_num", job["generation"]["num_frames"])),
+            "sample_steps": int(self.generation.get("sample_steps", 40)),
+            "sample_shift": self.generation.get("sample_shift"),
+            "sample_guide_scale": self.generation.get("sample_guide_scale"),
+            "sample_solver": str(self.generation.get("sample_solver", "unipc")),
+            "seed": int(job["seed"]),
+        }
 
     def provenance(self) -> dict[str, Any]:
         return {
