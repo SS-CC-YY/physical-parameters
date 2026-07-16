@@ -21,6 +21,20 @@ export REMAKE_ROOT=/root/data/heyuanyu/yefei/chenyu/remake/data/blender/remake
 
 共享 root 账户上不要继续写全局 Git 配置。以下所有命令只用临时 `-c safe.directory=...`，不会改变其他用户的 Git 配置。
 
+### outputs 与 git pull
+
+`blender/remake/.gitignore` 使用 `/outputs/` 忽略运行结果，且仓库没有跟踪任何 outputs 文件。因此正常的 `fetch`、`pull --ff-only`、`checkout` 不会删除或覆盖已有视频、日志和评估报告。
+
+更新前可检查：
+
+```bash
+git -c safe.directory="$REPO" status --short
+git -c safe.directory="$REPO" check-ignore -v \
+  blender/remake/outputs/<run_id>/sequential_summary.json
+```
+
+若未来远端真的新增了与本地 ignored 文件完全同名的 tracked 文件，Git 会停止并提示冲突，而不是静默覆盖。不要在该仓库运行 `git clean -fdx`；其中 `-x` 会把 ignored 的 outputs 一并删除。
+
 ## 2. 从 GitHub 更新代码与完整首帧
 
 ```bash
@@ -151,6 +165,8 @@ python -m remake_benchmark sequence \
 ```
 
 非空视频会跳过生成，但仍会执行/更新相应评估，然后从缺失视频处继续。不要传 `--overwrite`，否则会重新生成已有视频。
+
+如果只是 pull 了新的 evaluator，希望用已有 raw videos 重做评估，也使用同一条 `sequence` 命令；当 manifest 中所有视频都存在时，它不会启动 Wan2.2 worker。V1_A 旧 manifest 即使还没有 `drop_distance_m` 字段，也会使用 release 中冻结的 `4.2-0.44=3.76 m` 兼容值。必须对 `outputs/<run_id>/videos/*.mp4` 原始生成视频重评，不要把已经画过框的 `eval/freefall/overlays/*.mp4` 再作为 evaluator 输入。
 
 ## 8. 查看可视化
 

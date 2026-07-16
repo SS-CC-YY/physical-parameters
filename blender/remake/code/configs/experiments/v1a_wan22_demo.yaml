@@ -23,6 +23,9 @@ targets:
     values: [2.0, 4.9, 9.81, 14.7]
 known_params:
   initial_vertical_velocity_mps: 0.0
+  initial_height_z0_m: 4.2
+  contact_height_zc_m: 0.44
+  drop_distance_m: 3.76
 generation:
   width: 832
   height: 480

@@ -6,7 +6,7 @@ evaluators:
     ffprobe: true
     ffprobe_required: false
   - id: v1a_freefall
-    version: 2.0.0
+    version: 2.1.0
     tracker: auto
     min_template_score: 0.18
     min_detection_rate: 0.70
@@ -16,13 +16,16 @@ evaluators:
     floor_percentile: 92
     smoothing_window: 5
     motion_threshold: 14
+    max_contact_refinement_area_ratio: 2.25
+    max_contact_refinement_dimension_ratio: 1.8
     max_missing_run_fraction: 0.18
     max_bbox_area_ratio: 3.0
     max_bbox_aspect_ratio_change: 2.5
     max_center_jump_object_diagonals: 2.5
     max_trajectory_line_residual_object_diagonals: 1.5
     max_out_of_frame_fraction: 0.10
-    max_penetration_object_heights: 0.60
+    max_center_below_support_bottom_object_heights: 0.25
+    max_terminal_overshoot_object_heights: 0.45
     min_penetration_frames: 3
     overlay_video_count: 9
     overlay_tail_frames: 24

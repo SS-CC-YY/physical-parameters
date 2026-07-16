@@ -18,6 +18,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 
+FREEFALL_EVALUATOR_VERSION = "2.1.0"
+
+
 def _finite(value: Any) -> float | None:
     try:
         number = float(value)
@@ -61,7 +64,9 @@ def _object_mask(roi: np.ndarray, object_id: str) -> np.ndarray:
     hsv = cv2.cvtColor(cv2.GaussianBlur(roi, (5, 5), 0), cv2.COLOR_BGR2HSV)
     hue, saturation, value = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
     if object_id == "standard_ball":
-        mask = (hue >= 4) & (hue <= 28) & (saturation >= 60) & (value >= 70)
+        # The wooden support has a similar hue but much lower saturation.
+        # Keeping the high-chroma orange core prevents contact-time merging.
+        mask = (hue >= 6) & (hue <= 20) & (saturation >= 125) & (value >= 70)
     elif object_id == "standard_cube":
         mask = (hue >= 85) & (hue <= 135) & (saturation >= 40) & (value >= 50)
     elif object_id == "cardboard_box":
@@ -149,7 +154,7 @@ def _template_detection(frame: np.ndarray, template_gray: np.ndarray, initial_bb
     search_x0 = max(0, int(initial_center_x - strip_half))
     search_x1 = min(width, int(initial_center_x + strip_half))
     search_y0 = max(0, int(initial_bbox[1] - 2 * template_height))
-    search_y1 = min(height, int(0.96 * height))
+    search_y1 = height
     search = frame[search_y0:search_y1, search_x0:search_x1]
     if search.shape[0] < template_height or search.shape[1] < template_width:
         return None, float("nan")
@@ -176,7 +181,7 @@ def _motion_detection(
     strip_half = max(int(0.26 * width), 4 * initial_width)
     gate = np.zeros_like(mask)
     x0, x1 = max(0, int(initial_center_x - strip_half)), min(width, int(initial_center_x + strip_half))
-    y0, y1 = max(0, initial_bbox[1] - 2 * initial_height), min(height, int(0.96 * height))
+    y0, y1 = max(0, initial_bbox[1] - 2 * initial_height), height
     gate[y0:y1, x0:x1] = mask[y0:y1, x0:x1]
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
     gate = cv2.morphologyEx(cv2.morphologyEx(gate, cv2.MORPH_CLOSE, kernel), cv2.MORPH_OPEN, kernel)
@@ -224,6 +229,20 @@ def _refine_bbox(
     return bbox[0] + rx0, bbox[1] + ry0, bbox[2] + rx0, bbox[3] + ry0
 
 
+def _centered_bbox(
+    center: tuple[float, float],
+    size: tuple[float, float],
+    frame_shape: tuple[int, int],
+) -> tuple[int, int, int, int]:
+    frame_height, frame_width = frame_shape
+    width, height = max(2, int(round(size[0]))), max(2, int(round(size[1])))
+    x0 = int(round(center[0] - width / 2.0))
+    y0 = int(round(center[1] - height / 2.0))
+    x0 = min(max(0, x0), max(0, frame_width - width))
+    y0 = min(max(0, y0), max(0, frame_height - height))
+    return x0, y0, min(frame_width, x0 + width), min(frame_height, y0 + height)
+
+
 def _track_video(job: dict[str, Any], video_path: Path, image_path: Path, config: dict[str, Any]) -> tuple[list[dict[str, Any]], float, tuple[int, int]]:
     object_id = str(job["factors"]["object_id"])
     source_bbox, source_shape = _conditioning_bbox(image_path, object_id)
@@ -249,6 +268,8 @@ def _track_video(job: dict[str, Any], video_path: Path, image_path: Path, config
     template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
     previous, frame = first, first
     previous_center = ((x0 + x1) / 2.0, (y0 + y1) / 2.0)
+    stable_size: tuple[float, float] | None = None
+    support_profile = _support_surface_profile(image_path, frame_shape)
     tracks: list[dict[str, Any]] = []
     frame_index = 0
     tracker = str(config.get("tracker", "auto"))
@@ -287,11 +308,51 @@ def _track_video(job: dict[str, Any], video_path: Path, image_path: Path, config
             source = "missing"
             score = None
             bbox = None
+        refinement_rejected = False
+        refinement_area_ratio = None
+        near_support = False
         if chosen is not None and bbox is not None:
-            refined = _refine_bbox(frame, bbox, object_id, initial_area)
+            coarse_bbox = bbox
+            refined = _refine_bbox(frame, coarse_bbox, object_id, initial_area)
             if refined is not None:
-                bbox = refined
-                source = f"{source}+mask"
+                refined_width = float(refined[2] - refined[0])
+                refined_height = float(refined[3] - refined[1])
+                refined_area = refined_width * refined_height
+                if stable_size is None:
+                    stable_size = (refined_width, refined_height)
+                stable_area = max(stable_size[0] * stable_size[1], 1.0)
+                refinement_area_ratio = refined_area / stable_area
+                refined_center = (0.5 * (refined[0] + refined[2]), 0.5 * (refined[1] + refined[3]))
+                if support_profile is not None:
+                    support_x = min(frame_shape[1] - 1, max(0, int(round(refined_center[0]))))
+                    near_support = refined[3] >= support_profile[support_x] - 1.25 * stable_size[1]
+                width_ratio = refined_width / max(stable_size[0], 1.0)
+                height_ratio = refined_height / max(stable_size[1], 1.0)
+                merged_candidate = (
+                    refinement_area_ratio > float(config.get("max_contact_refinement_area_ratio", 2.25))
+                    or width_ratio > float(config.get("max_contact_refinement_dimension_ratio", 1.8))
+                    or height_ratio > float(config.get("max_contact_refinement_dimension_ratio", 1.8))
+                )
+                if merged_candidate and near_support:
+                    refinement_rejected = True
+                    coarse_center = (
+                        0.5 * (coarse_bbox[0] + coarse_bbox[2]),
+                        0.5 * (coarse_bbox[1] + coarse_bbox[3]),
+                    )
+                    bbox = _centered_bbox(coarse_center, stable_size, frame_shape)
+                    source = f"{source}+contact-stabilized"
+                else:
+                    bbox = refined
+                    source = f"{source}+mask"
+                    if not near_support:
+                        stable_size = (
+                            0.90 * stable_size[0] + 0.10 * refined_width,
+                            0.90 * stable_size[1] + 0.10 * refined_height,
+                        )
+            elif stable_size is not None:
+                coarse_center = (0.5 * (bbox[0] + bbox[2]), 0.5 * (bbox[1] + bbox[3]))
+                bbox = _centered_bbox(coarse_center, stable_size, frame_shape)
+                source = f"{source}+size-fallback"
             center_x, center_y = (bbox[0] + bbox[2]) / 2.0, (bbox[1] + bbox[3]) / 2.0
             previous_center = (center_x, center_y)
         else:
@@ -315,6 +376,9 @@ def _track_video(job: dict[str, Any], video_path: Path, image_path: Path, config
                 "bbox_height_px": None if bbox is None else bbox[3] - bbox[1],
                 "bbox_area_px2": None if bbox is None else (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]),
                 "bbox_aspect_ratio": None if bbox is None else (bbox[2] - bbox[0]) / max(bbox[3] - bbox[1], 1),
+                "refinement_rejected": refinement_rejected,
+                "refinement_area_ratio": _finite(refinement_area_ratio),
+                "near_support": near_support,
                 "fit_used": False,
                 "center_y_smoothed_px": None,
             }
@@ -336,8 +400,11 @@ def _max_true_run(values: list[bool]) -> int:
     return longest
 
 
-def _support_surface_profile(image_path: Path, frame_shape: tuple[int, int]) -> np.ndarray | None:
-    """Estimate the top of the wide brown support plank in conditioning-image coordinates."""
+def _support_region_profiles(
+    image_path: Path,
+    frame_shape: tuple[int, int],
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """Estimate upper and lower image boundaries of the wide support plank."""
     image = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
     if image is None:
         return None
@@ -366,18 +433,30 @@ def _support_surface_profile(image_path: Path, frame_shape: tuple[int, int]) -> 
     contour = max(candidates, key=lambda item: item[0])[1]
     component = np.zeros((source_height, source_width), dtype=np.uint8)
     cv2.drawContours(component, [contour], -1, 255, thickness=cv2.FILLED)
-    profile = np.full(source_width, np.nan, dtype=float)
+    top_profile = np.full(source_width, np.nan, dtype=float)
+    bottom_profile = np.full(source_width, np.nan, dtype=float)
     for x in range(source_width):
         ys = np.flatnonzero(component[:, x])
         if len(ys):
-            profile[x] = float(ys[0])
-    known = np.flatnonzero(np.isfinite(profile))
+            top_profile[x] = float(ys[0])
+            bottom_profile[x] = float(ys[-1])
+    known = np.flatnonzero(np.isfinite(top_profile))
     if len(known) < max(8, int(0.08 * source_width)):
         return None
-    profile = np.interp(np.arange(source_width), known, profile[known])
+    top_profile = np.interp(np.arange(source_width), known, top_profile[known])
+    bottom_profile = np.interp(np.arange(source_width), known, bottom_profile[known])
     frame_height, frame_width = frame_shape
     source_x = np.linspace(0, source_width - 1, frame_width)
-    return np.interp(source_x, np.arange(source_width), profile) * frame_height / float(source_height)
+    scale_y = frame_height / float(source_height)
+    return (
+        np.interp(source_x, np.arange(source_width), top_profile) * scale_y,
+        np.interp(source_x, np.arange(source_width), bottom_profile) * scale_y,
+    )
+
+
+def _support_surface_profile(image_path: Path, frame_shape: tuple[int, int]) -> np.ndarray | None:
+    profiles = _support_region_profiles(image_path, frame_shape)
+    return None if profiles is None else profiles[0]
 
 
 def _physical_gate(
@@ -453,37 +532,61 @@ def _physical_gate(
     if boundary_fraction > float(config.get("max_out_of_frame_fraction", 0.10)):
         severe.append("severe_out_of_frame")
 
-    support = _support_surface_profile(image_path, frame_shape)
-    if support is not None:
+    support_profiles = _support_region_profiles(image_path, frame_shape)
+    support_top = None if support_profiles is None else support_profiles[0]
+    support_bottom = None if support_profiles is None else support_profiles[1]
+    if support_top is not None:
         first_valid = valid[0]
         first_x = min(frame_width - 1, max(0, int(round(first_valid["center_x_px"]))))
-        initial_clearance = float(support[first_x] - first_valid["bbox_y1"])
+        initial_clearance = float(support_top[first_x] - first_valid["bbox_y1"])
         metrics["support_surface_initial_clearance_px"] = initial_clearance
         if initial_clearance < 0.25 * max(float(first_valid["bbox_height_px"]), 1.0):
             # Every v1_A conditioning frame is airborne. A surface above or
             # touching the initial object is therefore a failed plank split,
             # not evidence of penetration.
-            support = None
-    if support is not None:
+            support_top = None
+            support_bottom = None
+    if support_top is not None and support_bottom is not None:
         metrics["support_surface_detected"] = True
         depths_by_frame: list[float | None] = []
-        ratios_by_frame: list[float | None] = []
+        apparent_overlap_ratios: list[float | None] = []
+        below_bottom_ratios: list[float | None] = []
         for row in tracks:
             if not row["found"]:
                 depths_by_frame.append(None)
-                ratios_by_frame.append(None)
+                apparent_overlap_ratios.append(None)
+                below_bottom_ratios.append(None)
                 continue
             x = min(frame_width - 1, max(0, int(round(row["center_x_px"]))))
-            depth = float(row["bbox_y1"] - support[x])
+            depth = float(row["bbox_y1"] - support_top[x])
             height = max(float(row["bbox_height_px"]), 1.0)
             depths_by_frame.append(depth)
-            ratios_by_frame.append(depth / height)
+            apparent_overlap_ratios.append(depth / height)
+            below_bottom_ratios.append(float(row["center_y_px"] - support_bottom[x]) / height)
         finite_depths = [value for value in depths_by_frame if value is not None]
-        finite_ratios = [value for value in ratios_by_frame if value is not None]
+        finite_ratios = [value for value in apparent_overlap_ratios if value is not None]
+        finite_below = [value for value in below_bottom_ratios if value is not None]
         metrics["max_penetration_depth_px"] = max(finite_depths) if finite_depths else None
         metrics["max_penetration_depth_object_heights"] = max(finite_ratios) if finite_ratios else None
-        threshold = float(config.get("max_penetration_object_heights", 0.60))
-        penetration_run = _max_true_run([value is not None and value > threshold for value in ratios_by_frame])
+        metrics["max_center_below_support_bottom_object_heights"] = max(finite_below) if finite_below else None
+
+        late_count = max(8, int(math.ceil(0.20 * len(valid))))
+        settled_y = float(np.median([row["center_y_px"] for row in valid[-late_count:]]))
+        overshoot_ratios = [
+            None if not row["found"] else float(row["center_y_px"] - settled_y) / max(float(row["bbox_height_px"]), 1.0)
+            for row in tracks
+        ]
+        finite_overshoot = [value for value in overshoot_ratios if value is not None]
+        metrics["settled_center_y_px"] = settled_y
+        metrics["max_terminal_overshoot_object_heights"] = max(finite_overshoot) if finite_overshoot else None
+
+        below_threshold = float(config.get("max_center_below_support_bottom_object_heights", 0.25))
+        overshoot_threshold = float(config.get("max_terminal_overshoot_object_heights", 0.45))
+        bottom_run = _max_true_run([value is not None and value > below_threshold for value in below_bottom_ratios])
+        overshoot_run = _max_true_run([value is not None and value > overshoot_threshold for value in overshoot_ratios])
+        penetration_run = max(bottom_run, overshoot_run)
+        metrics["support_bottom_crossing_run_frames"] = bottom_run
+        metrics["terminal_overshoot_run_frames"] = overshoot_run
         metrics["penetration_run_frames"] = penetration_run
         if penetration_run >= int(config.get("min_penetration_frames", 3)):
             severe.append("severe_support_penetration")
@@ -682,6 +785,84 @@ def _overlay_video(
     temporary_output.replace(output)
 
 
+def parameter_similarity_score(estimated: float | None, target: float | None) -> float | None:
+    """Symmetric positive-parameter ratio: 1 is exact, 0 is sign/zero failure."""
+    estimate = _finite(estimated)
+    reference = _finite(target)
+    if estimate is None or reference is None:
+        return None
+    if estimate <= 0 or reference <= 0:
+        return 0.0
+    return float(min(estimate, reference) / max(estimate, reference))
+
+
+def _known_drop_distance(job: dict[str, Any]) -> float | None:
+    known = job.get("known_params", {})
+    direct = _finite(known.get("drop_distance_m"))
+    if direct is not None and direct > 0:
+        return direct
+    initial = _finite(known.get("initial_height_z0_m"))
+    contact = _finite(known.get("contact_height_zc_m"))
+    if initial is None or contact is None or initial <= contact:
+        # Backward compatibility for runs prepared before these known values
+        # were copied into the canonical v1_A manifest.
+        return 3.76 if job.get("experiment_id") == "v1_A" else None
+    return initial - contact
+
+
+def _metric_parameter_estimate(
+    job: dict[str, Any],
+    tracks: list[dict[str, Any]],
+    fit: dict[str, Any] | None,
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    target = float(job["targets"]["gravity_g"])
+    result: dict[str, Any] = {
+        "target_parameter": "gravity_g",
+        "target_value": target,
+        "estimated_value": None,
+        "unit": "m/s^2",
+        "similarity_score": None,
+        "relative_error": None,
+        "calibration_method": None,
+        "effective_pixels_per_meter": None,
+        "drop_distance_m": _known_drop_distance(job),
+    }
+    if fit is None:
+        result["unavailable_reason"] = "trajectory_fit_unavailable"
+        return result
+    configured_scale = _finite(config.get("pixels_per_meter"))
+    if configured_scale is not None and configured_scale > 0:
+        pixels_per_meter = configured_scale
+        method = "configured_pixels_per_meter"
+    else:
+        drop_distance = result["drop_distance_m"]
+        detected = [row for row in tracks if row["found"]]
+        initial_y = _finite(detected[0].get("center_y_smoothed_px")) if detected else None
+        if initial_y is None and detected:
+            initial_y = _finite(detected[0].get("center_y_px"))
+        image_drop = None if initial_y is None else float(fit["floor_center_y_px"] - initial_y)
+        if drop_distance is None or image_drop is None or image_drop <= 2.0:
+            result["unavailable_reason"] = "missing_drop_distance_or_image_displacement"
+            return result
+        pixels_per_meter = image_drop / drop_distance
+        camera = str(job.get("factors", {}).get("camera", "unknown"))
+        method = "known_drop_endpoint_scale_side" if camera == "CAM_Side" else "known_drop_endpoint_scale_projective"
+        result["image_drop_px"] = image_drop
+    estimate = float(fit["vertical_acceleration_px_s2"] / pixels_per_meter)
+    result.update(
+        {
+            "estimated_value": estimate,
+            "similarity_score": parameter_similarity_score(estimate, target),
+            "relative_error": abs(estimate - target) / target if target != 0 else None,
+            "calibration_method": method,
+            "effective_pixels_per_meter": pixels_per_meter,
+            "unavailable_reason": None,
+        }
+    )
+    return result
+
+
 def evaluate_freefall_job(
     job: dict[str, Any],
     video_path: Path,
@@ -696,9 +877,11 @@ def evaluate_freefall_job(
         image_path = workspace_root / image_path
     tracks, fps, frame_shape = _track_video(job, video_path, image_path, config)
     gate_metrics, severe_flags = _physical_gate(tracks, frame_shape, image_path, config)
+    penetration_flag = "severe_support_penetration" in severe_flags
+    tracking_flags = [flag for flag in severe_flags if flag != "severe_support_penetration"]
     fit: dict[str, Any] | None = None
     fit_error = None
-    if not severe_flags:
+    if not tracking_flags:
         try:
             fit, _, _ = _fit_tracks(tracks, config)
         except Exception as exc:
@@ -708,7 +891,7 @@ def evaluate_freefall_job(
     plot_path = output_root / "plots" / f"{job_id}.png"
     overlay_path = output_root / "overlays" / f"{job_id}.mp4"
     _write_tracks(track_path, tracks)
-    _trajectory_plot(plot_path, job, tracks, fit, severe_flags)
+    _trajectory_plot(plot_path, job, tracks, fit, tracking_flags)
     overlay_error = None
     if make_overlay:
         try:
@@ -723,53 +906,106 @@ def evaluate_freefall_job(
             )
         except Exception as exc:
             overlay_error = str(exc)
-    quality_flags = list(severe_flags)
+    parameter_flags: list[str] = []
     if fit_error:
-        quality_flags.append("parameter_fit_failed")
+        parameter_flags.append("parameter_fit_failed")
     if fit is not None and (not math.isfinite(fit["fit_r2"]) or fit["fit_r2"] < float(config.get("min_fit_r2", 0.70))):
-        quality_flags.append("low_fit_r2")
+        parameter_flags.append("low_fit_r2")
     if fit is not None and fit["fit_selection"] == "early_window_fallback":
-        quality_flags.append("airborne_interval_fallback")
+        parameter_flags.append("airborne_interval_fallback")
+    camera = str(job["factors"].get("camera", "unknown"))
+    parameter_result = _metric_parameter_estimate(job, tracks, fit, config)
+    acceleration_m_s2 = parameter_result["estimated_value"]
+    if acceleration_m_s2 is not None and acceleration_m_s2 <= 0:
+        parameter_flags.append("nonpositive_parameter_estimate")
+    quality_flags = list(
+        dict.fromkeys(
+            [*tracking_flags, *parameter_flags, *(["severe_support_penetration"] if penetration_flag else [])]
+        )
+    )
     if overlay_error:
         quality_flags.append("overlay_write_failed")
-    camera = str(job["factors"].get("camera", "unknown"))
-    pixels_per_meter = config.get("pixels_per_meter")
-    acceleration_m_s2 = None
-    if fit is not None and camera == "CAM_Side" and pixels_per_meter is not None and float(pixels_per_meter) > 0:
-        acceleration_m_s2 = fit["vertical_acceleration_px_s2"] / float(pixels_per_meter)
     if fit is None:
-        fit_status = "skipped_severe_gate" if severe_flags else "failed"
+        fit_status = "skipped_tracking_gate" if tracking_flags else "failed"
+        parameter_status = "unavailable"
     else:
         fit_status = "fitted_image_plane_proxy"
-    if acceleration_m_s2 is not None:
-        parameter_identifiability = "metric_side_view_with_scale"
+        if acceleration_m_s2 is None:
+            parameter_status = "unavailable"
+        else:
+            parameter_status = "invalid" if parameter_flags else "ok"
+    if parameter_result["calibration_method"] == "known_drop_endpoint_scale_side":
+        parameter_identifiability = "endpoint_calibrated_side_view"
+    elif parameter_result["calibration_method"] == "known_drop_endpoint_scale_projective":
+        parameter_identifiability = "endpoint_calibrated_projective_approximation"
+    elif acceleration_m_s2 is not None:
+        parameter_identifiability = "configured_metric_scale"
     elif camera == "CAM_Side":
-        parameter_identifiability = "image_plane_only_missing_metric_scale"
+        parameter_identifiability = "unavailable_missing_metric_scale"
     else:
-        parameter_identifiability = "image_plane_only_projective_view"
+        parameter_identifiability = "unavailable_projective_view"
+    if tracking_flags:
+        rigid_status = "indeterminate"
+        penetration_detected: bool | None = None
+    elif not gate_metrics.get("support_surface_detected"):
+        rigid_status = "indeterminate"
+        penetration_detected = None
+    elif penetration_flag:
+        rigid_status = "violation"
+        penetration_detected = True
+    else:
+        rigid_status = "pass"
+        penetration_detected = False
     camera_note = {
-        "CAM_Side": "Best 2-D gravity-proxy view; metric g still requires a valid pixels-per-meter calibration.",
-        "CAM_Main": "Perspective projection is fitted in image space; a scalar pixel scale is insufficient for metric g.",
-        "CAM_Top": "Top/oblique projection is fully tracked and gated, but metric g needs camera extrinsics and depth/plane calibration.",
+        "CAM_Side": "Metric estimate uses the known world drop distance and measured endpoint image displacement.",
+        "CAM_Main": "Perspective result uses known world drop distance and endpoint image displacement; metric g is an approximation until full camera calibration is supplied.",
+        "CAM_Top": "Top/oblique result uses known world drop distance and endpoint image displacement; metric g is an approximation until full camera calibration is supplied.",
     }.get(camera, "Unknown camera geometry; only image-plane motion is reported.")
     fit_metrics: dict[str, Any] = {} if fit is None else fit
     return {
         "job_id": job_id,
         "evaluator_id": "v1a_freefall",
-        "evaluator_version": str(config.get("version", "1.0.0")),
-        "status": "ok" if not quality_flags else "invalid",
+        "evaluator_version": FREEFALL_EVALUATOR_VERSION,
+        "status": "ok" if rigid_status == "pass" and parameter_status == "ok" and not tracking_flags and not overlay_error else "invalid",
         "quality_flags": quality_flags,
         "metrics": {
             **fit_metrics,
             **gate_metrics,
             "target_gravity_m_s2": float(job["targets"]["gravity_g"]),
             "estimated_gravity_m_s2": acceleration_m_s2,
-            "pixels_per_meter": pixels_per_meter,
+            "parameter_similarity_score": parameter_result["similarity_score"],
+            "parameter_relative_error": parameter_result["relative_error"],
+            "pixels_per_meter": parameter_result["effective_pixels_per_meter"],
             "fps": fps,
             "fit_status": fit_status,
+            "parameter_status": parameter_status,
             "parameter_identifiability": parameter_identifiability,
             "camera_interpretation": camera_note,
+            "tracking_gate_passed": not tracking_flags,
             "severe_gate_passed": not severe_flags,
+            "rigid_penetration_status": rigid_status,
+            "penetration_detected": penetration_detected,
+        },
+        "rigid_body_evaluation": {
+            "status": rigid_status,
+            "penetration_detected": penetration_detected,
+            "support_surface_detected": gate_metrics.get("support_surface_detected"),
+            "max_penetration_depth_px": gate_metrics.get("max_penetration_depth_px"),
+            "max_penetration_depth_object_heights": gate_metrics.get("max_penetration_depth_object_heights"),
+            "max_center_below_support_bottom_object_heights": gate_metrics.get("max_center_below_support_bottom_object_heights"),
+            "max_terminal_overshoot_object_heights": gate_metrics.get("max_terminal_overshoot_object_heights"),
+            "penetration_run_frames": gate_metrics.get("penetration_run_frames", 0),
+            "support_bottom_threshold_object_heights": float(config.get("max_center_below_support_bottom_object_heights", 0.25)),
+            "terminal_overshoot_threshold_object_heights": float(config.get("max_terminal_overshoot_object_heights", 0.45)),
+            "threshold_frames": int(config.get("min_penetration_frames", 3)),
+        },
+        "parameter_evaluation": {
+            "status": parameter_status,
+            **parameter_result,
+            "fit_status": fit_status,
+            "fit_r2": None if fit is None else fit.get("fit_r2"),
+            "fit_rmse_px": None if fit is None else fit.get("fit_rmse_px"),
+            "quality_flags": parameter_flags,
         },
         "artifacts": {
             "track_csv": str(track_path),
@@ -809,21 +1045,35 @@ def aggregate_freefall(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "usable_proxy_fits": len(camera_usable),
             "valid": sum(row.get("status") == "ok" for row in camera_rows),
             "severe_gate_failures": sum(not row.get("metrics", {}).get("severe_gate_passed", False) for row in camera_rows),
+            "rigid_penetration_violations": sum(row.get("rigid_body_evaluation", {}).get("status") == "violation" for row in camera_rows),
+            "parameter_similarity_mean": float(np.mean([
+                row["parameter_evaluation"]["similarity_score"]
+                for row in camera_rows
+                if _finite(row.get("parameter_evaluation", {}).get("similarity_score")) is not None
+            ])) if any(_finite(row.get("parameter_evaluation", {}).get("similarity_score")) is not None for row in camera_rows) else None,
             "pearson_target_vs_acceleration_proxy": correlation(camera_targets, camera_estimates),
         }
+    similarities = [
+        float(row["parameter_evaluation"]["similarity_score"])
+        for row in rows
+        if _finite(row.get("parameter_evaluation", {}).get("similarity_score")) is not None
+    ]
     return {
         "n": len(rows),
         "usable": len(usable),
         "valid": sum(row.get("status") == "ok" for row in rows),
         "severe_gate_failures": sum(not row.get("metrics", {}).get("severe_gate_passed", False) for row in rows),
+        "rigid_penetration_violations": sum(row.get("rigid_body_evaluation", {}).get("status") == "violation" for row in rows),
+        "rigid_penetration_indeterminate": sum(row.get("rigid_body_evaluation", {}).get("status") == "indeterminate" for row in rows),
+        "mean_parameter_similarity": float(np.mean(similarities)) if similarities else None,
         "pearson_target_vs_acceleration_proxy": correlation(targets, estimates),
         "spearman_target_vs_acceleration_proxy": correlation(rank_target, rank_estimate),
         "mean_detection_rate": float(np.mean([row["metrics"]["detection_rate"] for row in tracked])) if tracked else None,
         "mean_fit_r2": float(np.mean([row["metrics"]["fit_r2"] for row in usable])) if usable else None,
         "scene_counts": {scene: len(items) for scene, items in by_scene.items()},
         "per_camera": per_camera,
-        "unit_warning": "vertical_acceleration_px_s2 is an image-plane proxy; it is not m/s^2 without pixels_per_meter calibration",
-        "view_warning": "CAM_Main and CAM_Top are projective views; metric gravity is not identifiable from a scalar pixel scale alone",
+        "unit_warning": "metric gravity uses known drop distance and endpoint image displacement; keep vertical_acceleration_px_s2 as the raw audit value",
+        "view_warning": "CAM_Main and CAM_Top endpoint-scale gravity estimates are projective approximations until full camera calibration is available",
         "design_warning": "object_values binds one gravity to each object, so gravity response is confounded with object identity",
     }
 
@@ -834,9 +1084,12 @@ def write_freefall_summary_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "job_id", "status", "scene_id", "object_id", "camera", "target_gravity_m_s2",
         "vertical_acceleration_px_s2", "estimated_gravity_m_s2", "fit_r2", "fit_rmse_px",
         "detection_rate", "num_fit_points", "fit_selection", "fit_status", "parameter_identifiability",
+        "rigid_penetration_status", "penetration_detected", "parameter_status",
+        "parameter_similarity_score", "parameter_relative_error", "parameter_calibration_method",
         "severe_gate_passed", "max_missing_run_frames", "max_center_jump_object_diagonals",
         "bbox_area_p95_p05_ratio", "bbox_aspect_p95_p05_ratio", "out_of_frame_fraction",
-        "max_penetration_depth_object_heights", "quality_flags", "trajectory_plot", "overlay_video",
+        "max_penetration_depth_object_heights", "max_center_below_support_bottom_object_heights",
+        "max_terminal_overshoot_object_heights", "quality_flags", "trajectory_plot", "overlay_video",
     ]
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
@@ -860,6 +1113,12 @@ def write_freefall_summary_csv(path: Path, rows: list[dict[str, Any]]) -> None:
                     "fit_selection": metrics.get("fit_selection"),
                     "fit_status": metrics.get("fit_status"),
                     "parameter_identifiability": metrics.get("parameter_identifiability"),
+                    "rigid_penetration_status": metrics.get("rigid_penetration_status"),
+                    "penetration_detected": metrics.get("penetration_detected"),
+                    "parameter_status": metrics.get("parameter_status"),
+                    "parameter_similarity_score": metrics.get("parameter_similarity_score"),
+                    "parameter_relative_error": metrics.get("parameter_relative_error"),
+                    "parameter_calibration_method": row.get("parameter_evaluation", {}).get("calibration_method"),
                     "severe_gate_passed": metrics.get("severe_gate_passed"),
                     "max_missing_run_frames": metrics.get("max_missing_run_frames"),
                     "max_center_jump_object_diagonals": metrics.get("max_center_jump_object_diagonals"),
@@ -867,6 +1126,8 @@ def write_freefall_summary_csv(path: Path, rows: list[dict[str, Any]]) -> None:
                     "bbox_aspect_p95_p05_ratio": metrics.get("bbox_aspect_p95_p05_ratio"),
                     "out_of_frame_fraction": metrics.get("out_of_frame_fraction"),
                     "max_penetration_depth_object_heights": metrics.get("max_penetration_depth_object_heights"),
+                    "max_center_below_support_bottom_object_heights": metrics.get("max_center_below_support_bottom_object_heights"),
+                    "max_terminal_overshoot_object_heights": metrics.get("max_terminal_overshoot_object_heights"),
                     "quality_flags": ";".join(row.get("quality_flags", [])),
                     "trajectory_plot": artifacts.get("trajectory_plot"),
                     "overlay_video": artifacts.get("overlay_video"),
@@ -884,23 +1145,36 @@ def write_freefall_html_report(path: Path, rows: list[dict[str, Any]], aggregate
         "<!doctype html><html><head><meta charset='utf-8'><title>V1A free-fall evaluation</title>",
         "<style>body{font-family:Arial,sans-serif;margin:24px;line-height:1.5}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:6px;font-size:12px}th{background:#f4f4f4}img{max-width:900px;width:100%}video{max-width:900px;width:100%}.warn{color:#a33}code{background:#f4f4f4;padding:2px 4px}</style></head><body>",
         "<h1>V1A three-view physics gate, tracking and fit report</h1>",
-        f"<p>Usable proxy fits: {aggregate.get('usable', 0)} / {aggregate.get('n', 0)}; severe-gate failures: {aggregate.get('severe_gate_failures', 0)}; mean detection rate: {aggregate.get('mean_detection_rate')}; mean R²: {aggregate.get('mean_fit_r2')}</p>",
+        f"<p>Usable proxy fits: {aggregate.get('usable', 0)} / {aggregate.get('n', 0)}; rigid penetration violations: {aggregate.get('rigid_penetration_violations', 0)}; mean parameter similarity: {aggregate.get('mean_parameter_similarity')}; mean detection rate: {aggregate.get('mean_detection_rate')}; mean R²: {aggregate.get('mean_fit_r2')}</p>",
         "<h2>Evaluation order</h2>",
-        "<p>Each generated video is processed before the next generation starts: (1) object detection and route extraction; (2) severe 2-D physics/geometry gate for disappearance, teleportation, scale/deformation, frame exit, erratic route and support-plank penetration; (3) only after the gate passes, airborne trajectory fitting; (4) route plot and selected annotated video.</p>",
+        "<p>Each generated video is processed before the next generation starts: (1) object detection and route extraction; (2) tracking-integrity gate; (3) an independent rigid-body support-penetration decision; (4) an independent airborne trajectory/parameter fit whenever tracking is usable, even if penetration is detected after contact; (5) route plot and selected annotated video.</p>",
         "<p class='warn'>The severe gate is an auditable image-space heuristic, not a collision-engine proof. A flagged sample requires visual confirmation in its annotated video.</p>",
         "<h2>Fitting equation and units</h2>",
-        "<p>Image coordinates use positive y downward. For selected airborne frames, fit <code>y_px(t)=c0+c1·(t−t0)+c2·(t−t0)²</code>. Therefore <code>v_px(t)=c1+2·c2·(t−t0)</code> and the projected acceleration is <code>a_px=2·c2</code> in px/s². For a calibrated side view only, <code>g_est=a_px/s_px_per_m</code>.</p>",
-        "<p class='warn'>Without calibration, px/s² is only a projected motion proxy. CAM_Main and CAM_Top additionally need camera extrinsics/homography or depth calibration; their scalar metric gravity is intentionally reported as unidentifiable. The object-values design also confounds object identity with gravity value.</p>",
+        "<p>Image coordinates use positive y downward. For selected airborne frames, fit <code>y_px(t)=c0+c1·(t−t0)+c2·(t−t0)²</code>, so <code>a_px=2·c2</code>. With known world drop <code>D=z0−zc</code> and measured endpoint displacement <code>Δy_px</code>, use <code>s_eff=Δy_px/D</code> and <code>g_est=a_px/s_eff</code>. Positive-parameter similarity is <code>min(g_est,g_target)/max(g_est,g_target)</code>.</p>",
+        "<p class='warn'>CAM_Main and CAM_Top use an endpoint-scale projective approximation until full camera calibration is supplied. The object-values design also confounds object identity with gravity value.</p>",
         "<h2>Per-video visual verification</h2>",
     ]
     for row in rows:
         metrics, artifacts = row.get("metrics", {}), row.get("artifacts", {})
+        rigid = row.get("rigid_body_evaluation", {})
+        parameter = row.get("parameter_evaluation", {})
         lines.append(f"<h3>{html.escape(row['job_id'])}</h3>")
         lines.append(
             f"<p>View={html.escape(str(row.get('factors', {}).get('camera')))}; status={html.escape(row['status'])}; "
-            f"gate_passed={metrics.get('severe_gate_passed')}; detection={metrics.get('detection_rate')}; "
-            f"fit={metrics.get('fit_status')}; a={metrics.get('vertical_acceleration_px_s2')} px/s²; R²={metrics.get('fit_r2')}; "
+            f"tracking_gate_passed={metrics.get('tracking_gate_passed')}; detection={metrics.get('detection_rate')}; "
             f"flags={html.escape(', '.join(row.get('quality_flags', [])))}</p>"
+        )
+        lines.append(
+            f"<h4>Rigid-body penetration</h4><p>Status={html.escape(str(rigid.get('status')))}; "
+            f"penetration_detected={rigid.get('penetration_detected')}; below_support_bottom={rigid.get('max_center_below_support_bottom_object_heights')} object heights; "
+            f"terminal_overshoot={rigid.get('max_terminal_overshoot_object_heights')} object heights; "
+            f"evidence_run={rigid.get('penetration_run_frames')} frames.</p>"
+        )
+        lines.append(
+            f"<h4>Parameter inversion</h4><p>Status={html.escape(str(parameter.get('status')))}; "
+            f"target={parameter.get('target_value')} m/s²; estimated={parameter.get('estimated_value')} m/s²; "
+            f"similarity={parameter.get('similarity_score')}; relative_error={parameter.get('relative_error')}; "
+            f"fit_R²={parameter.get('fit_r2')}; calibration={html.escape(str(parameter.get('calibration_method')))}.</p>"
         )
         lines.append(f"<p>{html.escape(str(metrics.get('camera_interpretation', '')))}</p>")
         plot = relative(artifacts.get("trajectory_plot"))

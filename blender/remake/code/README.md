@@ -148,7 +148,7 @@ outputs/<run_id>/
 
 1. 已完成 canonical manifest schema、build 解析和校验；
 2. 已完成显式参数 prompt renderer 和 Wan2.2 reference adapter；
-3. 已完成三视角逐样本严重异常门控、轨迹/加速度代理拟合及可视化；
+3. 已完成三视角逐样本跟踪门控、独立刚性穿模判定、独立参数反推/相似度及可视化；
 4. 下一步用服务器真实输出复核检测阈值，并补充相机内外参与尺度标定；
 5. 在服务器安装第二个模型并增加对应 adapter/model profile；
 6. 最后补齐并行 GPU、跨模型汇总报告和打包。
