@@ -18,7 +18,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 
-FREEFALL_EVALUATOR_VERSION = "2.1.0"
+FREEFALL_EVALUATOR_VERSION = "2.2.0"
 
 
 def _finite(value: Any) -> float | None:
@@ -243,6 +243,41 @@ def _centered_bbox(
     return x0, y0, min(frame_width, x0 + width), min(frame_height, y0 + height)
 
 
+def _robust_bbox_size(samples: list[tuple[float, float]]) -> tuple[float, float]:
+    """Return a size template that is insensitive to one noisy refinement."""
+    if not samples:
+        raise ValueError("at least one bbox size sample is required")
+    widths = np.asarray([sample[0] for sample in samples], dtype=float)
+    heights = np.asarray([sample[1] for sample in samples], dtype=float)
+    return float(np.median(widths)), float(np.median(heights))
+
+
+def _deformation_evidence(
+    candidate_size: tuple[float, float],
+    reference_size: tuple[float, float],
+    config: dict[str, Any],
+) -> bool:
+    """Require area-preserving, reciprocal width/height change as deformation evidence.
+
+    A support plank merged into the object mask normally increases both dimensions
+    and/or area. A visible squash/stretch instead changes width and height in
+    opposite directions for approximately the same silhouette area.
+    """
+    width, height = candidate_size
+    reference_width, reference_height = reference_size
+    width_ratio = width / max(reference_width, 1.0)
+    height_ratio = height / max(reference_height, 1.0)
+    area_ratio = width_ratio * height_ratio
+    dimension_change = float(config.get("deformation_min_dimension_change_ratio", 0.22))
+    reciprocal_limit = 1.0 / (1.0 + dimension_change)
+    reciprocal_change = (
+        (width_ratio >= 1.0 + dimension_change and height_ratio <= reciprocal_limit)
+        or (height_ratio >= 1.0 + dimension_change and width_ratio <= reciprocal_limit)
+    )
+    max_area_ratio = float(config.get("deformation_max_area_change_ratio", 1.30))
+    return reciprocal_change and 1.0 / max_area_ratio <= area_ratio <= max_area_ratio
+
+
 def _track_video(job: dict[str, Any], video_path: Path, image_path: Path, config: dict[str, Any]) -> tuple[list[dict[str, Any]], float, tuple[int, int]]:
     object_id = str(job["factors"]["object_id"])
     source_bbox, source_shape = _conditioning_bbox(image_path, object_id)
@@ -269,6 +304,9 @@ def _track_video(job: dict[str, Any], video_path: Path, image_path: Path, config
     previous, frame = first, first
     previous_center = ((x0 + x1) / 2.0, (y0 + y1) / 2.0)
     stable_size: tuple[float, float] | None = None
+    size_samples: list[tuple[float, float]] = []
+    size_locked = False
+    deformation_candidate_run = 0
     support_profile = _support_surface_profile(image_path, frame_shape)
     tracks: list[dict[str, Any]] = []
     frame_index = 0
@@ -311,6 +349,9 @@ def _track_video(job: dict[str, Any], video_path: Path, image_path: Path, config
         refinement_rejected = False
         refinement_area_ratio = None
         near_support = False
+        bbox_size_constrained = False
+        deformation_candidate = False
+        deformation_confirmed = False
         if chosen is not None and bbox is not None:
             coarse_bbox = bbox
             refined = _refine_bbox(frame, coarse_bbox, object_id, initial_area)
@@ -318,8 +359,10 @@ def _track_video(job: dict[str, Any], video_path: Path, image_path: Path, config
                 refined_width = float(refined[2] - refined[0])
                 refined_height = float(refined[3] - refined[1])
                 refined_area = refined_width * refined_height
+                seeded_reference = stable_size is None
                 if stable_size is None:
-                    stable_size = (refined_width, refined_height)
+                    size_samples.append((refined_width, refined_height))
+                    stable_size = _robust_bbox_size(size_samples)
                 stable_area = max(stable_size[0] * stable_size[1], 1.0)
                 refinement_area_ratio = refined_area / stable_area
                 refined_center = (0.5 * (refined[0] + refined[2]), 0.5 * (refined[1] + refined[3]))
@@ -328,34 +371,94 @@ def _track_video(job: dict[str, Any], video_path: Path, image_path: Path, config
                     near_support = refined[3] >= support_profile[support_x] - 1.25 * stable_size[1]
                 width_ratio = refined_width / max(stable_size[0], 1.0)
                 height_ratio = refined_height / max(stable_size[1], 1.0)
-                merged_candidate = (
-                    refinement_area_ratio > float(config.get("max_contact_refinement_area_ratio", 2.25))
-                    or width_ratio > float(config.get("max_contact_refinement_dimension_ratio", 1.8))
-                    or height_ratio > float(config.get("max_contact_refinement_dimension_ratio", 1.8))
-                )
-                if merged_candidate and near_support:
+                warmup_max_change = float(config.get("size_lock_warmup_max_dimension_ratio", 1.35))
+                warmup_outlier = max(
+                    width_ratio,
+                    height_ratio,
+                    1.0 / max(width_ratio, 1e-6),
+                    1.0 / max(height_ratio, 1e-6),
+                ) > warmup_max_change
+                if not seeded_reference and not size_locked and not near_support and not warmup_outlier:
+                    size_samples.append((refined_width, refined_height))
+                    stable_size = _robust_bbox_size(size_samples)
+                warmup_frames = max(1, int(config.get("size_lock_warmup_frames", 3)))
+                size_locked = len(size_samples) >= warmup_frames
+                stable_area = max(stable_size[0] * stable_size[1], 1.0)
+                refinement_area_ratio = refined_area / stable_area
+
+                if size_locked:
+                    deformation_candidate = _deformation_evidence(
+                        (refined_width, refined_height),
+                        stable_size,
+                        config,
+                    )
+                    deformation_candidate_run = deformation_candidate_run + 1 if deformation_candidate else 0
+                    deformation_confirmed = deformation_candidate_run >= max(
+                        2,
+                        int(config.get("deformation_confirmation_frames", 3)),
+                    )
+                else:
+                    deformation_candidate_run = 0
+
+                if deformation_confirmed:
+                    bbox = refined
+                    source = f"{source}+deformation-confirmed"
+                elif size_locked:
+                    minimum_ratio = float(config.get("min_locked_bbox_dimension_ratio", 0.85))
+                    maximum_ratio = float(config.get("max_locked_bbox_dimension_ratio", 1.10))
+                    lock_at_contact = near_support and bool(config.get("lock_bbox_size_near_support", True))
+                    if lock_at_contact:
+                        constrained_size = stable_size
+                    else:
+                        constrained_size = (
+                            min(max(refined_width, minimum_ratio * stable_size[0]), maximum_ratio * stable_size[0]),
+                            min(max(refined_height, minimum_ratio * stable_size[1]), maximum_ratio * stable_size[1]),
+                        )
+                    bbox_size_constrained = (
+                        abs(constrained_size[0] - refined_width) > 0.5
+                        or abs(constrained_size[1] - refined_height) > 0.5
+                    )
+                    if bbox_size_constrained:
+                        refinement_rejected = True
+                        coarse_center = (
+                            0.5 * (coarse_bbox[0] + coarse_bbox[2]),
+                            0.5 * (coarse_bbox[1] + coarse_bbox[3]),
+                        )
+                        # A large area increase is typical of a support/object
+                        # mask merge, so its shifted mask center is not trusted.
+                        rebuild_center = (
+                            coarse_center
+                            if refinement_area_ratio > float(config.get("deformation_max_area_change_ratio", 1.30))
+                            else refined_center
+                        )
+                        bbox = _centered_bbox(rebuild_center, constrained_size, frame_shape)
+                        suffix = "contact-size-locked" if lock_at_contact else "size-limited"
+                        source = f"{source}+{suffix}"
+                    else:
+                        bbox = refined
+                        source = f"{source}+mask"
+                elif warmup_outlier:
                     refinement_rejected = True
+                    bbox_size_constrained = True
                     coarse_center = (
                         0.5 * (coarse_bbox[0] + coarse_bbox[2]),
                         0.5 * (coarse_bbox[1] + coarse_bbox[3]),
                     )
                     bbox = _centered_bbox(coarse_center, stable_size, frame_shape)
-                    source = f"{source}+contact-stabilized"
+                    source = f"{source}+size-warmup-rejected"
                 else:
                     bbox = refined
-                    source = f"{source}+mask"
-                    if not near_support:
-                        stable_size = (
-                            0.90 * stable_size[0] + 0.10 * refined_width,
-                            0.90 * stable_size[1] + 0.10 * refined_height,
-                        )
+                    source = f"{source}+mask-warmup"
             elif stable_size is not None:
+                deformation_candidate_run = 0
                 coarse_center = (0.5 * (bbox[0] + bbox[2]), 0.5 * (bbox[1] + bbox[3]))
                 bbox = _centered_bbox(coarse_center, stable_size, frame_shape)
+                bbox_size_constrained = True
                 source = f"{source}+size-fallback"
             center_x, center_y = (bbox[0] + bbox[2]) / 2.0, (bbox[1] + bbox[3]) / 2.0
             previous_center = (center_x, center_y)
         else:
+            deformation_candidate_run = 0
             center_x = center_y = None
         tracks.append(
             {
@@ -379,6 +482,13 @@ def _track_video(job: dict[str, Any], video_path: Path, image_path: Path, config
                 "refinement_rejected": refinement_rejected,
                 "refinement_area_ratio": _finite(refinement_area_ratio),
                 "near_support": near_support,
+                "bbox_size_locked": size_locked,
+                "bbox_size_constrained": bbox_size_constrained,
+                "bbox_reference_width_px": None if stable_size is None else _finite(stable_size[0]),
+                "bbox_reference_height_px": None if stable_size is None else _finite(stable_size[1]),
+                "deformation_candidate": deformation_candidate,
+                "deformation_candidate_run": deformation_candidate_run,
+                "deformation_confirmed": deformation_confirmed,
                 "fit_used": False,
                 "center_y_smoothed_px": None,
             }

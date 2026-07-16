@@ -33,7 +33,16 @@ conditioning image 用物体类别相关的颜色、亮度、边缘与连通域�
 2. 相邻帧灰度差分的运动连通域；
 3. 上一位置、搜索带和预期向下运动的空间约束。
 
-落地接触阶段额外使用首帧物体尺寸作为稳定参考。若颜色连通域突然放大超过 2.25 倍、单边尺寸超过 1.8 倍，并且候选框已经接近支撑板，则判定为“物体掩膜与木板合并”，拒绝该大框并用模板中心与稳定尺寸重建目标框。标准橙色球还使用高饱和度核心掩膜，从颜色上排除低饱和度木板。
+前 3 个远离支撑面的可信颜色连通域以宽、高中位数建立物体尺寸模板，此后锁定模板，不再用后续候选框更新参考尺寸。普通帧的宽、高最多扩大到模板的 1.10 倍，最多缩小到 0.85 倍；接近支撑面时直接使用模板宽、高，仅跟随检测中心。因此落地瞬间即使物体掩膜与木板合并，检测框也不会随连通域突然扩大。
+
+只有满足下面全部条件才把尺寸锁定临时释放为“明显形变”：
+
+1. 宽、高相对模板至少有一边变化 22%；
+2. 宽、高沿相反方向变化（压扁或拉伸，而不是两边一起扩大）；
+3. 候选框面积保持在模板面积的 `1/1.30` 到 `1.30` 倍；
+4. 上述证据连续至少 3 帧出现。
+
+这样可将单帧扩框、木板粘连与真实的持续压扁/拉伸区分开。标准橙色球还使用高饱和度核心掩膜，从颜色上排除低饱和度木板。
 
 每帧记录：
 
@@ -43,6 +52,9 @@ center_x_px, center_y_px,
 bbox_x0, bbox_y0, bbox_x1, bbox_y1,
 bbox_width_px, bbox_height_px, bbox_area_px2, bbox_aspect_ratio,
 refinement_rejected, refinement_area_ratio, near_support,
+bbox_size_locked, bbox_size_constrained,
+bbox_reference_width_px, bbox_reference_height_px,
+deformation_candidate, deformation_candidate_run, deformation_confirmed,
 center_y_smoothed_px, fit_used
 ```
 

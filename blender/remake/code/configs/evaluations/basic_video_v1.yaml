@@ -6,7 +6,7 @@ evaluators:
     ffprobe: true
     ffprobe_required: false
   - id: v1a_freefall
-    version: 2.1.0
+    version: 2.2.0
     tracker: auto
     min_template_score: 0.18
     min_detection_rate: 0.70
@@ -16,8 +16,14 @@ evaluators:
     floor_percentile: 92
     smoothing_window: 5
     motion_threshold: 14
-    max_contact_refinement_area_ratio: 2.25
-    max_contact_refinement_dimension_ratio: 1.8
+    size_lock_warmup_frames: 3
+    size_lock_warmup_max_dimension_ratio: 1.35
+    min_locked_bbox_dimension_ratio: 0.85
+    max_locked_bbox_dimension_ratio: 1.10
+    lock_bbox_size_near_support: true
+    deformation_min_dimension_change_ratio: 0.22
+    deformation_max_area_change_ratio: 1.30
+    deformation_confirmation_frames: 3
     max_missing_run_fraction: 0.18
     max_bbox_area_ratio: 3.0
     max_bbox_aspect_ratio_change: 2.5

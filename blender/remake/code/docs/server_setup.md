@@ -166,7 +166,7 @@ python -m remake_benchmark sequence \
 
 非空视频会跳过生成，但仍会执行/更新相应评估，然后从缺失视频处继续。不要传 `--overwrite`，否则会重新生成已有视频。
 
-如果只是 pull 了新的 evaluator，希望用已有 raw videos 重做评估，也使用同一条 `sequence` 命令；当 manifest 中所有视频都存在时，它不会启动 Wan2.2 worker。V1_A 旧 manifest 即使还没有 `drop_distance_m` 字段，也会使用 release 中冻结的 `4.2-0.44=3.76 m` 兼容值。必须对 `outputs/<run_id>/videos/*.mp4` 原始生成视频重评，不要把已经画过框的 `eval/freefall/overlays/*.mp4` 再作为 evaluator 输入。
+如果只是 pull 了新的 evaluator，希望用已有 raw videos 重做评估，也使用同一条 `sequence` 命令；当 manifest 中所有视频都存在时，它不会启动 Wan2.2 worker。V1_A 旧 manifest 即使还没有 `drop_distance_m` 字段，也会使用 release 中冻结的 `4.2-0.44=3.76 m` 兼容值。evaluator 2.2 还会自动对旧 run 使用默认的物体框尺寸锁定参数，无须重新 prepare。必须对 `outputs/<run_id>/videos/*.mp4` 原始生成视频重评，不要把已经画过框的 `eval/freefall/overlays/*.mp4` 再作为 evaluator 输入。
 
 ## 8. 查看可视化
 

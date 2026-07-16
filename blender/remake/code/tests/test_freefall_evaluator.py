@@ -14,7 +14,9 @@ try:
     import numpy as np
 
     from remake_benchmark.evaluators.freefall import (
+        _deformation_evidence,
         _physical_gate,
+        _track_video,
         evaluate_freefall_job,
         fit_vertical_quadratic,
         parameter_similarity_score,
@@ -38,6 +40,15 @@ class FreefallEvaluatorTests(unittest.TestCase):
         self.assertAlmostEqual(parameter_similarity_score(2.0, 4.0), 0.5)
         self.assertAlmostEqual(parameter_similarity_score(6.0, 4.0), 2.0 / 3.0)
         self.assertEqual(parameter_similarity_score(-1.0, 4.0), 0.0)
+
+    def test_deformation_requires_reciprocal_area_preserving_shape_change(self) -> None:
+        config = {
+            "deformation_min_dimension_change_ratio": 0.22,
+            "deformation_max_area_change_ratio": 1.30,
+        }
+        self.assertTrue(_deformation_evidence((130.0, 77.0), (100.0, 100.0), config))
+        self.assertFalse(_deformation_evidence((150.0, 100.0), (100.0, 100.0), config))
+        self.assertFalse(_deformation_evidence((120.0, 84.0), (100.0, 100.0), config))
 
     def test_synthetic_video_produces_track_plot_and_overlay(self) -> None:
         with tempfile.TemporaryDirectory(dir=CODE_ROOT / "tests") as temporary:
@@ -153,6 +164,57 @@ class FreefallEvaluatorTests(unittest.TestCase):
             self.assertTrue(penetration_result["rigid_body_evaluation"]["penetration_detected"])
             self.assertEqual(penetration_result["parameter_evaluation"]["status"], "ok")
             self.assertIsNotNone(penetration_result["parameter_evaluation"]["estimated_value"])
+
+    def test_contact_mask_merge_does_not_expand_locked_bbox(self) -> None:
+        with tempfile.TemporaryDirectory(dir=CODE_ROOT / "tests") as temporary:
+            root = Path(temporary)
+            image_path = root / "conditioning.png"
+            video_path = root / "contact_merge.mp4"
+            width, height, fps, frames = 320, 240, 20.0, 64
+            background = np.full((height, width, 3), 45, dtype=np.uint8)
+            cv2.rectangle(background, (24, 180), (296, 208), (40, 95, 150), -1)
+            conditioning = background.copy()
+            cv2.circle(conditioning, (width // 2, 42), 13, (0, 140, 255), -1)
+            self.assertTrue(cv2.imwrite(str(image_path), conditioning))
+            writer = cv2.VideoWriter(str(video_path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height))
+            self.assertTrue(writer.isOpened())
+            for frame_index in range(frames):
+                center_y = min(167, 42 + 3 * frame_index)
+                frame = background.copy()
+                cv2.circle(frame, (width // 2, center_y), 13, (0, 140, 255), -1)
+                if frame_index >= 44:
+                    # High-chroma pixels touching the ball emulate a mask that
+                    # merges with a support/object artifact at landing.
+                    cv2.rectangle(frame, (104, 166), (216, 181), (0, 140, 255), -1)
+                writer.write(frame)
+            writer.release()
+            job = {
+                "job_id": "synthetic_contact_merge",
+                "factors": {"object_id": "standard_ball"},
+                "generation": {"fps": fps},
+            }
+            tracks, _, _ = _track_video(
+                job,
+                video_path,
+                image_path,
+                {
+                    "tracker": "template",
+                    "min_template_score": 0.10,
+                    "size_lock_warmup_frames": 3,
+                    "max_locked_bbox_dimension_ratio": 1.10,
+                    "lock_bbox_size_near_support": True,
+                    "deformation_confirmation_frames": 3,
+                },
+            )
+            constrained = [row for row in tracks if row["bbox_size_constrained"]]
+            self.assertTrue(constrained)
+            self.assertTrue(any("contact-size-locked" in row["tracking_source"] for row in constrained))
+            self.assertFalse(any(row["deformation_confirmed"] for row in tracks))
+            for row in constrained:
+                self.assertLessEqual(
+                    float(row["bbox_width_px"]),
+                    float(row["bbox_reference_width_px"]) + 1.0,
+                )
 
     def test_support_penetration_is_reported_as_rigid_violation(self) -> None:
         with tempfile.TemporaryDirectory(dir=CODE_ROOT / "tests") as temporary:
