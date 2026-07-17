@@ -1,0 +1,12 @@
+schema_version: 1.0.0
+build_id: all13_wan22_i2v_explicit_generation
+description: Exhaustive generation-only Wan2.2 build for all 13 experiments, 69 frozen parameter anchors, 9 scenes, 4 objects and 3 cameras.
+workflow: generation_only
+workspace_root: ${REMAKE_ROOT:-/root/data/heyuanyu/yefei/chenyu/remake/data/blender/remake}
+output_root: ${OUTPUT_ROOT:-outputs}
+profiles:
+  experiment: configs/experiments/all_experiments_full.yaml
+  prompt: configs/prompts/all_experiments_explicit_v1.yaml
+  model: configs/models/wan22_i2v_a14b_full_server.yaml
+  # Kept in the resolved build for later reproducibility; generation does not invoke it.
+  evaluation: configs/evaluations/basic_video_v1.yaml

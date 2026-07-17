@@ -26,6 +26,8 @@ model adapter 再决定负面提示是独立参数、拼接进正面提示，还
 
 评估器不读取 Wan、Cosmos 等模型内部目录，也不解析模型运行命令。它只接收 canonical job、规范化视频路径和 metadata。因此同一个评估器可以直接比较不同模型。
 
+当前正式调度采用 generation-first：先为每个目标模型完成并核对完整 manifest 的全部规范化视频，再单独启动 evaluator。`workflow: generation_only` 的 build 禁止 `sequence` 入口，避免生成阶段因检测阈值或拟合问题改变任务覆盖率。
+
 ### 配置可复现，运行状态可恢复
 
 每次运行先冻结 `resolved_build.yaml` 和 `manifest.jsonl`。运行状态另写 `run_state.jsonl`，不原地修改 manifest。失败任务可按 job id 重跑，已有成功视频默认跳过。

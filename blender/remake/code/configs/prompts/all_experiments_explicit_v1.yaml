@@ -1,0 +1,130 @@
+extends: configs/prompts/common_physics_video_v1.yaml
+prompt_template_id: ppb_all_13_explicit_physics
+version: 1.0.0
+mode: explicit
+experiment_templates:
+  v1_A:
+    dynamics: >-
+      Continue the object from rest in a purely vertical short-horizon free fall. Use constant
+      gravitational acceleration with no horizontal drift, spin, air drag, or bounce.
+    parameter: >-
+      Use gravity_g = {gravity_g:g} m/s^2.
+    terminal: >-
+      At the first floor contact, stop the object and keep it at rest for the remaining frames.
+  v1_B:
+    dynamics: >-
+      Continue the object horizontally toward the single wall with constant incoming speed, zero
+      gravity, and zero friction. At impact, reverse the horizontal velocity once.
+    parameter: >-
+      Use wall restitution restitution_e = {restitution_e:g}.
+    terminal: >-
+      After the impact, preserve the resulting constant outgoing speed and do not add another collision.
+  v1_C:
+    dynamics: >-
+      Continue the object sliding horizontally on the flat floor from the known initial speed. Apply
+      constant kinetic-friction deceleration under known gravity 9.81 m/s^2, without bounce or hopping.
+    parameter: >-
+      Use kinetic_friction_mu = {kinetic_friction_mu:g}.
+    terminal: >-
+      If the speed reaches zero, keep the object at rest for all remaining frames.
+  v1_D:
+    dynamics: >-
+      Continue the pendulum-shaped payload as the gravity-independent controlled damping oscillator
+      already shown. Keep its period fixed at 3.0 seconds and decay only its angular amplitude.
+    parameter: >-
+      Use amplitude_decay_beta = {amplitude_decay_beta:g} 1/s.
+    terminal: >-
+      Maintain a smooth exponentially decaying oscillation without a phase reset or energy increase.
+  v2_A:
+    dynamics: >-
+      Continue the payload oscillating along the fixed cycloid track. Preserve the track geometry and
+      arc amplitude convention; gravity controls the oscillation period through the cycloid dynamics.
+    parameter: >-
+      Use gravity_g = {gravity_g:g} m/s^2 with known cycloid scale a = 0.65 m.
+    terminal: >-
+      Keep the motion on the track through a complete smooth oscillation with no speed reset.
+  v2_B:
+    dynamics: >-
+      Continue repeated horizontal motion between the two symmetric fixed walls with zero gravity and
+      zero friction. Reverse and reduce speed at every wall using one constant restitution.
+    parameter: >-
+      Use restitution_e = {restitution_e:g} at both walls.
+    terminal: >-
+      Preserve the geometric sequence of impact speeds without sticking, tunneling, or spontaneous acceleration.
+  v2_C:
+    dynamics: >-
+      Continue the payload rightward across the horizontal two-surface track. Surface A is left of the
+      known transition and Surface B is right of it; velocity must remain continuous at the transition.
+    parameter: >-
+      Use kinetic_friction_mu_A = {kinetic_friction_mu_A:g} and kinetic_friction_mu_B = {kinetic_friction_mu_B:g}.
+    terminal: >-
+      Apply the corresponding constant deceleration on each surface and remain at rest after stopping.
+  v2_D:
+    dynamics: >-
+      Continue the fixed-length pendulum in its plane. Jointly apply gravity to its phase and period and
+      linear damping to its amplitude envelope, with no rod flex or pivot motion.
+    parameter: >-
+      Use gravity_g = {gravity_g:g} m/s^2 and linear_damping_beta = {linear_damping_beta:g} 1/s.
+    terminal: >-
+      Preserve a smooth nonlinear damped-pendulum trajectory with no phase or energy reset.
+  v2_E:
+    dynamics: >-
+      Continue the purely vertical repeated bounce. Apply constant gravity during each flight and the
+      same normal restitution at every floor impact, with zero drag and zero tangential motion.
+    parameter: >-
+      Use gravity_g = {gravity_g:g} m/s^2 and restitution_e = {restitution_e:g}.
+    terminal: >-
+      Keep flight arcs and impact-speed ratios consistent until the end of the clip.
+  v3_A:
+    dynamics: >-
+      Continue the long-horizon projectile with horizontal linear drag, vertical gravity and drag, and
+      repeated floor bounces. Preserve its initial state and ground height with zero contact friction.
+    parameter: >-
+      Use gravity_g = {gravity_g:g} m/s^2, linear_drag_beta = {linear_drag_beta:g} 1/s,
+      and restitution_e = {restitution_e:g}.
+    terminal: >-
+      Maintain continuous dragged flight segments and apply the same restitution at every ground impact.
+  v3_B:
+    dynamics: >-
+      Continue repeated horizontal travel between two fixed walls. Apply kinetic-friction deceleration
+      during every travel segment and distinct restitution at the left and right walls. There is no spring.
+    parameter: >-
+      Use kinetic_friction_mu_k = {kinetic_friction_mu_k:g}, left_restitution_e_L = {left_restitution_e_L:g},
+      and right_restitution_e_R = {right_restitution_e_R:g}.
+    terminal: >-
+      Preserve continuous travel and the correct wall-specific impact ratios without tunneling or speed reset.
+  v3_C:
+    dynamics: >-
+      Continue the incline-to-floor-to-wall hybrid trajectory. Use one gravity and one kinetic friction
+      through the incline and floor stages, then apply one restitution at the fixed wall collision.
+    parameter: >-
+      Use gravity_g = {gravity_g:g} m/s^2, kinetic_friction_mu = {kinetic_friction_mu:g},
+      and restitution_e = {restitution_e:g}.
+    terminal: >-
+      Keep stage transitions continuous and show the post-wall motion without a position or speed reset.
+  v3_D:
+    dynamics: >-
+      Continue the fixed-length magnetic damped pendulum in-plane. Simultaneously apply gravity, global
+      linear damping, and the known localized magnetic profile centered at the visible magnet apparatus.
+    parameter: >-
+      Use gravity_g = {gravity_g:g} m/s^2, linear_damping_beta = {linear_damping_beta:g} 1/s,
+      and magnetic_kappa = {magnetic_kappa:g} rad/s^2.
+    terminal: >-
+      Preserve smooth magnet-zone passages and damped extrema with no pivot motion, rod flex, or phase reset.
+experiment_constraints:
+  v1_A: [vertical_free_fall, constant_gravity, no_air_drag, no_bounce_after_contact]
+  v1_B: [single_horizontal_wall_impact, zero_gravity, zero_friction, constant_restitution]
+  v1_C: [flat_floor_slide, constant_kinetic_friction, no_bounce, rest_after_stop]
+  v1_D: [fixed_period_oscillator, exponential_amplitude_decay, gravity_independent]
+  v2_A: [fixed_cycloid_track, gravity_dependent_period, continuous_motion]
+  v2_B: [two_fixed_walls, repeated_impacts, symmetric_restitution, zero_friction]
+  v2_C: [two_friction_surfaces, one_known_transition, continuous_velocity]
+  v2_D: [fixed_pivot, rigid_rod, joint_gravity_damping, planar_motion]
+  v2_E: [vertical_bounce, joint_gravity_restitution, repeated_impacts]
+  v3_A: [joint_gravity_drag_restitution, projectile_motion, repeated_floor_impacts]
+  v3_B: [two_fixed_walls, asymmetric_restitution, kinetic_friction, no_spring]
+  v3_C: [incline_floor_wall_stages, joint_gravity_friction_restitution, continuous_transitions]
+  v3_D: [fixed_pivot, rigid_rod, joint_gravity_damping_magnetism, known_magnetic_profile]
+additional_negative_prompt: >-
+  physically inconsistent speed reset, spontaneous energy gain, apparatus motion, wall or floor
+  penetration, target disappearance, target size growth, target identity change

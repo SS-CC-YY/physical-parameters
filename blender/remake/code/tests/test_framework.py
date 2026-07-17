@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+from collections import Counter
 from pathlib import Path
 
 
@@ -22,6 +23,10 @@ class FrameworkTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.resolved = resolve_build(CODE_ROOT / "builds" / "v1a_wan22_demo.yaml", WORKSPACE_ROOT)
+        cls.full_resolved = resolve_build(
+            CODE_ROOT / "builds" / "all_experiments_wan22_generation.yaml", WORKSPACE_ROOT
+        )
+        cls.full_jobs = build_jobs(cls.full_resolved)
 
     def test_demo_build_creates_sixty_three_view_jobs_from_five_sampled_scenes(self) -> None:
         jobs = build_jobs(self.resolved)
@@ -97,6 +102,46 @@ class FrameworkTests(unittest.TestCase):
         result = evaluate_video(job, WORKSPACE_ROOT / "does-not-exist.mp4", {"min_bytes": 1024})
         self.assertEqual(result["status"], "invalid")
         self.assertIn("missing_video", result["quality_flags"])
+
+    def test_full_generation_build_is_exhaustive(self) -> None:
+        jobs = self.full_jobs
+        self.assertEqual(len(jobs), 7452)
+        self.assertEqual(len({job["inputs"]["image"] for job in jobs}), 1404)
+        parameter_tuples = {
+            (job["experiment_id"], job["factors"]["parameter_tuple_id"])
+            for job in jobs
+        }
+        self.assertEqual(len(parameter_tuples), 69)
+        tuple_counts = Counter(
+            (job["experiment_id"], job["factors"]["parameter_tuple_id"])
+            for job in jobs
+        )
+        self.assertEqual(set(tuple_counts.values()), {108})
+        self.assertEqual(
+            {job["factors"]["scene_id"] for job in jobs},
+            {"baseline", "indoor1", "indoor2", "indoor3", "indoor4", "outdoor1", "outdoor2", "outdoor3", "outdoor4"},
+        )
+        self.assertEqual({job["factors"]["object_id"] for job in jobs}, {"standard_ball", "standard_cube", "cardboard_box", "volleyball"})
+        self.assertEqual({job["factors"]["camera"] for job in jobs}, {"CAM_Main", "CAM_Side", "CAM_Top"})
+
+    def test_full_generation_uses_current_v3b_physics(self) -> None:
+        job = next(job for job in self.full_jobs if job["experiment_id"] == "v3_B")
+        self.assertEqual(
+            set(job["targets"]),
+            {"kinetic_friction_mu_k", "left_restitution_e_L", "right_restitution_e_R"},
+        )
+        self.assertIn("two fixed walls", job["prompt"])
+        self.assertIn("There is no spring", job["prompt"])
+
+    def test_full_generation_uses_one_common_prompt_framework(self) -> None:
+        self.assertEqual(
+            {job["prompt_spec"]["prompt_framework_id"] for job in self.full_jobs},
+            {"ppb_common_physics_video_v1"},
+        )
+        self.assertEqual(
+            {job["prompt_template_id"] for job in self.full_jobs},
+            {"ppb_all_13_explicit_physics"},
+        )
 
 
 if __name__ == "__main__":

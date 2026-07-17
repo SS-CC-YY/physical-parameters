@@ -31,6 +31,31 @@
       }
     },
     "experiment_templates": {
+      "oneOf": [
+        {"$ref": "#/$defs/experimentTemplate"},
+        {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {"$ref": "#/$defs/experimentTemplate"}
+        }
+      ]
+    },
+    "shared_constraints": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "experiment_constraints": {
+      "oneOf": [
+        {"$ref": "#/$defs/constraintList"},
+        {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {"$ref": "#/$defs/constraintList"}
+        }
+      ]
+    },
+    "negative_prompt": {"type": "string"},
+    "additional_negative_prompt": {"type": "string"}
+  },
+  "$defs": {
+    "experimentTemplate": {
       "type": "object",
       "additionalProperties": false,
       "required": ["dynamics", "parameter", "terminal"],
@@ -40,9 +65,10 @@
         "terminal": {"type": "string", "minLength": 1}
       }
     },
-    "shared_constraints": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
-    "experiment_constraints": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
-    "negative_prompt": {"type": "string"},
-    "additional_negative_prompt": {"type": "string"}
+    "constraintList": {
+      "type": "array",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    }
   }
 }

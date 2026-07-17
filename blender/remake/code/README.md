@@ -1,4 +1,4 @@
-# Remake 多模型视频实验框架（设计稿）
+# Remake 多模型视频实验框架
 
 本目录是 `blender/remake` 后续视频生成实验的统一代码入口。当前已经实现第一阶段可运行版本：build/schema、canonical manifest、通用 runner、Wan2.2 reference adapter 和基础视频完整性评估。
 
@@ -29,13 +29,11 @@ build profile 选择模型与运行参数
         ↓
 model adapter（Wan / Cosmos / 其他模型）
         ↓
-单个 job 的 videos + metadata + logs
+完整生成所有 jobs（模型进程保持常驻，支持断点续跑）
         ↓
-该 job 的严重物理门控 + 轨迹拟合 + 可视化
+videos + metadata + logs
         ↓
-下一个 job（Wan2.2 模型进程保持常驻）
-        ↓
-逐样本结果 + 跨模型汇总报告
+生成阶段全部结束后，再单独启动评估与跨模型汇总
 ```
 
 ## 当前目录
@@ -89,7 +87,7 @@ sequence  --run-dir <dir> [--max-jobs N] [--dry-run]
 run       --build <build.yaml> --run-dir <dir>
 ```
 
-`sequence` 严格执行“生成一个 → 门控/评估 → 拟合/可视化 → 下一个”。`run` 依次调用 prepare 和 sequence。保留 `generate`/`evaluate` 是为了诊断和兼容，但本次正式 Wan2.2 流程使用 sequence。生成阶段不得修改已经固化的 manifest，只把实际运行信息写入 metadata 和 run state。
+`generate` 和 `run` 当前都只负责生成，不会调用 evaluator。`sequence` 作为旧的显式诊断入口保留，但正式批量生成不得使用它。评估必须等所有目标模型的视频生成完成后，再由人工明确执行 `evaluate`。生成阶段不得修改已经固化的 manifest，只把实际运行信息写入 metadata 和 run state。
 
 无需安装 package 也可通过薄入口运行：
 
@@ -97,7 +95,31 @@ run       --build <build.yaml> --run-dir <dir>
 python code/scripts/remake_benchmark.py --help
 ```
 
-## Wan2.2 完整 demo
+## 正式全量生成矩阵
+
+正式 experiment profile 为 `configs/experiments/all_experiments_full.yaml`，参数来自冻结的 13 实验设计，而不是旧版 v1/v2/v3 prompt 文档。范围为：
+
+- 13 个实验：`v1_A–v1_D`、`v2_A–v2_E`、`v3_A–v3_D`；
+- 69 个冻结 parameter anchor tuples；
+- 9 个场景：baseline、4 个 indoor、4 个 outdoor；
+- 4 个物体；
+- 3 个视角；
+- seed 36；
+- 每模型共 `69 × 9 × 4 × 3 = 7452` 个视频；
+- 使用全部 1404 张首帧 PNG，每个 PNG 对应多个显式物理参数 continuation。
+
+V3 多参数实验只运行 registry 中有物理意义的联合参数锚点，不把各参数独立做笛卡尔积。尤其 `v3_B` 的冻结实验是“带摩擦的左右墙非对称重复碰撞”，不是旧文件名所暗示的弹簧阻尼实验。
+
+当前可直接运行的 reference build 是 `builds/all_experiments_wan22_generation.yaml`。执行：
+
+```bash
+DETACHED=1 GPU_ID=7 \
+bash code/scripts/run_full_generation.sh
+```
+
+脚本只调用 `prepare` 和 `generate`；不会产生 `eval/`，也不会因检测或拟合结果中断生成。相同 `RUN_DIR` 再次执行会复用不可变 manifest，并跳过已有非空视频。
+
+## 旧 Wan2.2 60-job demo
 
 demo build 为 `builds/v1a_wan22_demo.yaml`，使用：
 
@@ -110,7 +132,7 @@ demo build 为 `builds/v1a_wan22_demo.yaml`，使用：
 - seed 36；
 - 共 `5 场景 × 4 物体 × 3 视角 = 60` 个 I2V 任务。
 
-测试和正式实验使用相同的五场景抽样规则，均运行这 60 个任务。`MAX_JOBS=3` 只用于覆盖三个视角的基础设施 smoke，不作为实验结果。每次 prepare 都会把计划抽取的场景和实际写入 manifest 的场景记录到 `manifest.selection.json`，因此随机选择可检查、可复现。
+该 build 只保留用于兼容已经生成的 smoke run，不再作为正式实验清单。`run_wan22_demo.sh` 也已改为纯生成。
 
 服务器配置和运行命令见 [docs/server_setup.md](docs/server_setup.md)。建议第一次先运行两个任务的 dry-run：
 
@@ -127,19 +149,19 @@ outputs/<run_id>/
 ├── resolved_build.yaml          # 展开后的完整 build 快照
 ├── manifest.jsonl               # 不可变的 canonical jobs
 ├── run_state.jsonl              # pending/running/ok/error/skip
-├── sequential_summary.json      # 逐样本生成/评估累计计数
+├── run_summary.json             # 纯生成累计计数
 ├── videos/<job_id>.mp4
 ├── metadata/<job_id>.json
 ├── logs/<job_id>.*.log
-├── eval/
-│   ├── sample_metrics.jsonl
-│   ├── aggregate.json
-│   ├── freefall/
-│   │   ├── summary.csv
-│   │   ├── tracks/
-│   │   ├── plots/
-│   │   └── overlays/
-│   └── report/index.html
+└── eval/                        # 仅在未来显式运行 evaluate 后出现
+    ├── sample_metrics.jsonl
+    ├── aggregate.json
+    ├── freefall/
+    │   ├── summary.csv
+    │   ├── tracks/
+    │   ├── plots/
+    │   └── overlays/
+    └── report/index.html
 ```
 
 模型原生输出文件名可以不同，但 adapter 必须将最终视频规范化为 `videos/<job_id>.mp4`，并保留原始输出路径和转换记录。

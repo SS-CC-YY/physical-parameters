@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +32,13 @@ def prepare_run(
     write_jsonl(manifest_path, jobs)
     selected_scenes = list(dict.fromkeys(str(job["factors"]["scene_id"]) for job in all_jobs))
     manifest_scenes = list(dict.fromkeys(str(job["factors"]["scene_id"]) for job in jobs))
+    planned_by_experiment = Counter(str(job["experiment_id"]) for job in all_jobs)
+    manifest_by_experiment = Counter(str(job["experiment_id"]) for job in jobs)
+    parameter_tuples = {
+        (str(job["experiment_id"]), str(job["factors"].get("parameter_tuple_id", "")))
+        for job in all_jobs
+        if job["factors"].get("parameter_tuple_id") is not None
+    }
     write_json(
         run_dir / "manifest.selection.json",
         {
@@ -39,6 +47,9 @@ def prepare_run(
             "selected_scenes": selected_scenes,
             "manifest_scenes": manifest_scenes,
             "target_assignment": jobs[0]["factors"].get("target_assignment"),
+            "planned_parameter_tuple_count": len(parameter_tuples),
+            "planned_jobs_by_experiment": dict(planned_by_experiment),
+            "manifest_jobs_by_experiment": dict(manifest_by_experiment),
             "planned_job_count": len(all_jobs),
             "job_count": len(jobs),
         },

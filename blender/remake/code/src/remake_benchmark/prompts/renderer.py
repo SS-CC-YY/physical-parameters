@@ -29,13 +29,28 @@ def render_prompt(
         "camera": camera,
         **targets,
     }
+    configured_templates = profile["experiment_templates"]
+    if all(key in configured_templates for key in ("dynamics", "parameter", "terminal")):
+        experiment_templates = configured_templates
+    else:
+        experiment_templates = configured_templates.get(experiment_id)
+        if not isinstance(experiment_templates, dict):
+            raise ConfigError(f"prompt profile has no experiment templates for {experiment_id}")
+    configured_constraints = profile["experiment_constraints"]
+    if isinstance(configured_constraints, list):
+        experiment_constraints = configured_constraints
+    else:
+        experiment_constraints = configured_constraints.get(experiment_id)
+        if not isinstance(experiment_constraints, list):
+            raise ConfigError(f"prompt profile has no experiment constraints for {experiment_id}")
+
     section_templates = {
         "task": profile["shared_templates"]["task"],
         "scene": profile["shared_templates"]["scene"],
         "camera": profile["shared_templates"]["camera"],
-        "dynamics": profile["experiment_templates"]["dynamics"],
-        "parameter": profile["experiment_templates"]["parameter"],
-        "terminal": profile["experiment_templates"]["terminal"],
+        "dynamics": experiment_templates["dynamics"],
+        "parameter": experiment_templates["parameter"],
+        "terminal": experiment_templates["terminal"],
         "quality": profile["shared_templates"]["quality"],
     }
     try:
@@ -62,6 +77,6 @@ def render_prompt(
         "object_description": object_description,
         "camera": camera,
         "targets": targets,
-        "constraints": list(profile["shared_constraints"]) + list(profile["experiment_constraints"]),
+        "constraints": list(profile["shared_constraints"]) + list(experiment_constraints),
     }
     return prompt_spec, prompt, negative

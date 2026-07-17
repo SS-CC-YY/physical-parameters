@@ -44,12 +44,13 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate_parser = subparsers.add_parser("evaluate", help="evaluate canonical output videos")
     evaluate_parser.add_argument("--run-dir", type=Path, required=True)
 
-    run_parser = subparsers.add_parser("run", help="prepare, generate, and evaluate one build")
+    run_parser = subparsers.add_parser(
+        "run", help="prepare and generate one build; evaluation is an explicit later step"
+    )
     run_parser.add_argument("--build", type=Path, required=True)
     run_parser.add_argument("--run-dir", type=Path, required=True)
     run_parser.add_argument("--workspace-root", type=Path, default=None)
     _add_generation_options(run_parser)
-    run_parser.add_argument("--stop-on-invalid", action="store_true")
     return parser
 
 
@@ -102,15 +103,14 @@ def dispatch(args: argparse.Namespace) -> dict[str, object]:
             max_jobs=args.max_jobs,
             overwrite=args.overwrite,
         )
-        sequence = run_sequential(
+        generation = generate_run(
             args.run_dir,
             dry_run=args.dry_run,
             start_index=args.start_index,
             overwrite=args.overwrite,
             fail_fast=args.fail_fast,
-            stop_on_invalid=args.stop_on_invalid,
         )
-        return {"build_id": resolved["build_id"], "jobs": len(jobs), "sequence": sequence}
+        return {"build_id": resolved["build_id"], "jobs": len(jobs), "generation": generation}
     raise AssertionError(args.command)
 
 

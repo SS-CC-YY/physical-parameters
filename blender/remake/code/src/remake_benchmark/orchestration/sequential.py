@@ -56,6 +56,10 @@ def run_sequential(
     """Generate one job, evaluate/upsert it, then and only then continue."""
     run_dir = run_dir.resolve()
     resolved = read_yaml(run_dir / "resolved_build.yaml")
+    if str(resolved.get("workflow", "generation_only")) == "generation_only":
+        raise ConfigError(
+            "this build is generation_only; use 'generate' now and run evaluation explicitly later"
+        )
     all_jobs = read_jsonl(run_dir / "manifest.jsonl")
     jobs = all_jobs[start_index:]
     if max_jobs is not None:

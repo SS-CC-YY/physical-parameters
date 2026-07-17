@@ -65,12 +65,20 @@ def _require_mapping(data: dict[str, Any], key: str, origin: Path) -> dict[str, 
 
 def _validate_components(resolved: dict[str, Any], origins: dict[str, Path]) -> None:
     experiment = resolved["experiment"]
-    for key in ("experiment_id", "release_id", "task_type", "builder", "input_root", "selection", "targets", "generation"):
+    for key in ("release_id", "task_type", "builder", "input_root", "selection", "generation"):
         if key not in experiment:
             raise ConfigError(f"{origins['experiment']}: missing '{key}'")
     if experiment["task_type"] not in {"t2v", "i2v", "v2v"}:
         raise ConfigError(f"{origins['experiment']}: unsupported task_type {experiment['task_type']!r}")
-    if experiment["builder"] != "directory_grid_v1":
+    builder = str(experiment["builder"])
+    if builder == "directory_grid_v1":
+        for key in ("experiment_id", "targets"):
+            if key not in experiment:
+                raise ConfigError(f"{origins['experiment']}: missing '{key}' for {builder}")
+    elif builder == "registry_exhaustive_v1":
+        if not isinstance(experiment.get("experiments"), list) or not experiment["experiments"]:
+            raise ConfigError(f"{origins['experiment']}: 'experiments' must be a non-empty list for {builder}")
+    else:
         raise ConfigError(f"{origins['experiment']}: unsupported builder {experiment['builder']!r}")
 
     validate_prompt(resolved["prompt"])
@@ -100,6 +108,7 @@ def resolve_build(build_path: Path, workspace_root_override: Path | None = None)
         "schema_version": source["schema_version"],
         "build_id": source["build_id"],
         "description": source.get("description", ""),
+        "workflow": source.get("workflow", "generation_only"),
         "workspace_root": str(
             workspace_root_override.resolve() if workspace_root_override else Path(source["workspace_root"]).expanduser()
         ),

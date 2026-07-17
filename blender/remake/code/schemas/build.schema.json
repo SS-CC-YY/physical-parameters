@@ -9,6 +9,7 @@
     "schema_version": {"const": "1.0.0"},
     "build_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"},
     "description": {"type": "string"},
+    "workflow": {"enum": ["generation_only", "sequential"]},
     "workspace_root": {"type": "string", "minLength": 1},
     "output_root": {"type": "string", "minLength": 1},
     "profiles": {
