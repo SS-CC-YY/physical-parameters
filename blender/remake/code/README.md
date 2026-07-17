@@ -97,30 +97,30 @@ python code/scripts/remake_benchmark.py --help
 
 ## 标准球优先生成矩阵
 
-首轮正式 build 为 `builds/standard_ball_all_experiments_wan22_generation.yaml`。它通过 build override 复用完整实验配置，只选择 `standard_ball` 并将默认输出设为 81 帧：
+当前推荐的首轮正式 build 为 `builds/standard_ball_reduced_parameters_wan22_generation.yaml`。它通过 build override 复用完整实验配置，只选择 `standard_ball`、筛选代表性参数 tuple，并将默认输出设为 81 帧：
 
 - 13 个实验：`v1_A–v1_D`、`v2_A–v2_E`、`v3_A–v3_D`；
-- 69 个冻结 parameter anchor tuples；
+- 48 个冻结 parameter anchor tuples；
 - 9 个场景：baseline、4 个 indoor、4 个 outdoor；
 - 1 个物体：`standard_ball`；
 - 3 个视角；
 - seed 36；
-- 每模型共 `69 × 9 × 1 × 3 = 1863` 个视频；
+- 每模型共 `48 × 9 × 1 × 3 = 1296` 个视频；
 - 使用 351 张标准球首帧 PNG，每个 PNG 对应多个显式物理参数 continuation；
 - 默认 81 帧、16 fps、40 sampling steps，Wan2.2 模型常驻且 H20 默认不 offload。
 
 V3 多参数实验只运行 registry 中有物理意义的联合参数锚点，不把各参数独立做笛卡尔积。尤其 `v3_B` 的冻结实验是“带摩擦的左右墙非对称重复碰撞”，不是旧文件名所暗示的弹簧阻尼实验。
 
-执行：
+参数筛选保留单参数实验的低/中/高点、V2 多参数实验的主效应覆盖，以及 V3 的默认点和每个隐藏参数最显著的单因素变化。执行四卡入口：
 
 ```bash
-DETACHED=1 GPU_ID=7 \
-bash code/scripts/run_standard_ball_generation.sh
+GPU_IDS=4,5,6,7 WAN_OFFLOAD_MODEL=false \
+bash code/scripts/run_reduced_standard_ball_generation_4gpu.sh
 ```
 
-脚本只调用 `prepare` 和 `generate`；不会产生 `eval/`，也不会因检测或拟合结果中断生成。相同 `RUN_DIR` 再次执行会复用不可变 manifest，并跳过已有非空视频。
+四卡入口只调用 controller `prepare` 和四个分片 `generate`；不会产生 `eval/`，也不会因检测或拟合结果中断生成。相同父 run 再次执行会复用不可变 manifest，并跳过已有非空视频。
 
-完整的四物体、161 帧 build `builds/all_experiments_wan22_generation.yaml` 仍然保留，但当前不运行。81 帧是 speed-first 条件，计算量显著降低；部分长周期 V2/V3 实验在未来做完整拟合时可能需要单独补跑 161 帧条件。
+原 69-tuple、1863-video build `builds/standard_ball_all_experiments_wan22_generation.yaml` 与完整四物体、161 帧 build `builds/all_experiments_wan22_generation.yaml` 均保留，但当前不运行。81 帧是 speed-first 条件；部分长周期 V2/V3 实验在未来做完整拟合时可能需要单独补跑 161 帧或被删掉的 anchor 条件。
 
 在正式生成前，可用 `builds/v1a_seed_variation_wan22.yaml` 对完全相同的首帧和 prompt 运行 seeds 36–39，仅生成 4 条视频：
 
@@ -133,7 +133,7 @@ bash code/scripts/make_seed_variation_grid.sh \
   outputs/v1a_seed_variation_wan22
 ```
 
-四宫格布局为左上 seed36、右上 seed37、左下 seed38、右下 seed39。该 smoke build 与正式 1863-job manifest 完全分开。
+四宫格布局为左上 seed36、右上 seed37、左下 seed38、右下 seed39。该 smoke build 与正式 1296-job manifest 完全分开。
 
 服务器有四张可用卡时，推荐让 GPU 4、5、6、7 各生成一个 seed：
 
@@ -147,15 +147,15 @@ python code/scripts/collect_sharded_run.py "outputs/$RUN_ID"
 bash code/scripts/make_seed_variation_grid.sh "outputs/$RUN_ID"
 ```
 
-正式标准球清单可用相同机制分为 `466 + 466 + 466 + 465 = 1863` 条：
+推荐的 reduced 正式标准球清单会均匀分为 `324 × 4 = 1296` 条：
 
 ```bash
-RUN_ID=standard_ball_all13_wan22_4gpu_$(date +%Y%m%d_%H%M%S)
+RUN_ID=standard_ball_all13_reduced48_wan22_4gpu_$(date +%Y%m%d_%H%M%S)
 RUN_ID="$RUN_ID" GPU_IDS=4,5,6,7 WAN_OFFLOAD_MODEL=false \
-  bash code/scripts/run_standard_ball_generation_4gpu.sh
+  bash code/scripts/run_reduced_standard_ball_generation_4gpu.sh
 ```
 
-每张卡拥有独立的 `shards/gpu-<id>/`、常驻 worker、日志和状态文件。全部完成后运行 `collect_sharded_run.py`；它先验证 1863 个视频及 metadata 完整且无重复，再用硬链接汇总到父 run 的标准 `videos/` 和 `metadata/`，不会复制 MP4 数据。
+每张卡拥有独立的 `shards/gpu-<id>/`、常驻 worker、日志和状态文件。全部完成后运行 `collect_sharded_run.py`；它先验证 1296 个视频及 metadata 完整且无重复，再用硬链接汇总到父 run 的标准 `videos/` 和 `metadata/`，不会复制 MP4 数据。
 
 ## 旧 Wan2.2 60-job demo
 

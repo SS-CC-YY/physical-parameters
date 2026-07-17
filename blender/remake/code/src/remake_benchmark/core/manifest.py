@@ -247,6 +247,47 @@ def _anchor_targets(
     return variant_id, targets
 
 
+def _selected_anchor_ids(
+    selection: dict[str, Any], registry: list[dict[str, Any]]
+) -> dict[str, set[str]] | None:
+    configured = selection.get("parameter_tuple_ids")
+    if configured is None:
+        return None
+    if not isinstance(configured, dict) or not configured:
+        raise ConfigError("selection.parameter_tuple_ids must be a non-empty object")
+
+    registry_by_id = {str(item["id"]): item for item in registry}
+    configured_by_id = {str(key): value for key, value in configured.items()}
+    missing_experiments = sorted(set(registry_by_id) - set(configured_by_id))
+    unknown_experiments = sorted(set(configured_by_id) - set(registry_by_id))
+    if missing_experiments or unknown_experiments:
+        raise ConfigError(
+            "selection.parameter_tuple_ids must cover every registry experiment; "
+            f"missing={missing_experiments}, unknown={unknown_experiments}"
+        )
+
+    result: dict[str, set[str]] = {}
+    for experiment_id, registry_experiment in registry_by_id.items():
+        raw_ids = configured_by_id.get(experiment_id)
+        if not isinstance(raw_ids, list) or not raw_ids:
+            raise ConfigError(
+                f"selection.parameter_tuple_ids.{experiment_id} must be a non-empty list"
+            )
+        selected = [str(value) for value in raw_ids]
+        if len(selected) != len(set(selected)):
+            raise ConfigError(
+                f"selection.parameter_tuple_ids.{experiment_id} contains duplicate ids"
+            )
+        available = {str(anchor.get("id", "")) for anchor in registry_experiment["anchor_tuples"]}
+        unknown = sorted(set(selected) - available)
+        if unknown:
+            raise ConfigError(
+                f"selection.parameter_tuple_ids.{experiment_id} contains unknown ids: {unknown}"
+            )
+        result[experiment_id] = set(selected)
+    return result
+
+
 def _build_registry_exhaustive_jobs(
     resolved: dict[str, Any], *, check_inputs: bool, max_jobs: int | None
 ) -> list[dict[str, Any]]:
@@ -264,6 +305,7 @@ def _build_registry_exhaustive_jobs(
     seeds = [int(value) for value in _as_nonempty_list(selection, "seeds")]
     generation = _generation_config(experiment)
     registry = _registry_experiments(experiment)
+    selected_anchor_ids = _selected_anchor_ids(selection, registry)
 
     jobs: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
@@ -289,6 +331,8 @@ def _build_registry_exhaustive_jobs(
             if not isinstance(raw_anchor, dict):
                 raise ConfigError(f"registry experiment {experiment_id} contains a non-object anchor")
             variant_id, targets = _anchor_targets(experiment_id, raw_anchor, parameter_names)
+            if selected_anchor_ids is not None and variant_id not in selected_anchor_ids[experiment_id]:
+                continue
             combinations = itertools.product(scenes, objects, cameras, seeds)
             for scene_id, object_id, camera, seed in combinations:
                 case_id = _safe_id(

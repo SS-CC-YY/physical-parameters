@@ -37,6 +37,11 @@ class FrameworkTests(unittest.TestCase):
             WORKSPACE_ROOT,
         )
         cls.seed_variation_jobs = build_jobs(cls.seed_variation_resolved)
+        cls.reduced_standard_ball_resolved = resolve_build(
+            CODE_ROOT / "builds" / "standard_ball_reduced_parameters_wan22_generation.yaml",
+            WORKSPACE_ROOT,
+        )
+        cls.reduced_standard_ball_jobs = build_jobs(cls.reduced_standard_ball_resolved)
 
     def test_demo_build_creates_sixty_three_view_jobs_from_five_sampled_scenes(self) -> None:
         jobs = build_jobs(self.resolved)
@@ -185,6 +190,56 @@ class FrameworkTests(unittest.TestCase):
         self.assertEqual({job["factors"]["scene_id"] for job in jobs}, {"baseline"})
         self.assertEqual({job["factors"]["object_id"] for job in jobs}, {"standard_ball"})
         self.assertEqual({job["factors"]["camera"] for job in jobs}, {"CAM_Side"})
+
+    def test_reduced_standard_ball_build_preserves_coverage_with_48_tuples(self) -> None:
+        jobs = self.reduced_standard_ball_jobs
+        tuple_counts = Counter(
+            (job["experiment_id"], job["factors"]["parameter_tuple_id"])
+            for job in jobs
+        )
+        tuples_by_experiment = Counter(experiment_id for experiment_id, _ in tuple_counts)
+        self.assertEqual(len(jobs), 1296)
+        self.assertEqual(len(tuple_counts), 48)
+        self.assertEqual(set(tuple_counts.values()), {27})
+        self.assertEqual(
+            tuples_by_experiment,
+            Counter(
+                {
+                    "v1_A": 3,
+                    "v1_B": 3,
+                    "v1_C": 3,
+                    "v1_D": 3,
+                    "v2_A": 3,
+                    "v2_B": 3,
+                    "v2_C": 4,
+                    "v2_D": 5,
+                    "v2_E": 5,
+                    "v3_A": 4,
+                    "v3_B": 4,
+                    "v3_C": 4,
+                    "v3_D": 4,
+                }
+            ),
+        )
+        self.assertEqual({job["factors"]["object_id"] for job in jobs}, {"standard_ball"})
+        self.assertEqual(
+            {job["factors"]["scene_id"] for job in jobs},
+            {
+                "baseline",
+                "indoor1",
+                "indoor2",
+                "indoor3",
+                "indoor4",
+                "outdoor1",
+                "outdoor2",
+                "outdoor3",
+                "outdoor4",
+            },
+        )
+        self.assertEqual(
+            {job["factors"]["camera"] for job in jobs},
+            {"CAM_Main", "CAM_Side", "CAM_Top"},
+        )
 
 
 if __name__ == "__main__":

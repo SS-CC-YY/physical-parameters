@@ -1,0 +1,35 @@
+schema_version: 1.0.0
+build_id: standard_ball_all13_reduced48_wan22_i2v_speed_generation
+description: Balanced reduced generation-only Wan2.2 build with 48 parameter tuples, all 13 experiments, all 9 scenes, standard_ball and all 3 cameras.
+workflow: generation_only
+workspace_root: ${REMAKE_ROOT:-/root/data/heyuanyu/yefei/chenyu/remake/data/blender/remake}
+output_root: ${OUTPUT_ROOT:-outputs}
+profiles:
+  experiment: configs/experiments/all_experiments_full.yaml
+  prompt: configs/prompts/all_experiments_explicit_v1.yaml
+  model: configs/models/wan22_i2v_a14b_full_server.yaml
+  evaluation: configs/evaluations/basic_video_v1.yaml
+overrides:
+  experiment:
+    suite_id: ppb-remake-all-13-standard-ball-reduced48-speed
+    selection:
+      objects: [standard_ball]
+      parameter_tuple_ids:
+        v1_A: [g2p00, g9p81, g14p70]
+        v1_B: [e0p35, e0p75, e0p90]
+        v1_C: [mu0p06, mu0p18, mu0p30]
+        v1_D: [beta0p04, beta0p18, beta0p30]
+        v2_A: [g4p90, g9p81, g14p70]
+        v2_B: [e0p35, e0p72, e0p88]
+        v2_C: [muA0p05_muB0p18, muA0p06_muB0p10, muA0p08_muB0p14, muA0p08_muB0p18]
+        v2_D: [g9p80_beta0p12, g6p50_beta0p12, g11p50_beta0p12, g9p80_beta0p04, g9p80_beta0p22]
+        v2_E: [g8p00_e0p76, g9p80_e0p76, g11p20_e0p76, g9p80_e0p58, g9p80_e0p80]
+        v3_A: [default, g_low, drag_high, e_low]
+        v3_B: [default, mu_high, eL_low, eR_low]
+        v3_C: [default, g_low, mu_high, e_low]
+        v3_D: [default, g_low, beta_high, kappa_low]
+    generation:
+      num_frames: ${NUM_FRAMES:-81}
+  model:
+    generation:
+      frame_num: ${NUM_FRAMES:-81}
