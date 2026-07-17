@@ -6,7 +6,7 @@ evaluators:
     ffprobe: true
     ffprobe_required: false
   - id: v1a_freefall
-    version: 2.2.1
+    version: 2.3.0
     tracker: auto
     min_template_score: 0.18
     min_detection_rate: 0.70

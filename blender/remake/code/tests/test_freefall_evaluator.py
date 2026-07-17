@@ -14,6 +14,7 @@ try:
     import numpy as np
 
     from remake_benchmark.evaluators.freefall import (
+        _conditioning_bbox,
         _deformation_evidence,
         _physical_gate,
         _track_video,
@@ -77,6 +78,37 @@ class FreefallEvaluatorTests(unittest.TestCase):
         )
         self.assertAlmostEqual(aggregate["mean_fit_r2"], 0.82)
         self.assertAlmostEqual(aggregate["mean_detection_rate"], 0.90)
+
+    def test_sibling_variation_prior_rejects_complex_background(self) -> None:
+        with tempfile.TemporaryDirectory(dir=CODE_ROOT / "tests") as temporary:
+            scene = Path(temporary) / "indoor_scene"
+            width, height = 320, 240
+            background = np.full((height, width, 3), 185, dtype=np.uint8)
+            cv2.rectangle(background, (60, 18), (275, 105), (75, 125, 75), -1)
+            cv2.rectangle(background, (12, 24), (92, 112), (225, 225, 225), -1)
+            cv2.line(background, (75, 68), (260, 68), (245, 245, 245), 4)
+            center = (160, 52)
+            for object_id in ("standard_ball", "standard_cube", "volleyball", "cardboard_box"):
+                object_dir = scene / object_id
+                object_dir.mkdir(parents=True)
+                image = background.copy()
+                if object_id == "standard_ball":
+                    cv2.circle(image, center, 14, (0, 140, 255), -1)
+                elif object_id == "standard_cube":
+                    cv2.rectangle(image, (146, 38), (174, 66), (220, 120, 45), -1)
+                elif object_id == "volleyball":
+                    cv2.circle(image, center, 14, (205, 75, 25), -1)
+                    cv2.rectangle(image, (153, 39), (160, 65), (0, 220, 245), -1)
+                else:
+                    cv2.rectangle(image, (143, 37), (177, 67), (85, 145, 200), -1)
+                self.assertTrue(cv2.imwrite(str(object_dir / "CAM_Main.png"), image))
+
+            bbox, _ = _conditioning_bbox(scene / "volleyball" / "CAM_Main.png", "volleyball")
+            bbox_center = (0.5 * (bbox[0] + bbox[2]), 0.5 * (bbox[1] + bbox[3]))
+            self.assertAlmostEqual(bbox_center[0], center[0], delta=5.0)
+            self.assertAlmostEqual(bbox_center[1], center[1], delta=5.0)
+            self.assertLess(bbox[2] - bbox[0], 60)
+            self.assertLess(bbox[3] - bbox[1], 60)
 
     def test_synthetic_video_produces_track_plot_and_overlay(self) -> None:
         with tempfile.TemporaryDirectory(dir=CODE_ROOT / "tests") as temporary:

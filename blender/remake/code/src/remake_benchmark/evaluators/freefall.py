@@ -18,7 +18,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 
-FREEFALL_EVALUATOR_VERSION = "2.2.1"
+FREEFALL_EVALUATOR_VERSION = "2.3.0"
 
 
 def _finite(value: Any) -> float | None:
@@ -72,8 +72,12 @@ def _object_mask(roi: np.ndarray, object_id: str) -> np.ndarray:
     elif object_id == "cardboard_box":
         mask = (hue >= 8) & (hue <= 35) & (saturation >= 25) & (saturation <= 190) & (value >= 55)
     elif object_id == "volleyball":
-        edges = cv2.Canny(cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY), 40, 120)
-        mask = ((saturation >= 25) & (value >= 95)) | (edges > 0)
+        # Use the distinctive yellow/blue panels rather than generic saturation
+        # or edges. Indoor chalkboards, posters and outdoor foliage otherwise
+        # dominate the mask before tracking has even started.
+        yellow = (hue >= 18) & (hue <= 38) & (saturation >= 70) & (value >= 90)
+        blue = (hue >= 95) & (hue <= 135) & (saturation >= 70) & (value >= 55)
+        mask = yellow | blue
     else:
         edges = cv2.Canny(cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY), 45, 120)
         mask = (saturation > 35) | (value > np.percentile(value, 82)) | (edges > 0)
@@ -81,6 +85,57 @@ def _object_mask(roi: np.ndarray, object_id: str) -> np.ndarray:
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
     output = cv2.morphologyEx(output, cv2.MORPH_CLOSE, kernel)
     return cv2.morphologyEx(output, cv2.MORPH_OPEN, kernel)
+
+
+def _sibling_variation_bbox(image_path: Path) -> tuple[int, int, int, int] | None:
+    """Locate the canonical object using same-scene object variants.
+
+    The benchmark ships all four object first frames for every scene/camera.
+    Their background is identical, so cross-object pixel variation is a much
+    stronger foreground prior than colors or edges in a complex background.
+    """
+    scene_dir = image_path.parent.parent
+    sibling_paths = sorted(
+        candidate
+        for candidate in scene_dir.glob(f"*/{image_path.name}")
+        if candidate.is_file()
+    )
+    images = [cv2.imread(str(candidate), cv2.IMREAD_COLOR) for candidate in sibling_paths]
+    images = [image for image in images if image is not None]
+    if len(images) < 3 or any(image.shape != images[0].shape for image in images[1:]):
+        return None
+    height, width = images[0].shape[:2]
+    stack = np.stack(images).astype(np.int16)
+    channel_spread = np.max(stack, axis=0) - np.min(stack, axis=0)
+    variation = (np.max(channel_spread, axis=2) >= 12).astype(np.uint8) * 255
+    gate = np.zeros_like(variation)
+    x0, x1 = int(0.20 * width), int(0.80 * width)
+    y1 = int(0.55 * height)
+    gate[:y1, x0:x1] = variation[:y1, x0:x1]
+    close_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+    open_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    gate = cv2.morphologyEx(gate, cv2.MORPH_CLOSE, close_kernel)
+    gate = cv2.morphologyEx(gate, cv2.MORPH_OPEN, open_kernel)
+    contours, _ = cv2.findContours(gate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    expected = (0.5 * width, 0.20 * height)
+    best: tuple[float, tuple[int, int, int, int]] | None = None
+    for contour in contours:
+        area = float(cv2.contourArea(contour))
+        if area < max(35.0, 0.00003 * width * height) or area > 0.04 * width * height:
+            continue
+        x, y, box_width, box_height = cv2.boundingRect(contour)
+        if box_width < 5 or box_height < 5:
+            continue
+        center = (x + box_width / 2.0, y + box_height / 2.0)
+        distance = math.hypot(
+            (center[0] - expected[0]) / max(0.30 * width, 1.0),
+            (center[1] - expected[1]) / max(0.30 * height, 1.0),
+        )
+        score = math.log1p(area) - 2.5 * distance
+        bbox = (x, y, x + box_width, y + box_height)
+        if best is None or score > best[0]:
+            best = (score, bbox)
+    return None if best is None else best[1]
 
 
 def _best_component(mask: np.ndarray, expected: tuple[float, float], min_area: float, max_area: float) -> tuple[int, int, int, int] | None:
@@ -112,24 +167,55 @@ def _conditioning_bbox(image_path: Path, object_id: str) -> tuple[tuple[int, int
     if image is None:
         raise RuntimeError(f"cannot read conditioning image: {image_path}")
     height, width = image.shape[:2]
-    x0, x1 = int(0.30 * width), int(0.70 * width)
-    # CAM_Top can place the object against the top image boundary, while the
-    # side/main views place it around 20% image height.
-    y0, y1 = 0, int(0.55 * height)
+    variation_bbox = _sibling_variation_bbox(image_path)
+    if variation_bbox is not None:
+        vx0, vy0, vx1, vy1 = variation_bbox
+        variation_width, variation_height = vx1 - vx0, vy1 - vy0
+        pad = max(10, int(0.45 * max(variation_width, variation_height)))
+        x0, x1 = max(0, vx0 - pad), min(width, vx1 + pad)
+        y0, y1 = max(0, vy0 - pad), min(int(0.55 * height), vy1 + pad)
+    else:
+        x0, x1 = int(0.30 * width), int(0.70 * width)
+        # CAM_Top can place the object against the top image boundary, while
+        # side/main views place it around 20% image height.
+        y0, y1 = 0, int(0.55 * height)
     roi = image[y0:y1, x0:x1]
     mask = _object_mask(roi, object_id)
+    if variation_bbox is not None:
+        expected = (
+            0.5 * (variation_bbox[0] + variation_bbox[2]) - x0,
+            0.5 * (variation_bbox[1] + variation_bbox[3]) - y0,
+        )
+        variation_area = max(
+            1.0,
+            float((variation_bbox[2] - variation_bbox[0]) * (variation_bbox[3] - variation_bbox[1])),
+        )
+        min_area = max(20.0, 0.03 * variation_area)
+        max_area = max(120.0, 2.50 * variation_area)
+    else:
+        expected = (0.5 * (x1 - x0), 0.32 * (y1 - y0))
+        min_area = max(60.0, 0.00010 * width * height)
+        max_area = max(600.0, 0.030 * width * height)
     bbox = _best_component(
         mask,
-        expected=(0.5 * (x1 - x0), 0.32 * (y1 - y0)),
-        min_area=max(60.0, 0.00010 * width * height),
-        max_area=max(600.0, 0.030 * width * height),
+        expected=expected,
+        min_area=min_area,
+        max_area=max_area,
     )
     if bbox is None:
-        center_x, center_y = int(0.5 * width), int(0.22 * height)
-        half = int(0.045 * width)
-        return (center_x - half, center_y - half, center_x + half, center_y + half), (height, width)
+        if variation_bbox is not None:
+            bbox = (
+                variation_bbox[0] - x0,
+                variation_bbox[1] - y0,
+                variation_bbox[2] - x0,
+                variation_bbox[3] - y0,
+            )
+        else:
+            center_x, center_y = int(0.5 * width), int(0.22 * height)
+            half = int(0.045 * width)
+            return (center_x - half, center_y - half, center_x + half, center_y + half), (height, width)
     bx0, by0, bx1, by1 = bbox
-    pad = int(0.18 * max(bx1 - bx0, by1 - by0)) + 6
+    pad = int(0.10 * max(bx1 - bx0, by1 - by0)) + 3
     return (
         max(0, x0 + bx0 - pad),
         max(0, y0 + by0 - pad),
@@ -146,7 +232,12 @@ def _scale_bbox(bbox: tuple[int, int, int, int], source_shape: tuple[int, int], 
     return int(x0 * sx), int(y0 * sy), int(x1 * sx), int(y1 * sy)
 
 
-def _template_detection(frame: np.ndarray, template_gray: np.ndarray, initial_bbox: tuple[int, int, int, int]) -> tuple[tuple[int, int, int, int] | None, float]:
+def _template_detection(
+    frame: np.ndarray,
+    template_gray: np.ndarray,
+    template_mask: np.ndarray | None,
+    initial_bbox: tuple[int, int, int, int],
+) -> tuple[tuple[int, int, int, int] | None, float]:
     height, width = frame.shape[:2]
     template_height, template_width = template_gray.shape[:2]
     initial_center_x = 0.5 * (initial_bbox[0] + initial_bbox[2])
@@ -158,7 +249,21 @@ def _template_detection(frame: np.ndarray, template_gray: np.ndarray, initial_bb
     search = frame[search_y0:search_y1, search_x0:search_x1]
     if search.shape[0] < template_height or search.shape[1] < template_width:
         return None, float("nan")
-    result = cv2.matchTemplate(cv2.cvtColor(search, cv2.COLOR_BGR2GRAY), template_gray, cv2.TM_CCOEFF_NORMED)
+    search_gray = cv2.cvtColor(search, cv2.COLOR_BGR2GRAY)
+    use_mask = template_mask is not None and int(np.count_nonzero(template_mask)) >= max(
+        9,
+        int(0.02 * template_mask.size),
+    )
+    if use_mask:
+        result = cv2.matchTemplate(
+            search_gray,
+            template_gray,
+            cv2.TM_CCORR_NORMED,
+            mask=template_mask,
+        )
+        result = np.nan_to_num(result, nan=-1.0, posinf=-1.0, neginf=-1.0)
+    else:
+        result = cv2.matchTemplate(search_gray, template_gray, cv2.TM_CCOEFF_NORMED)
     _, score, _, location = cv2.minMaxLoc(result)
     x0, y0 = search_x0 + location[0], search_y0 + location[1]
     return (x0, y0, x0 + template_width, y0 + template_height), float(score)
@@ -301,6 +406,7 @@ def _track_video(job: dict[str, Any], video_path: Path, image_path: Path, config
     initial_bbox = (x0, y0, x1, y1)
     initial_area = float(max(1, (x1 - x0) * (y1 - y0)))
     template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+    template_mask = _object_mask(template, object_id)
     previous, frame = first, first
     previous_center = ((x0 + x1) / 2.0, (y0 + y1) / 2.0)
     stable_size: tuple[float, float] | None = None
@@ -313,7 +419,12 @@ def _track_video(job: dict[str, Any], video_path: Path, image_path: Path, config
     tracker = str(config.get("tracker", "auto"))
     min_template_score = float(config.get("min_template_score", 0.18))
     while True:
-        template_bbox, template_score = _template_detection(frame, template_gray, initial_bbox)
+        template_bbox, template_score = _template_detection(
+            frame,
+            template_gray,
+            template_mask,
+            initial_bbox,
+        )
         template_found = template_bbox is not None and math.isfinite(template_score) and template_score >= min_template_score
         motion = None
         if frame_index > 0 and tracker != "template":
