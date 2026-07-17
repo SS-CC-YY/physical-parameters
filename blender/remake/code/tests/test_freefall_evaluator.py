@@ -17,6 +17,7 @@ try:
         _deformation_evidence,
         _physical_gate,
         _track_video,
+        aggregate_freefall,
         evaluate_freefall_job,
         fit_vertical_quadratic,
         parameter_similarity_score,
@@ -49,6 +50,33 @@ class FreefallEvaluatorTests(unittest.TestCase):
         self.assertTrue(_deformation_evidence((130.0, 77.0), (100.0, 100.0), config))
         self.assertFalse(_deformation_evidence((150.0, 100.0), (100.0, 100.0), config))
         self.assertFalse(_deformation_evidence((120.0, 84.0), (100.0, 100.0), config))
+
+    def test_aggregate_ignores_missing_fit_r2(self) -> None:
+        def row(job_id: str, fit_r2: float | None, acceleration: float) -> dict:
+            return {
+                "job_id": job_id,
+                "status": "invalid" if fit_r2 is None else "ok",
+                "factors": {"scene_id": "baseline", "camera": "CAM_Side"},
+                "metrics": {
+                    "target_gravity_m_s2": 9.81,
+                    "vertical_acceleration_px_s2": acceleration,
+                    "detection_rate": 0.90,
+                    "fit_r2": fit_r2,
+                    "severe_gate_passed": fit_r2 is not None,
+                },
+                "parameter_evaluation": {"similarity_score": None},
+                "rigid_body_evaluation": {"status": "indeterminate"},
+            }
+
+        aggregate = aggregate_freefall(
+            [
+                row("valid_fit", 0.82, 40.0),
+                row("missing_fit_r2", None, 42.0),
+                row("nan_fit_r2", float("nan"), 44.0),
+            ]
+        )
+        self.assertAlmostEqual(aggregate["mean_fit_r2"], 0.82)
+        self.assertAlmostEqual(aggregate["mean_detection_rate"], 0.90)
 
     def test_synthetic_video_produces_track_plot_and_overlay(self) -> None:
         with tempfile.TemporaryDirectory(dir=CODE_ROOT / "tests") as temporary:

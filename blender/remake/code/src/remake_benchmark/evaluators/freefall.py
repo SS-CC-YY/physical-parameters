@@ -18,7 +18,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 
-FREEFALL_EVALUATOR_VERSION = "2.2.0"
+FREEFALL_EVALUATOR_VERSION = "2.2.1"
 
 
 def _finite(value: Any) -> float | None:
@@ -1131,6 +1131,16 @@ def evaluate_freefall_job(
 def aggregate_freefall(rows: list[dict[str, Any]]) -> dict[str, Any]:
     usable = [row for row in rows if row.get("metrics") and _finite(row["metrics"].get("vertical_acceleration_px_s2")) is not None]
     tracked = [row for row in rows if _finite(row.get("metrics", {}).get("detection_rate")) is not None]
+    detection_rates = [
+        value
+        for row in tracked
+        if (value := _finite(row.get("metrics", {}).get("detection_rate"))) is not None
+    ]
+    fit_r2_values = [
+        value
+        for row in usable
+        if (value := _finite(row.get("metrics", {}).get("fit_r2"))) is not None
+    ]
     targets = np.asarray([row["metrics"]["target_gravity_m_s2"] for row in usable], dtype=float)
     estimates = np.asarray([row["metrics"]["vertical_acceleration_px_s2"] for row in usable], dtype=float)
 
@@ -1178,8 +1188,8 @@ def aggregate_freefall(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "mean_parameter_similarity": float(np.mean(similarities)) if similarities else None,
         "pearson_target_vs_acceleration_proxy": correlation(targets, estimates),
         "spearman_target_vs_acceleration_proxy": correlation(rank_target, rank_estimate),
-        "mean_detection_rate": float(np.mean([row["metrics"]["detection_rate"] for row in tracked])) if tracked else None,
-        "mean_fit_r2": float(np.mean([row["metrics"]["fit_r2"] for row in usable])) if usable else None,
+        "mean_detection_rate": float(np.mean(detection_rates)) if detection_rates else None,
+        "mean_fit_r2": float(np.mean(fit_r2_values)) if fit_r2_values else None,
         "scene_counts": {scene: len(items) for scene, items in by_scene.items()},
         "per_camera": per_camera,
         "unit_warning": "metric gravity uses known drop distance and endpoint image displacement; keep vertical_acceleration_px_s2 as the raw audit value",
