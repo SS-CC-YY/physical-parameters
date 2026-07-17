@@ -42,6 +42,11 @@ class FrameworkTests(unittest.TestCase):
             WORKSPACE_ROOT,
         )
         cls.reduced_standard_ball_jobs = build_jobs(cls.reduced_standard_ball_resolved)
+        cls.factorized_standard_ball_resolved = resolve_build(
+            CODE_ROOT / "builds" / "standard_ball_factorized900_wan22_generation.yaml",
+            WORKSPACE_ROOT,
+        )
+        cls.factorized_standard_ball_jobs = build_jobs(cls.factorized_standard_ball_resolved)
 
     def test_demo_build_creates_sixty_three_view_jobs_from_five_sampled_scenes(self) -> None:
         jobs = build_jobs(self.resolved)
@@ -239,6 +244,44 @@ class FrameworkTests(unittest.TestCase):
         self.assertEqual(
             {job["factors"]["camera"] for job in jobs},
             {"CAM_Main", "CAM_Side", "CAM_Top"},
+        )
+
+    def test_factorized_build_preserves_physics_and_viewpoint_tracks(self) -> None:
+        jobs = self.factorized_standard_ball_jobs
+        side_jobs = [job for job in jobs if job["factors"]["camera"] == "CAM_Side"]
+        non_side_jobs = [job for job in jobs if job["factors"]["camera"] != "CAM_Side"]
+        side_tuples = {
+            (job["experiment_id"], job["factors"]["parameter_tuple_id"])
+            for job in side_jobs
+        }
+        non_side_tuples = {
+            (job["experiment_id"], job["factors"]["parameter_tuple_id"])
+            for job in non_side_jobs
+        }
+        non_side_tuples_per_experiment = Counter(
+            experiment_id for experiment_id, _ in non_side_tuples
+        )
+        experiment_scene_camera = {
+            (job["experiment_id"], job["factors"]["scene_id"], job["factors"]["camera"])
+            for job in jobs
+        }
+
+        self.assertEqual(len(jobs), 900)
+        self.assertEqual(len(side_jobs), 432)
+        self.assertEqual(len(non_side_jobs), 468)
+        self.assertEqual(len(side_tuples), 48)
+        self.assertEqual(len(non_side_tuples), 26)
+        self.assertEqual(set(non_side_tuples_per_experiment.values()), {2})
+        self.assertEqual(len(experiment_scene_camera), 13 * 9 * 3)
+        self.assertEqual(len({job["inputs"]["image"] for job in jobs}), 351)
+        self.assertEqual(
+            Counter(job["factors"]["camera"] for job in jobs),
+            Counter({"CAM_Side": 432, "CAM_Main": 234, "CAM_Top": 234}),
+        )
+        self.assertEqual({job["generation"]["num_frames"] for job in jobs}, {81})
+        self.assertEqual(
+            {job["prompt_spec"]["prompt_framework_id"] for job in jobs},
+            {"ppb_common_physics_video_v1"},
         )
 
 

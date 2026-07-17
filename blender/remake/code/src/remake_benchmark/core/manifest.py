@@ -288,6 +288,66 @@ def _selected_anchor_ids(
     return result
 
 
+def _registry_coverage_blocks(
+    selection: dict[str, Any], registry: list[dict[str, Any]], cameras: list[str]
+) -> list[tuple[list[str], dict[str, set[str]] | None]]:
+    configured = selection.get("coverage_blocks")
+    if configured is None:
+        return [(cameras, _selected_anchor_ids(selection, registry))]
+    if selection.get("parameter_tuple_ids") is not None:
+        raise ConfigError(
+            "selection cannot define both parameter_tuple_ids and coverage_blocks"
+        )
+    if not isinstance(configured, list) or not configured:
+        raise ConfigError("selection.coverage_blocks must be a non-empty list")
+
+    selected_cameras = set(cameras)
+    covered_cameras: set[str] = set()
+    covered_cases: set[tuple[str, str, str]] = set()
+    blocks: list[tuple[list[str], dict[str, set[str]] | None]] = []
+    for index, block in enumerate(configured):
+        if not isinstance(block, dict):
+            raise ConfigError(f"selection.coverage_blocks[{index}] must be an object")
+        raw_cameras = block.get("cameras")
+        if not isinstance(raw_cameras, list) or not raw_cameras:
+            raise ConfigError(
+                f"selection.coverage_blocks[{index}].cameras must be a non-empty list"
+            )
+        block_cameras = [str(value) for value in raw_cameras]
+        if len(block_cameras) != len(set(block_cameras)):
+            raise ConfigError(f"selection.coverage_blocks[{index}].cameras contains duplicates")
+        unknown_cameras = sorted(set(block_cameras) - selected_cameras)
+        if unknown_cameras:
+            raise ConfigError(
+                f"selection.coverage_blocks[{index}] contains cameras outside selection.cameras: "
+                f"{unknown_cameras}"
+            )
+        block_anchor_ids = _selected_anchor_ids(block, registry)
+        if block_anchor_ids is None:
+            raise ConfigError(
+                f"selection.coverage_blocks[{index}] requires parameter_tuple_ids"
+            )
+        for camera in block_cameras:
+            for experiment_id, anchor_ids in block_anchor_ids.items():
+                for anchor_id in anchor_ids:
+                    case = (camera, experiment_id, anchor_id)
+                    if case in covered_cases:
+                        raise ConfigError(
+                            "selection.coverage_blocks overlap at "
+                            f"camera={camera}, experiment={experiment_id}, tuple={anchor_id}"
+                        )
+                    covered_cases.add(case)
+        covered_cameras.update(block_cameras)
+        blocks.append((block_cameras, block_anchor_ids))
+
+    missing_cameras = sorted(selected_cameras - covered_cameras)
+    if missing_cameras:
+        raise ConfigError(
+            f"selection.coverage_blocks leave selected cameras uncovered: {missing_cameras}"
+        )
+    return blocks
+
+
 def _build_registry_exhaustive_jobs(
     resolved: dict[str, Any], *, check_inputs: bool, max_jobs: int | None
 ) -> list[dict[str, Any]]:
@@ -305,7 +365,7 @@ def _build_registry_exhaustive_jobs(
     seeds = [int(value) for value in _as_nonempty_list(selection, "seeds")]
     generation = _generation_config(experiment)
     registry = _registry_experiments(experiment)
-    selected_anchor_ids = _selected_anchor_ids(selection, registry)
+    coverage_blocks = _registry_coverage_blocks(selection, registry, cameras)
 
     jobs: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
@@ -331,75 +391,76 @@ def _build_registry_exhaustive_jobs(
             if not isinstance(raw_anchor, dict):
                 raise ConfigError(f"registry experiment {experiment_id} contains a non-object anchor")
             variant_id, targets = _anchor_targets(experiment_id, raw_anchor, parameter_names)
-            if selected_anchor_ids is not None and variant_id not in selected_anchor_ids[experiment_id]:
-                continue
-            combinations = itertools.product(scenes, objects, cameras, seeds)
-            for scene_id, object_id, camera, seed in combinations:
-                case_id = _safe_id(
-                    f"{experiment_id}__{variant_id}__{scene_id}__{object_id}__{camera}"
-                )
-                repeat_id = f"seed-{seed}"
-                job_id = _safe_id(f"{case_id}__{repeat_id}")
-                if job_id in seen_ids:
-                    raise ConfigError(f"duplicate job_id generated: {job_id}")
-                seen_ids.add(job_id)
-                image_relative, _image_path = _input_image(
-                    workspace_root,
-                    input_root,
-                    experiment_id,
-                    scene_id,
-                    object_id,
-                    camera,
-                    check_inputs=check_inputs,
-                )
-                prompt_spec, prompt, negative_prompt = render_prompt(
-                    prompt_profile,
-                    experiment_id=experiment_id,
-                    scene_id=scene_id,
-                    object_id=object_id,
-                    camera=camera,
-                    targets=targets,
-                )
-                job = {
-                    "schema_version": "1.0.0",
-                    "job_id": job_id,
-                    "build_id": resolved["build_id"],
-                    "release_id": str(experiment["release_id"]),
-                    "experiment_id": experiment_id,
-                    "case_id": case_id,
-                    "repeat_id": repeat_id,
-                    "task_type": str(experiment["task_type"]),
-                    "seed": seed,
-                    "inputs": {
-                        "image": image_relative.as_posix(),
-                        "source_fps": float(experiment.get("source_fps", 24)),
-                        "conditioning_frame_index": int(experiment.get("conditioning_frame_index", 1)),
-                    },
-                    "prompt_spec": prompt_spec,
-                    "prompt": prompt,
-                    "negative_prompt": negative_prompt,
-                    "prompt_mode": str(prompt_profile["mode"]),
-                    "prompt_template_id": str(prompt_profile["prompt_template_id"]),
-                    "prompt_template_version": str(prompt_profile["version"]),
-                    "targets": targets,
-                    "known_params": known_params,
-                    "factors": {
-                        "level": level,
-                        "parameter_tuple_id": variant_id,
-                        "scene_id": scene_id,
-                        "object_id": object_id,
-                        "camera": camera,
-                        "scene_selection_seed": scene_selection_seed,
-                        "target_assignment": "registry_anchor_tuples",
-                    },
-                    "units": units,
-                    "generation": dict(generation),
-                    "evaluation_tags": list(experiment.get("evaluation_tags", [])),
-                }
-                validate_job(job)
-                jobs.append(job)
-                if max_jobs is not None and len(jobs) >= max_jobs:
-                    return jobs
+            for block_cameras, block_anchor_ids in coverage_blocks:
+                if block_anchor_ids is not None and variant_id not in block_anchor_ids[experiment_id]:
+                    continue
+                combinations = itertools.product(scenes, objects, block_cameras, seeds)
+                for scene_id, object_id, camera, seed in combinations:
+                    case_id = _safe_id(
+                        f"{experiment_id}__{variant_id}__{scene_id}__{object_id}__{camera}"
+                    )
+                    repeat_id = f"seed-{seed}"
+                    job_id = _safe_id(f"{case_id}__{repeat_id}")
+                    if job_id in seen_ids:
+                        raise ConfigError(f"duplicate job_id generated: {job_id}")
+                    seen_ids.add(job_id)
+                    image_relative, _image_path = _input_image(
+                        workspace_root,
+                        input_root,
+                        experiment_id,
+                        scene_id,
+                        object_id,
+                        camera,
+                        check_inputs=check_inputs,
+                    )
+                    prompt_spec, prompt, negative_prompt = render_prompt(
+                        prompt_profile,
+                        experiment_id=experiment_id,
+                        scene_id=scene_id,
+                        object_id=object_id,
+                        camera=camera,
+                        targets=targets,
+                    )
+                    job = {
+                        "schema_version": "1.0.0",
+                        "job_id": job_id,
+                        "build_id": resolved["build_id"],
+                        "release_id": str(experiment["release_id"]),
+                        "experiment_id": experiment_id,
+                        "case_id": case_id,
+                        "repeat_id": repeat_id,
+                        "task_type": str(experiment["task_type"]),
+                        "seed": seed,
+                        "inputs": {
+                            "image": image_relative.as_posix(),
+                            "source_fps": float(experiment.get("source_fps", 24)),
+                            "conditioning_frame_index": int(experiment.get("conditioning_frame_index", 1)),
+                        },
+                        "prompt_spec": prompt_spec,
+                        "prompt": prompt,
+                        "negative_prompt": negative_prompt,
+                        "prompt_mode": str(prompt_profile["mode"]),
+                        "prompt_template_id": str(prompt_profile["prompt_template_id"]),
+                        "prompt_template_version": str(prompt_profile["version"]),
+                        "targets": targets,
+                        "known_params": known_params,
+                        "factors": {
+                            "level": level,
+                            "parameter_tuple_id": variant_id,
+                            "scene_id": scene_id,
+                            "object_id": object_id,
+                            "camera": camera,
+                            "scene_selection_seed": scene_selection_seed,
+                            "target_assignment": "registry_anchor_tuples",
+                        },
+                        "units": units,
+                        "generation": dict(generation),
+                        "evaluation_tags": list(experiment.get("evaluation_tags", [])),
+                    }
+                    validate_job(job)
+                    jobs.append(job)
+                    if max_jobs is not None and len(jobs) >= max_jobs:
+                        return jobs
     if not jobs:
         raise ConfigError("build generated zero jobs")
     return jobs

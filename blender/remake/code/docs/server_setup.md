@@ -111,22 +111,23 @@ test -d "$WAN_CKPT_DIR"
 
 ## 3. 标准球首轮清单
 
-当前推荐的 reduced 正式 build：
+当前推荐的 factorized 正式 build：
 
 ```text
-code/builds/standard_ball_reduced_parameters_wan22_generation.yaml
+code/builds/standard_ball_factorized900_wan22_generation.yaml
 ```
 
 清单覆盖：
 
 ```text
 13 experiments
-48 selected frozen parameter tuples
+48 selected frozen parameter tuples in the side-view physics track
+2 reference/stress tuples per experiment in the main/top viewpoint track
 9 scenes
 1 object: standard_ball
 3 cameras
 1 seed
-= 1296 videos per model
+= 900 videos per model
 ```
 
 48 组参数的筛选规则如下：
@@ -136,7 +137,14 @@ code/builds/standard_ball_reduced_parameters_wan22_generation.yaml
 - `v2_D/v2_E` 各保留 5 个主效应组合，删除角点或冗余中间点；
 - 四个 V3 实验各保留 default 加每个隐藏参数的一次最大可辨识单因素变化，共 16 组。
 
-因此 `18 + 4 + 5 + 5 + 16 = 48`。所有 13 个实验、9 个场景、3 个视角仍完整保留。相对原 69-tuple 标准球清单从 1863 降为 1296，减少约 30.4%。原始 69-tuple build `code/builds/standard_ball_all_experiments_wan22_generation.yaml` 继续保留，可在后续需要更完整参数覆盖时补跑。
+因此物理 tuple 总数仍为 `18 + 4 + 5 + 5 + 16 = 48`。生成矩阵进一步拆成两条可独立报告的轨道：
+
+1. 物理辨识主轨：48 tuples × 9 scenes × `CAM_Side` = 432 条，用于参数变化、背景变化与物理运动的一致性；
+2. 视角鲁棒性轨：每实验 2 个代表/压力 tuples × 13 experiments × 9 scenes × `CAM_Main/CAM_Top` = 468 条，用于证明非侧视角流程与视角泛化能力。
+
+总数为 `432 + 468 = 900`。每个实验、场景和视角组合仍至少有代表点和压力点；所有 48 个参数 tuple 均在全部 9 个场景的侧视角出现。该设计不再声称完整的 parameter × scene × view 三因素交互，而是明确报告“物理辨识”和“视角鲁棒性”两条 benchmark 结果。相对 1296 条减少 30.6%，相对原 1863 条减少 51.7%。
+
+48-tuple 全三视角 build `code/builds/standard_ball_reduced_parameters_wan22_generation.yaml` 和原始 69-tuple build `code/builds/standard_ball_all_experiments_wan22_generation.yaml` 都继续保留，可在后续补跑。
 
 默认 `NUM_FRAMES=81`、16 fps、40 sampling steps；GPU 4、5、6、7 各使用一个常驻模型，并保持 `WAN_OFFLOAD_MODEL=false`。不降低 sampling steps，以避免进一步损失画质。
 
@@ -167,15 +175,15 @@ bash code/scripts/make_seed_variation_grid.sh "outputs/$RUN_ID"
 outputs/<run_id>/seed_variation_grid.mp4
 ```
 
-布局顺序是左上 seed36、右上 seed37、左下 seed38、右下 seed39。`collect_sharded_run.py` 只有在四个视频和四份 metadata 均完整时才会建立父目录的统一 `videos/`。确认四条视频的运动方向、落地行为、物体形状和背景稳定性可接受后，再使用新的正式 `RUN_ID` 跑 1296 条 reduced 标准球结果。不要把正式 build 的 `seeds` 直接扩成四个。
+布局顺序是左上 seed36、右上 seed37、左下 seed38、右下 seed39。`collect_sharded_run.py` 只有在四个视频和四份 metadata 均完整时才会建立父目录的统一 `videos/`。确认四条视频的运动方向、落地行为、物体形状和背景稳定性可接受后，再使用新的正式 `RUN_ID` 跑 900 条 factorized 标准球结果。不要把正式 build 的 `seeds` 直接扩成四个。
 
 ## 4. 先做三条 dry-run
 
-dry-run 会 prepare 1296-job reduced 标准球 manifest，但只打印前三条模型命令，不加载模型：
+dry-run 会 prepare 900-job factorized 标准球 manifest，但只打印前三条模型命令，不加载模型：
 
 ```bash
-RUN_ID=standard_ball_all13_reduced48_wan22_dryrun \
-BUILD_FILE=code/builds/standard_ball_reduced_parameters_wan22_generation.yaml \
+RUN_ID=standard_ball_all13_factorized900_wan22_dryrun \
+BUILD_FILE=code/builds/standard_ball_factorized900_wan22_generation.yaml \
 MAX_JOBS=3 \
 DRY_RUN=1 \
 GPU_ID=7 \
@@ -184,7 +192,7 @@ bash code/scripts/run_full_generation.sh
 python - <<'PY'
 import json
 from pathlib import Path
-p = Path('outputs/standard_ball_all13_reduced48_wan22_dryrun/manifest.jsonl')
+p = Path('outputs/standard_ball_all13_factorized900_wan22_dryrun/manifest.jsonl')
 rows = [json.loads(line) for line in p.open(encoding='utf-8')]
 print('jobs =', len(rows))
 print('experiments =', len({row['experiment_id'] for row in rows}))
@@ -193,29 +201,29 @@ print('input PNGs =', len({row['inputs']['image'] for row in rows}))
 PY
 ```
 
-预期依次输出 `1296`、`13`、`48`、`351`。
+预期依次输出 `900`、`13`、`48`、`351`。
 
 ## 5. 四卡正式后台生成
 
 ```bash
-RUN_ID=standard_ball_all13_reduced48_wan22_4gpu_$(date +%Y%m%d_%H%M%S)
+RUN_ID=standard_ball_all13_factorized900_wan22_4gpu_$(date +%Y%m%d_%H%M%S)
 
 RUN_ID="$RUN_ID" \
 GPU_IDS=4,5,6,7 \
 WAN_OFFLOAD_MODEL=false \
 FAIL_FAST=1 \
-bash code/scripts/run_reduced_standard_ball_generation_4gpu.sh
+bash code/scripts/run_factorized_standard_ball_generation_4gpu.sh
 
 echo "$RUN_ID"
 ```
 
-启动器会立即返回四个 PID，并将 1296 条均匀分为：
+启动器会立即返回四个 PID，并将 900 条均匀分为：
 
 ```text
-GPU 4: start=0,   jobs=324
-GPU 5: start=324, jobs=324
-GPU 6: start=648, jobs=324
-GPU 7: start=972, jobs=324
+GPU 4: start=0,   jobs=225
+GPU 5: start=225, jobs=225
+GPU 6: start=450, jobs=225
+GPU 7: start=675, jobs=225
 ```
 
 每张卡分别写入 `outputs/<run_id>/shards/gpu-<id>/`，不会并发覆盖状态文件。查看统一进度：
@@ -229,7 +237,7 @@ tail -f "outputs/$RUN_ID/shards/gpu-6/master.log"
 tail -f "outputs/$RUN_ID/shards/gpu-7/master.log"
 ```
 
-状态显示 `generated=1296/1296` 后统一汇总：
+状态显示 `generated=900/900` 后统一汇总：
 
 ```bash
 python code/scripts/collect_sharded_run.py "outputs/$RUN_ID"
@@ -237,7 +245,7 @@ cat "outputs/$RUN_ID/run_summary.json"
 find "outputs/$RUN_ID/videos" -maxdepth 1 -type f -name '*.mp4' -size +0c | wc -l
 ```
 
-汇总器会严格检查缺失、空文件、重复 job ID 和 metadata。检查通过后使用硬链接建立统一 `videos/` 与 `metadata/`，因此不会额外复制 1296 个 MP4。`eval/` 不应在本流程中出现。
+汇总器会严格检查缺失、空文件、重复 job ID 和 metadata。检查通过后使用硬链接建立统一 `videos/` 与 `metadata/`，因此不会额外复制 900 个 MP4。`eval/` 不应在本流程中出现。
 
 ## 6. 断点续跑
 
@@ -248,7 +256,7 @@ RUN_ID=<existing_run_id> \
 GPU_IDS=4,5,6,7 \
 WAN_OFFLOAD_MODEL=false \
 FAIL_FAST=1 \
-bash code/scripts/run_reduced_standard_ball_generation_4gpu.sh
+bash code/scripts/run_factorized_standard_ball_generation_4gpu.sh
 ```
 
 入口不会重复启动仍存活的本项目 shard；停止的 shard 会从自己的固定范围恢复，已有非空 MP4 会被跳过。不要设置 `OVERWRITE=1`，否则已有视频会重新生成。不要同时对同一个 `RUN_ID` 运行单卡脚本。
@@ -264,4 +272,4 @@ configs/experiments/all_experiments_full.yaml
 configs/prompts/all_experiments_explicit_v1.yaml
 ```
 
-其他 I2V 模型也应先使用相同的 reduced48 标准球 override，每模型 1296 个 job；四个模型合计 5184 个视频。Cosmos 若同时比较 image2world 与 video2world，应作为两个独立模型条件，各自生成 1296 个输出，不能混在同一个 run 中。若后续升级为原 69-tuple 清单，再对所有模型一致补跑，不能只补某一个模型。
+其他 I2V 模型也应先使用相同的 factorized900 标准球矩阵，每模型 900 个 job；四个模型合计 3600 个视频。Cosmos 若同时比较 image2world 与 video2world，应作为两个独立模型条件，各自生成 900 个输出，不能混在同一个 run 中。若后续升级为 1296 或 1863 条清单，再对所有模型一致补跑，不能只补某一个模型。
