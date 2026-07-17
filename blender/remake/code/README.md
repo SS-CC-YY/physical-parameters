@@ -135,6 +135,28 @@ bash code/scripts/make_seed_variation_grid.sh \
 
 四宫格布局为左上 seed36、右上 seed37、左下 seed38、右下 seed39。该 smoke build 与正式 1863-job manifest 完全分开。
 
+服务器有四张可用卡时，推荐让 GPU 4、5、6、7 各生成一个 seed：
+
+```bash
+RUN_ID=v1a_seed_variation_wan22_4gpu_$(date +%Y%m%d_%H%M%S)
+RUN_ID="$RUN_ID" GPU_IDS=4,5,6,7 WAN_OFFLOAD_MODEL=false \
+  bash code/scripts/run_seed_variation_4gpu.sh
+
+bash code/scripts/check_four_gpu_generation.sh "outputs/$RUN_ID"
+python code/scripts/collect_sharded_run.py "outputs/$RUN_ID"
+bash code/scripts/make_seed_variation_grid.sh "outputs/$RUN_ID"
+```
+
+正式标准球清单可用相同机制分为 `466 + 466 + 466 + 465 = 1863` 条：
+
+```bash
+RUN_ID=standard_ball_all13_wan22_4gpu_$(date +%Y%m%d_%H%M%S)
+RUN_ID="$RUN_ID" GPU_IDS=4,5,6,7 WAN_OFFLOAD_MODEL=false \
+  bash code/scripts/run_standard_ball_generation_4gpu.sh
+```
+
+每张卡拥有独立的 `shards/gpu-<id>/`、常驻 worker、日志和状态文件。全部完成后运行 `collect_sharded_run.py`；它先验证 1863 个视频及 metadata 完整且无重复，再用硬链接汇总到父 run 的标准 `videos/` 和 `metadata/`，不会复制 MP4 数据。
+
 ## 旧 Wan2.2 60-job demo
 
 demo build 为 `builds/v1a_wan22_demo.yaml`，使用：

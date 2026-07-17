@@ -99,7 +99,7 @@ export REMAKE_ROOT="$PWD"
 export WAN_REPO=/root/data/heyuanyu/yefei/chenyu/data/Wan2.2
 export WAN_CKPT_DIR=/root/data/heyuanyu/yefei/chenyu/models/Wan2.2-I2V-A14B
 export WAN_PYTHON=python
-export GPU_ID=7
+export GPU_IDS=4,5,6,7
 export WAN_OFFLOAD_MODEL=false
 
 nvidia-smi --query-gpu=index,name,memory.total,memory.free --format=csv
@@ -107,7 +107,7 @@ test -f "$WAN_REPO/generate.py"
 test -d "$WAN_CKPT_DIR"
 ```
 
-H20 97871 MiB 默认使用 GPU 7 和一个常驻 Wan2.2 worker。只有首次真实任务报告 CUDA OOM 时，才结束该 run 并用 `WAN_OFFLOAD_MODEL=true` 新建 run。
+四卡流程在 GPU 4、5、6、7 上各启动一个常驻 Wan2.2 worker。每张卡独立加载模型并生成不同视频；不要把 `GPU_ID` 直接写成 `4,5,6,7` 后运行单卡脚本。只有某个 shard 的首次真实任务报告 CUDA OOM 时，才结束四个 shard，并用 `WAN_OFFLOAD_MODEL=true` 和新 `RUN_ID` 重跑。
 
 ## 3. 标准球首轮清单
 
@@ -129,22 +129,25 @@ code/builds/standard_ball_all_experiments_wan22_generation.yaml
 = 1863 videos per model
 ```
 
-默认 `NUM_FRAMES=81`、16 fps、40 sampling steps。相对原四物体、161 帧计划，任务数量减少为四分之一，帧数约减半；同时继续使用常驻模型、GPU 7 和 `WAN_OFFLOAD_MODEL=false`。不降低 sampling steps，以避免进一步损失画质。
+默认 `NUM_FRAMES=81`、16 fps、40 sampling steps。相对原四物体、161 帧计划，任务数量减少为四分之一，帧数约减半；同时在 GPU 4、5、6、7 上各使用一个常驻模型，并保持 `WAN_OFFLOAD_MODEL=false`。不降低 sampling steps，以避免进一步损失画质。
 
 81 帧是 speed-first 条件。部分长周期 V2/V3 实验将来恢复物理拟合时，可能需要用新的 `RUN_ID` 和 `NUM_FRAMES=161` 补跑。`NUM_FRAMES` 必须满足 Wan2.2 的 `4n+1`，不能改变已 prepared run 的帧数。
 
 ### 3.1 固定输入的四次采样测试
 
-以下 build 固定 `v1_A / g=9.81 / baseline / standard_ball / CAM_Side`，只改变 seed 36、37、38、39，因此总共只有 4 条视频：
+以下 build 固定 `v1_A / g=9.81 / baseline / standard_ball / CAM_Side`，只改变 seed 36、37、38、39，因此总共只有 4 条视频。四卡入口会让 GPU 4、5、6、7 各生成一个 seed：
 
 ```bash
-RUN_ID=v1a_seed_variation_wan22_$(date +%Y%m%d_%H%M%S)
+RUN_ID=v1a_seed_variation_wan22_4gpu_$(date +%Y%m%d_%H%M%S)
 
 RUN_ID="$RUN_ID" \
-GPU_ID=7 \
+GPU_IDS=4,5,6,7 \
 WAN_OFFLOAD_MODEL=false \
 FAIL_FAST=1 \
-bash code/scripts/run_seed_variation.sh
+bash code/scripts/run_seed_variation_4gpu.sh
+
+bash code/scripts/check_four_gpu_generation.sh "outputs/$RUN_ID"
+python code/scripts/collect_sharded_run.py "outputs/$RUN_ID"
 
 bash code/scripts/make_seed_variation_grid.sh "outputs/$RUN_ID"
 ```
@@ -155,7 +158,7 @@ bash code/scripts/make_seed_variation_grid.sh "outputs/$RUN_ID"
 outputs/<run_id>/seed_variation_grid.mp4
 ```
 
-布局顺序是左上 seed36、右上 seed37、左下 seed38、右下 seed39。确认四条视频的运动方向、落地行为、物体形状和背景稳定性可接受后，再使用新的正式 `RUN_ID` 跑 1863 条标准球结果。不要把正式 build 的 `seeds` 直接扩成四个。
+布局顺序是左上 seed36、右上 seed37、左下 seed38、右下 seed39。`collect_sharded_run.py` 只有在四个视频和四份 metadata 均完整时才会建立父目录的统一 `videos/`。确认四条视频的运动方向、落地行为、物体形状和背景稳定性可接受后，再使用新的正式 `RUN_ID` 跑 1863 条标准球结果。不要把正式 build 的 `seeds` 直接扩成四个。
 
 ## 4. 先做三条 dry-run
 
@@ -182,55 +185,63 @@ PY
 
 预期依次输出 `1863`、`13`、`69`、`351`。
 
-## 5. 正式后台生成
+## 5. 四卡正式后台生成
 
 ```bash
-RUN_ID=standard_ball_all13_wan22_$(date +%Y%m%d_%H%M%S)
+RUN_ID=standard_ball_all13_wan22_4gpu_$(date +%Y%m%d_%H%M%S)
 
 RUN_ID="$RUN_ID" \
-DETACHED=1 \
-GPU_ID=7 \
+GPU_IDS=4,5,6,7 \
 WAN_OFFLOAD_MODEL=false \
 FAIL_FAST=1 \
-bash code/scripts/run_standard_ball_generation.sh
+bash code/scripts/run_standard_ball_generation_4gpu.sh
 
 echo "$RUN_ID"
 ```
 
-查看进度：
+启动器会立即返回四个 PID，并将 1863 条分为：
 
-```bash
-tail -f "outputs/$RUN_ID/master.log"
-cat "outputs/$RUN_ID/run_summary.json" 2>/dev/null || true
-find "outputs/$RUN_ID/videos" -name '*.mp4' -type f | wc -l
-tail -n 20 "outputs/$RUN_ID/run_state.jsonl"
+```text
+GPU 4: start=0,    jobs=466
+GPU 5: start=466,  jobs=466
+GPU 6: start=932,  jobs=466
+GPU 7: start=1398, jobs=465
 ```
 
-`eval/` 不应在本流程中出现。任务次序按“实验 → 参数 tuple → 场景 → 标准球 → 视角”展开，同一个参数 tuple 的 27 个视频连续生成。
+每张卡分别写入 `outputs/<run_id>/shards/gpu-<id>/`，不会并发覆盖状态文件。查看统一进度：
+
+```bash
+bash code/scripts/check_four_gpu_generation.sh "outputs/$RUN_ID"
+
+tail -f "outputs/$RUN_ID/shards/gpu-4/master.log"
+tail -f "outputs/$RUN_ID/shards/gpu-5/master.log"
+tail -f "outputs/$RUN_ID/shards/gpu-6/master.log"
+tail -f "outputs/$RUN_ID/shards/gpu-7/master.log"
+```
+
+状态显示 `generated=1863/1863` 后统一汇总：
+
+```bash
+python code/scripts/collect_sharded_run.py "outputs/$RUN_ID"
+cat "outputs/$RUN_ID/run_summary.json"
+find "outputs/$RUN_ID/videos" -maxdepth 1 -type f -name '*.mp4' -size +0c | wc -l
+```
+
+汇总器会严格检查缺失、空文件、重复 job ID 和 metadata。检查通过后使用硬链接建立统一 `videos/` 与 `metadata/`，因此不会额外复制 1863 个 MP4。`eval/` 不应在本流程中出现。
 
 ## 6. 断点续跑
 
-Tunnel 断开不影响 `nohup` 进程。若进程确实停止，使用完全相同的 `RUN_ID`：
+Tunnel 断开不影响四个 `nohup` 进程。若一个或多个 shard 停止，使用完全相同的 `RUN_ID` 重新执行四卡入口：
 
 ```bash
 RUN_ID=<existing_run_id> \
-GPU_ID=7 \
+GPU_IDS=4,5,6,7 \
 WAN_OFFLOAD_MODEL=false \
 FAIL_FAST=1 \
-bash code/scripts/run_standard_ball_generation.sh
+bash code/scripts/run_standard_ball_generation_4gpu.sh
 ```
 
-脚本检测到 `resolved_build.yaml` 和 `manifest.jsonl` 后不会重新 prepare；已有非空 MP4 会被跳过。不要设置 `OVERWRITE=1`，否则已有视频会重新生成。
-
-也可直接运行：
-
-```bash
-export PYTHONPATH="$PWD/code/src${PYTHONPATH:+:$PYTHONPATH}"
-python -m remake_benchmark generate \
-  --run-dir "outputs/<existing_run_id>" \
-  --start-index 0 \
-  --fail-fast
-```
+入口不会重复启动仍存活的本项目 shard；停止的 shard 会从自己的固定范围恢复，已有非空 MP4 会被跳过。不要设置 `OVERWRITE=1`，否则已有视频会重新生成。不要同时对同一个 `RUN_ID` 运行单卡脚本。
 
 ## 7. 其他模型
 
