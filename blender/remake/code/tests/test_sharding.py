@@ -38,6 +38,11 @@ class ShardingTests(unittest.TestCase):
         self.assertEqual([item["start_index"] for item in ranges], [0, 225, 450, 675])
         self.assertEqual([item["max_jobs"] for item in ranges], [225, 225, 225, 225])
 
+    def test_factorized978_ranges_differ_by_at_most_one_job(self) -> None:
+        ranges = split_job_ranges(978, [4, 5, 6, 7])
+        self.assertEqual([item["start_index"] for item in ranges], [0, 245, 490, 734])
+        self.assertEqual([item["max_jobs"] for item in ranges], [245, 245, 244, 244])
+
     def test_four_seed_ranges_assign_one_job_per_gpu(self) -> None:
         ranges = split_job_ranges(4, [4, 5, 6, 7])
         self.assertEqual([item["start_index"] for item in ranges], [0, 1, 2, 3])

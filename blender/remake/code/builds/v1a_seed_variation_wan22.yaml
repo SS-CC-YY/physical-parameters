@@ -1,6 +1,6 @@
 schema_version: 1.0.0
-build_id: v1a_g9p81_standard_ball_side_seed_variation_wan22
-description: Four-seed sampling-stability smoke for one fixed v1_A conditioning image and prompt.
+build_id: v1a_g9p81_standard_ball_side_random_seed_variation_wan22
+description: Four frozen randomly drawn non-consecutive seeds for one fixed v1_A conditioning image and prompt.
 workflow: generation_only
 workspace_root: ${REMAKE_ROOT:-/root/data/heyuanyu/yefei/chenyu/remake/data/blender/remake}
 output_root: ${OUTPUT_ROOT:-outputs}
@@ -16,7 +16,7 @@ overrides:
       scenes: [baseline]
       objects: [standard_ball]
       cameras: [CAM_Side]
-      seeds: [36, 37, 38, 39]
+      seeds: [341867882, 1750912582, 265635392, 135883006]
     generation:
       num_frames: ${NUM_FRAMES:-81}
     experiments:

@@ -97,34 +97,35 @@ python code/scripts/remake_benchmark.py --help
 
 ## 标准球优先生成矩阵
 
-当前推荐的首轮正式 build 为 `builds/standard_ball_factorized900_wan22_generation.yaml`。它通过 build override 复用完整实验配置，只选择 `standard_ball`，并将完整笛卡尔积拆成物理辨识与视角鲁棒性两条轨道：
+当前推荐的首轮正式 build 为 `builds/standard_ball_factorized978_wan22_generation.yaml`。它复用完整实验配置，只选择 `standard_ball`，并将 benchmark 拆成物理辨识、视角鲁棒性和随机 seed 稳定性三条轨道：
 
 - 13 个实验：`v1_A–v1_D`、`v2_A–v2_E`、`v3_A–v3_D`；
 - 48 个冻结 parameter anchor tuples；
 - 9 个场景：baseline、4 个 indoor、4 个 outdoor；
 - 1 个物体：`standard_ball`；
 - 3 个视角；
-- seed 36；
+- 一次性随机抽取并冻结的主 seed `341867882`；
 - 物理辨识轨：48 tuples × 9 scenes × `CAM_Side` = 432；
 - 视角鲁棒性轨：每实验 2 个代表/压力 tuples × 13 experiments × 9 scenes × `CAM_Main/CAM_Top` = 468；
-- 每模型共 `432 + 468 = 900` 个视频；
+- seed 稳定性轨：26 个 baseline/CAM_Side 代表/压力条件 × 3 个额外随机 seed = 78；
+- 每模型共 `432 + 468 + 78 = 978` 个视频；
 - 使用 351 张标准球首帧 PNG，每个 PNG 对应多个显式物理参数 continuation；
 - 默认 81 帧、16 fps、40 sampling steps，Wan2.2 模型常驻且 H20 默认不 offload。
 
 V3 多参数实验只运行 registry 中有物理意义的联合参数锚点，不把各参数独立做笛卡尔积。尤其 `v3_B` 的冻结实验是“带摩擦的左右墙非对称重复碰撞”，不是旧文件名所暗示的弹簧阻尼实验。
 
-48 个参数 tuple 均在侧视角和全部场景中出现；主/顶视角为每个实验保留一个代表点和一个压力点，因此所有 13 个实验、9 个场景、3 个视角仍被覆盖，但不再声称完整的 parameter × scene × view 三因素交互。单条视频继续使用 81 帧、832×480、40 steps。执行四卡入口：
+48 个参数 tuple 均在侧视角和全部场景中出现；主/顶视角为每个实验保留一个代表点和一个压力点。seed 稳定性轨在相同26个条件上使用冻结的随机 seeds `341867882、1750912582、265635392、135883006`，其中主 seed 已包含在432条物理轨中，只新增78条。单条视频继续使用81帧、832×480、40 steps。执行四卡入口：
 
 ```bash
 GPU_IDS=4,5,6,7 WAN_OFFLOAD_MODEL=false \
-bash code/scripts/run_factorized_standard_ball_generation_4gpu.sh
+bash code/scripts/run_factorized978_standard_ball_generation_4gpu.sh
 ```
 
 四卡入口只调用 controller `prepare` 和四个分片 `generate`；不会产生 `eval/`，也不会因检测或拟合结果中断生成。相同父 run 再次执行会复用不可变 manifest，并跳过已有非空视频。
 
-48-tuple 全三视角笛卡尔积 build `builds/standard_ball_reduced_parameters_wan22_generation.yaml`（1296 条）、原 69-tuple build `builds/standard_ball_all_experiments_wan22_generation.yaml`（1863 条）与完整四物体 build 均保留，但当前不运行。部分长周期 V2/V3 实验未来可能需要单独补跑 161 帧或被删掉的 anchor 条件。
+不含 seed audit 的 `factorized900` build、48-tuple 全三视角 build（1296条）、原69-tuple build（1863条）与完整四物体 build 均保留，但当前不运行。
 
-在正式生成前，可用 `builds/v1a_seed_variation_wan22.yaml` 对完全相同的首帧和 prompt 运行 seeds 36–39，仅生成 4 条视频：
+在正式生成前，可用 `builds/v1a_seed_variation_wan22.yaml` 对完全相同的首帧和 prompt 运行与正式审计一致的4个冻结随机 seed，仅生成4条视频：
 
 ```bash
 RUN_ID=v1a_seed_variation_wan22 \
@@ -135,7 +136,7 @@ bash code/scripts/make_seed_variation_grid.sh \
   outputs/v1a_seed_variation_wan22
 ```
 
-四宫格布局为左上 seed36、右上 seed37、左下 seed38、右下 seed39。该 smoke build 与正式 900-job manifest 完全分开。
+四宫格顺序为 `341867882、1750912582、265635392、135883006`。脚本也会自动兼容已经生成的旧 `36/37/38/39` run。
 
 服务器有四张可用卡时，推荐让 GPU 4、5、6、7 各生成一个 seed：
 
@@ -149,15 +150,15 @@ python code/scripts/collect_sharded_run.py "outputs/$RUN_ID"
 bash code/scripts/make_seed_variation_grid.sh "outputs/$RUN_ID"
 ```
 
-推荐的 factorized 正式标准球清单会均匀分为 `225 × 4 = 900` 条：
+推荐的 factorized978 正式标准球清单会分为 `245 + 245 + 244 + 244 = 978` 条：
 
 ```bash
-RUN_ID=standard_ball_all13_factorized900_wan22_4gpu_$(date +%Y%m%d_%H%M%S)
+RUN_ID=standard_ball_all13_factorized978_wan22_4gpu_$(date +%Y%m%d_%H%M%S)
 RUN_ID="$RUN_ID" GPU_IDS=4,5,6,7 WAN_OFFLOAD_MODEL=false \
-  bash code/scripts/run_factorized_standard_ball_generation_4gpu.sh
+  bash code/scripts/run_factorized978_standard_ball_generation_4gpu.sh
 ```
 
-每张卡拥有独立的 `shards/gpu-<id>/`、常驻 worker、日志和状态文件。全部完成后运行 `collect_sharded_run.py`；它先验证 900 个视频及 metadata 完整且无重复，再用硬链接汇总到父 run 的标准 `videos/` 和 `metadata/`，不会复制 MP4 数据。
+每张卡拥有独立的 `shards/gpu-<id>/`、常驻 worker、日志和状态文件。全部完成后运行 `collect_sharded_run.py`；它先验证978个视频及metadata完整且无重复，再用硬链接汇总，不会复制MP4数据。
 
 ## 旧 Wan2.2 60-job demo
 

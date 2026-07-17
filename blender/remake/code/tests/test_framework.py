@@ -47,6 +47,11 @@ class FrameworkTests(unittest.TestCase):
             WORKSPACE_ROOT,
         )
         cls.factorized_standard_ball_jobs = build_jobs(cls.factorized_standard_ball_resolved)
+        cls.factorized978_resolved = resolve_build(
+            CODE_ROOT / "builds" / "standard_ball_factorized978_wan22_generation.yaml",
+            WORKSPACE_ROOT,
+        )
+        cls.factorized978_jobs = build_jobs(cls.factorized978_resolved)
 
     def test_demo_build_creates_sixty_three_view_jobs_from_five_sampled_scenes(self) -> None:
         jobs = build_jobs(self.resolved)
@@ -187,7 +192,10 @@ class FrameworkTests(unittest.TestCase):
     def test_seed_variation_build_changes_only_seed(self) -> None:
         jobs = self.seed_variation_jobs
         self.assertEqual(len(jobs), 4)
-        self.assertEqual({job["seed"] for job in jobs}, {36, 37, 38, 39})
+        self.assertEqual(
+            {job["seed"] for job in jobs},
+            {341867882, 1750912582, 265635392, 135883006},
+        )
         self.assertEqual(len({job["inputs"]["image"] for job in jobs}), 1)
         self.assertEqual(len({job["prompt"] for job in jobs}), 1)
         self.assertEqual({job["experiment_id"] for job in jobs}, {"v1_A"})
@@ -283,6 +291,46 @@ class FrameworkTests(unittest.TestCase):
             {job["prompt_spec"]["prompt_framework_id"] for job in jobs},
             {"ppb_common_physics_video_v1"},
         )
+
+    def test_factorized978_adds_a_frozen_nonconsecutive_seed_audit(self) -> None:
+        jobs = self.factorized978_jobs
+        primary_seed = 341867882
+        audit_seeds = {primary_seed, 1750912582, 265635392, 135883006}
+        extra_jobs = [job for job in jobs if job["seed"] != primary_seed]
+        extra_pairs = {
+            (job["experiment_id"], job["factors"]["parameter_tuple_id"])
+            for job in extra_jobs
+        }
+
+        self.assertEqual(len(jobs), 978)
+        self.assertEqual(Counter(job["seed"] for job in jobs)[primary_seed], 900)
+        self.assertEqual(
+            {seed: Counter(job["seed"] for job in jobs)[seed] for seed in audit_seeds - {primary_seed}},
+            {1750912582: 26, 265635392: 26, 135883006: 26},
+        )
+        self.assertEqual(len(extra_jobs), 78)
+        self.assertEqual(len(extra_pairs), 26)
+        self.assertTrue(all(job["factors"]["scene_id"] == "baseline" for job in extra_jobs))
+        self.assertTrue(all(job["factors"]["camera"] == "CAM_Side" for job in extra_jobs))
+        self.assertTrue(
+            all(abs(left - right) > 1 for left in audit_seeds for right in audit_seeds if left != right)
+        )
+        for experiment_id, parameter_tuple_id in extra_pairs:
+            pair_seeds = {
+                job["seed"]
+                for job in jobs
+                if job["experiment_id"] == experiment_id
+                and job["factors"]["parameter_tuple_id"] == parameter_tuple_id
+                and job["factors"]["scene_id"] == "baseline"
+                and job["factors"]["camera"] == "CAM_Side"
+            }
+            self.assertEqual(pair_seeds, audit_seeds)
+        self.assertEqual(
+            Counter(job["factors"]["camera"] for job in jobs),
+            Counter({"CAM_Side": 510, "CAM_Main": 234, "CAM_Top": 234}),
+        )
+        self.assertEqual(len({job["inputs"]["image"] for job in jobs}), 351)
+        self.assertEqual({job["generation"]["num_frames"] for job in jobs}, {81})
 
 
 if __name__ == "__main__":

@@ -14,9 +14,37 @@ fi
 RUN_DIR="$(cd "${RUN_DIR}" && pwd)"
 VIDEOS_DIR="${RUN_DIR}/videos"
 PREFIX="v1_A__g9p81__baseline__standard_ball__CAM_Side"
-SEEDS=(36 37 38 39)
+new_seeds=(341867882 1750912582 265635392 135883006)
+legacy_seeds=(36 37 38 39)
+seed_values=()
+if [[ -n "${SEEDS:-}" ]]; then
+  normalized_seeds="${SEEDS//,/ }"
+  read -r -a seed_values <<<"${normalized_seeds}"
+else
+  new_complete=1
+  for seed in "${new_seeds[@]}"; do
+    [[ -s "${VIDEOS_DIR}/${PREFIX}__seed-${seed}.mp4" ]] || new_complete=0
+  done
+  if (( new_complete )); then
+    seed_values=("${new_seeds[@]}")
+  else
+    legacy_complete=1
+    for seed in "${legacy_seeds[@]}"; do
+      [[ -s "${VIDEOS_DIR}/${PREFIX}__seed-${seed}.mp4" ]] || legacy_complete=0
+    done
+    if (( legacy_complete )); then
+      seed_values=("${legacy_seeds[@]}")
+    else
+      seed_values=("${new_seeds[@]}")
+    fi
+  fi
+fi
+if [[ "${#seed_values[@]}" -ne 4 ]]; then
+  echo "error: SEEDS must contain exactly four comma- or space-separated integers" >&2
+  exit 2
+fi
 ffmpeg_inputs=()
-for seed in "${SEEDS[@]}"; do
+for seed in "${seed_values[@]}"; do
   video="${VIDEOS_DIR}/${PREFIX}__seed-${seed}.mp4"
   if [[ ! -s "${video}" ]]; then
     echo "error: missing non-empty video: ${video}" >&2
@@ -36,4 +64,4 @@ ffmpeg -y "${ffmpeg_inputs[@]}" \
   -map "[v]" -an -r 16 -movflags +faststart "${OUTPUT}"
 
 echo "grid=${OUTPUT}"
-echo "layout: top-left=seed36 top-right=seed37 bottom-left=seed38 bottom-right=seed39"
+echo "layout: top-left=seed${seed_values[0]} top-right=seed${seed_values[1]} bottom-left=seed${seed_values[2]} bottom-right=seed${seed_values[3]}"

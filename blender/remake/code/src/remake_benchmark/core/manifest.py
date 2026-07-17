@@ -289,11 +289,15 @@ def _selected_anchor_ids(
 
 
 def _registry_coverage_blocks(
-    selection: dict[str, Any], registry: list[dict[str, Any]], cameras: list[str]
-) -> list[tuple[list[str], dict[str, set[str]] | None]]:
+    selection: dict[str, Any],
+    registry: list[dict[str, Any]],
+    cameras: list[str],
+    scenes: list[str],
+    seeds: list[int],
+) -> list[tuple[list[str], dict[str, set[str]] | None, list[str], list[int]]]:
     configured = selection.get("coverage_blocks")
     if configured is None:
-        return [(cameras, _selected_anchor_ids(selection, registry))]
+        return [(cameras, _selected_anchor_ids(selection, registry), scenes, seeds)]
     if selection.get("parameter_tuple_ids") is not None:
         raise ConfigError(
             "selection cannot define both parameter_tuple_ids and coverage_blocks"
@@ -302,9 +306,10 @@ def _registry_coverage_blocks(
         raise ConfigError("selection.coverage_blocks must be a non-empty list")
 
     selected_cameras = set(cameras)
+    selected_scenes = set(scenes)
     covered_cameras: set[str] = set()
-    covered_cases: set[tuple[str, str, str]] = set()
-    blocks: list[tuple[list[str], dict[str, set[str]] | None]] = []
+    covered_cases: set[tuple[str, str, str, str, int]] = set()
+    blocks: list[tuple[list[str], dict[str, set[str]] | None, list[str], list[int]]] = []
     for index, block in enumerate(configured):
         if not isinstance(block, dict):
             raise ConfigError(f"selection.coverage_blocks[{index}] must be an object")
@@ -322,6 +327,33 @@ def _registry_coverage_blocks(
                 f"selection.coverage_blocks[{index}] contains cameras outside selection.cameras: "
                 f"{unknown_cameras}"
             )
+        raw_scenes = block.get("scenes", scenes)
+        if not isinstance(raw_scenes, list) or not raw_scenes:
+            raise ConfigError(
+                f"selection.coverage_blocks[{index}].scenes must be a non-empty list"
+            )
+        block_scenes = [str(value) for value in raw_scenes]
+        if len(block_scenes) != len(set(block_scenes)):
+            raise ConfigError(f"selection.coverage_blocks[{index}].scenes contains duplicates")
+        unknown_scenes = sorted(set(block_scenes) - selected_scenes)
+        if unknown_scenes:
+            raise ConfigError(
+                f"selection.coverage_blocks[{index}] contains scenes outside selection.scenes: "
+                f"{unknown_scenes}"
+            )
+        raw_seeds = block.get("seeds", seeds)
+        if not isinstance(raw_seeds, list) or not raw_seeds:
+            raise ConfigError(
+                f"selection.coverage_blocks[{index}].seeds must be a non-empty list"
+            )
+        try:
+            block_seeds = [int(value) for value in raw_seeds]
+        except (TypeError, ValueError) as exc:
+            raise ConfigError(
+                f"selection.coverage_blocks[{index}].seeds contains a non-integer value"
+            ) from exc
+        if len(block_seeds) != len(set(block_seeds)):
+            raise ConfigError(f"selection.coverage_blocks[{index}].seeds contains duplicates")
         block_anchor_ids = _selected_anchor_ids(block, registry)
         if block_anchor_ids is None:
             raise ConfigError(
@@ -330,15 +362,18 @@ def _registry_coverage_blocks(
         for camera in block_cameras:
             for experiment_id, anchor_ids in block_anchor_ids.items():
                 for anchor_id in anchor_ids:
-                    case = (camera, experiment_id, anchor_id)
-                    if case in covered_cases:
-                        raise ConfigError(
-                            "selection.coverage_blocks overlap at "
-                            f"camera={camera}, experiment={experiment_id}, tuple={anchor_id}"
-                        )
-                    covered_cases.add(case)
+                    for scene_id in block_scenes:
+                        for seed in block_seeds:
+                            case = (camera, experiment_id, anchor_id, scene_id, seed)
+                            if case in covered_cases:
+                                raise ConfigError(
+                                    "selection.coverage_blocks overlap at "
+                                    f"camera={camera}, experiment={experiment_id}, "
+                                    f"tuple={anchor_id}, scene={scene_id}, seed={seed}"
+                                )
+                            covered_cases.add(case)
         covered_cameras.update(block_cameras)
-        blocks.append((block_cameras, block_anchor_ids))
+        blocks.append((block_cameras, block_anchor_ids, block_scenes, block_seeds))
 
     missing_cameras = sorted(selected_cameras - covered_cameras)
     if missing_cameras:
@@ -365,7 +400,9 @@ def _build_registry_exhaustive_jobs(
     seeds = [int(value) for value in _as_nonempty_list(selection, "seeds")]
     generation = _generation_config(experiment)
     registry = _registry_experiments(experiment)
-    coverage_blocks = _registry_coverage_blocks(selection, registry, cameras)
+    coverage_blocks = _registry_coverage_blocks(
+        selection, registry, cameras, scenes, seeds
+    )
 
     jobs: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
@@ -391,10 +428,12 @@ def _build_registry_exhaustive_jobs(
             if not isinstance(raw_anchor, dict):
                 raise ConfigError(f"registry experiment {experiment_id} contains a non-object anchor")
             variant_id, targets = _anchor_targets(experiment_id, raw_anchor, parameter_names)
-            for block_cameras, block_anchor_ids in coverage_blocks:
+            for block_cameras, block_anchor_ids, block_scenes, block_seeds in coverage_blocks:
                 if block_anchor_ids is not None and variant_id not in block_anchor_ids[experiment_id]:
                     continue
-                combinations = itertools.product(scenes, objects, block_cameras, seeds)
+                combinations = itertools.product(
+                    block_scenes, objects, block_cameras, block_seeds
+                )
                 for scene_id, object_id, camera, seed in combinations:
                     case_id = _safe_id(
                         f"{experiment_id}__{variant_id}__{scene_id}__{object_id}__{camera}"
