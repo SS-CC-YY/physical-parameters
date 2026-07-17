@@ -2,6 +2,53 @@
 
 当前正式流程是“先完成所有模型的全部视频生成，再统一评估”。本页只说明生成；不要运行 `sequence` 或 `evaluate`。
 
+## 0. 安全终止旧生成-评估流水线
+
+共享 root 账户上不要按进程名批量 `pkill`，也不要直接杀整个进程组。先确认 PID 仍属于本项目：
+
+```bash
+OLD_PID=332251
+
+ps -o user,pid,ppid,pgid,sid,etime,cmd -p "$OLD_PID"
+readlink -f "/proc/$OLD_PID/cwd"
+tr '\0' ' ' <"/proc/$OLD_PID/cmdline"; echo
+pstree -ap "$OLD_PID" || true
+```
+
+只有当工作目录或命令明确包含当前 `chenyu/remake` 项目时，才在当前 shell 定义并执行下面的递归函数。它先终止最深层子进程，再终止父进程，不会按用户名或模糊进程名影响其他用户任务：
+
+```bash
+terminate_tree() {
+  local parent="$1"
+  local child
+  for child in $(pgrep -P "$parent" 2>/dev/null); do
+    terminate_tree "$child"
+  done
+  kill -TERM "$parent" 2>/dev/null || true
+}
+
+terminate_tree "$OLD_PID"
+sleep 5
+
+ps -o user,pid,ppid,etime,cmd -p "$OLD_PID" || true
+pstree -ap "$OLD_PID" 2>/dev/null || true
+```
+
+若 5 秒后同一个已核对的 PID 仍存在，再只对该树使用 `KILL`，不要使用负 PGID：
+
+```bash
+kill_tree_now() {
+  local parent="$1"
+  local child
+  for child in $(pgrep -P "$parent" 2>/dev/null); do
+    kill_tree_now "$child"
+  done
+  kill -KILL "$parent" 2>/dev/null || true
+}
+
+kill_tree_now "$OLD_PID"
+```
+
 ## 1. 更新仓库且不影响共享账户
 
 ```bash
@@ -85,6 +132,30 @@ code/builds/standard_ball_all_experiments_wan22_generation.yaml
 默认 `NUM_FRAMES=81`、16 fps、40 sampling steps。相对原四物体、161 帧计划，任务数量减少为四分之一，帧数约减半；同时继续使用常驻模型、GPU 7 和 `WAN_OFFLOAD_MODEL=false`。不降低 sampling steps，以避免进一步损失画质。
 
 81 帧是 speed-first 条件。部分长周期 V2/V3 实验将来恢复物理拟合时，可能需要用新的 `RUN_ID` 和 `NUM_FRAMES=161` 补跑。`NUM_FRAMES` 必须满足 Wan2.2 的 `4n+1`，不能改变已 prepared run 的帧数。
+
+### 3.1 固定输入的四次采样测试
+
+以下 build 固定 `v1_A / g=9.81 / baseline / standard_ball / CAM_Side`，只改变 seed 36、37、38、39，因此总共只有 4 条视频：
+
+```bash
+RUN_ID=v1a_seed_variation_wan22_$(date +%Y%m%d_%H%M%S)
+
+RUN_ID="$RUN_ID" \
+GPU_ID=7 \
+WAN_OFFLOAD_MODEL=false \
+FAIL_FAST=1 \
+bash code/scripts/run_seed_variation.sh
+
+bash code/scripts/make_seed_variation_grid.sh "outputs/$RUN_ID"
+```
+
+输出为：
+
+```text
+outputs/<run_id>/seed_variation_grid.mp4
+```
+
+布局顺序是左上 seed36、右上 seed37、左下 seed38、右下 seed39。确认四条视频的运动方向、落地行为、物体形状和背景稳定性可接受后，再使用新的正式 `RUN_ID` 跑 1863 条标准球结果。不要把正式 build 的 `seeds` 直接扩成四个。
 
 ## 4. 先做三条 dry-run
 

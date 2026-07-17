@@ -122,6 +122,19 @@ bash code/scripts/run_standard_ball_generation.sh
 
 完整的四物体、161 帧 build `builds/all_experiments_wan22_generation.yaml` 仍然保留，但当前不运行。81 帧是 speed-first 条件，计算量显著降低；部分长周期 V2/V3 实验在未来做完整拟合时可能需要单独补跑 161 帧条件。
 
+在正式生成前，可用 `builds/v1a_seed_variation_wan22.yaml` 对完全相同的首帧和 prompt 运行 seeds 36–39，仅生成 4 条视频：
+
+```bash
+RUN_ID=v1a_seed_variation_wan22 \
+GPU_ID=7 WAN_OFFLOAD_MODEL=false \
+bash code/scripts/run_seed_variation.sh
+
+bash code/scripts/make_seed_variation_grid.sh \
+  outputs/v1a_seed_variation_wan22
+```
+
+四宫格布局为左上 seed36、右上 seed37、左下 seed38、右下 seed39。该 smoke build 与正式 1863-job manifest 完全分开。
+
 ## 旧 Wan2.2 60-job demo
 
 demo build 为 `builds/v1a_wan22_demo.yaml`，使用：

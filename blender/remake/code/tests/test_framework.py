@@ -32,6 +32,11 @@ class FrameworkTests(unittest.TestCase):
             WORKSPACE_ROOT,
         )
         cls.standard_ball_jobs = build_jobs(cls.standard_ball_resolved)
+        cls.seed_variation_resolved = resolve_build(
+            CODE_ROOT / "builds" / "v1a_seed_variation_wan22.yaml",
+            WORKSPACE_ROOT,
+        )
+        cls.seed_variation_jobs = build_jobs(cls.seed_variation_resolved)
 
     def test_demo_build_creates_sixty_three_view_jobs_from_five_sampled_scenes(self) -> None:
         jobs = build_jobs(self.resolved)
@@ -168,6 +173,18 @@ class FrameworkTests(unittest.TestCase):
             self.standard_ball_resolved["applied_overrides"]["experiment"]["selection"]["objects"],
             ["standard_ball"],
         )
+
+    def test_seed_variation_build_changes_only_seed(self) -> None:
+        jobs = self.seed_variation_jobs
+        self.assertEqual(len(jobs), 4)
+        self.assertEqual({job["seed"] for job in jobs}, {36, 37, 38, 39})
+        self.assertEqual(len({job["inputs"]["image"] for job in jobs}), 1)
+        self.assertEqual(len({job["prompt"] for job in jobs}), 1)
+        self.assertEqual({job["experiment_id"] for job in jobs}, {"v1_A"})
+        self.assertEqual({job["targets"]["gravity_g"] for job in jobs}, {9.81})
+        self.assertEqual({job["factors"]["scene_id"] for job in jobs}, {"baseline"})
+        self.assertEqual({job["factors"]["object_id"] for job in jobs}, {"standard_ball"})
+        self.assertEqual({job["factors"]["camera"] for job in jobs}, {"CAM_Side"})
 
 
 if __name__ == "__main__":

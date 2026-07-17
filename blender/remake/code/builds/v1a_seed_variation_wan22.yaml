@@ -1,0 +1,32 @@
+schema_version: 1.0.0
+build_id: v1a_g9p81_standard_ball_side_seed_variation_wan22
+description: Four-seed sampling-stability smoke for one fixed v1_A conditioning image and prompt.
+workflow: generation_only
+workspace_root: ${REMAKE_ROOT:-/root/data/heyuanyu/yefei/chenyu/remake/data/blender/remake}
+output_root: ${OUTPUT_ROOT:-outputs}
+profiles:
+  experiment: configs/experiments/all_experiments_full.yaml
+  prompt: configs/prompts/all_experiments_explicit_v1.yaml
+  model: configs/models/wan22_i2v_a14b_full_server.yaml
+  evaluation: configs/evaluations/basic_video_v1.yaml
+overrides:
+  experiment:
+    suite_id: v1a-g9p81-standard-ball-side-seed-variation
+    selection:
+      scenes: [baseline]
+      objects: [standard_ball]
+      cameras: [CAM_Side]
+      seeds: [36, 37, 38, 39]
+    generation:
+      num_frames: ${NUM_FRAMES:-81}
+    experiments:
+      - id: v1_A
+        level: 1
+        hidden_parameters:
+          - {name: gravity_g, unit: m/s^2}
+        known_parameters: [initial_height_z0, contact_height_zc, initial_vertical_velocity=0]
+        anchor_tuples:
+          - {id: g9p81, gravity_g: 9.81}
+  model:
+    generation:
+      frame_num: ${NUM_FRAMES:-81}
