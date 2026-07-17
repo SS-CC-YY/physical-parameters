@@ -62,12 +62,12 @@ test -d "$WAN_CKPT_DIR"
 
 H20 97871 MiB 默认使用 GPU 7 和一个常驻 Wan2.2 worker。只有首次真实任务报告 CUDA OOM 时，才结束该 run 并用 `WAN_OFFLOAD_MODEL=true` 新建 run。
 
-## 3. 全量清单口径
+## 3. 标准球首轮清单
 
 正式 build：
 
 ```text
-code/builds/all_experiments_wan22_generation.yaml
+code/builds/standard_ball_all_experiments_wan22_generation.yaml
 ```
 
 清单覆盖：
@@ -76,29 +76,31 @@ code/builds/all_experiments_wan22_generation.yaml
 13 experiments
 69 frozen parameter tuples
 9 scenes
-4 objects
+1 object: standard_ball
 3 cameras
 1 seed
-= 7452 videos per model
+= 1863 videos per model
 ```
 
-默认 `NUM_FRAMES=161`、16 fps，对应约 10 秒，能够保留 V2/V3 冻结设计的长时观察范围。`NUM_FRAMES` 必须满足 Wan2.2 的 `4n+1`；改变帧数必须使用新的 `RUN_ID`，不能覆盖已经 prepared 的 manifest。
+默认 `NUM_FRAMES=81`、16 fps、40 sampling steps。相对原四物体、161 帧计划，任务数量减少为四分之一，帧数约减半；同时继续使用常驻模型、GPU 7 和 `WAN_OFFLOAD_MODEL=false`。不降低 sampling steps，以避免进一步损失画质。
+
+81 帧是 speed-first 条件。部分长周期 V2/V3 实验将来恢复物理拟合时，可能需要用新的 `RUN_ID` 和 `NUM_FRAMES=161` 补跑。`NUM_FRAMES` 必须满足 Wan2.2 的 `4n+1`，不能改变已 prepared run 的帧数。
 
 ## 4. 先做三条 dry-run
 
-dry-run 仍会 prepare 完整 7452-job manifest，但只打印前三条模型命令，不加载模型：
+dry-run 会 prepare 1863-job 标准球 manifest，但只打印前三条模型命令，不加载模型：
 
 ```bash
-RUN_ID=all13_wan22_dryrun \
+RUN_ID=standard_ball_all13_wan22_dryrun \
 MAX_JOBS=3 \
 DRY_RUN=1 \
 GPU_ID=7 \
-bash code/scripts/run_full_generation.sh
+bash code/scripts/run_standard_ball_generation.sh
 
 python - <<'PY'
 import json
 from pathlib import Path
-p = Path('outputs/all13_wan22_dryrun/manifest.jsonl')
+p = Path('outputs/standard_ball_all13_wan22_dryrun/manifest.jsonl')
 rows = [json.loads(line) for line in p.open(encoding='utf-8')]
 print('jobs =', len(rows))
 print('experiments =', len({row['experiment_id'] for row in rows}))
@@ -107,19 +109,19 @@ print('input PNGs =', len({row['inputs']['image'] for row in rows}))
 PY
 ```
 
-预期依次输出 `7452`、`13`、`69`、`1404`。
+预期依次输出 `1863`、`13`、`69`、`351`。
 
 ## 5. 正式后台生成
 
 ```bash
-RUN_ID=all13_wan22_full_$(date +%Y%m%d_%H%M%S)
+RUN_ID=standard_ball_all13_wan22_$(date +%Y%m%d_%H%M%S)
 
 RUN_ID="$RUN_ID" \
 DETACHED=1 \
 GPU_ID=7 \
 WAN_OFFLOAD_MODEL=false \
 FAIL_FAST=1 \
-bash code/scripts/run_full_generation.sh
+bash code/scripts/run_standard_ball_generation.sh
 
 echo "$RUN_ID"
 ```
@@ -133,7 +135,7 @@ find "outputs/$RUN_ID/videos" -name '*.mp4' -type f | wc -l
 tail -n 20 "outputs/$RUN_ID/run_state.jsonl"
 ```
 
-`eval/` 不应在本流程中出现。任务次序按“实验 → 参数 tuple → 场景 → 物体 → 视角”展开，同一个参数 tuple 的 108 个视频连续生成。
+`eval/` 不应在本流程中出现。任务次序按“实验 → 参数 tuple → 场景 → 标准球 → 视角”展开，同一个参数 tuple 的 27 个视频连续生成。
 
 ## 6. 断点续跑
 
@@ -144,7 +146,7 @@ RUN_ID=<existing_run_id> \
 GPU_ID=7 \
 WAN_OFFLOAD_MODEL=false \
 FAIL_FAST=1 \
-bash code/scripts/run_full_generation.sh
+bash code/scripts/run_standard_ball_generation.sh
 ```
 
 脚本检测到 `resolved_build.yaml` 和 `manifest.jsonl` 后不会重新 prepare；已有非空 MP4 会被跳过。不要设置 `OVERWRITE=1`，否则已有视频会重新生成。
@@ -170,4 +172,4 @@ configs/experiments/all_experiments_full.yaml
 configs/prompts/all_experiments_explicit_v1.yaml
 ```
 
-这样每个 I2V 模型都应得到同样的 7452 个 job。Cosmos 若同时比较 image2world 与 video2world，应作为两个独立模型条件，各自生成 7452 个输出，不能混在同一个 run 中。
+其他 I2V 模型也应先使用相同的标准球 override，每模型 1863 个 job；四个模型合计 7452 个视频。Cosmos 若同时比较 image2world 与 video2world，应作为两个独立模型条件，各自生成 1863 个输出，不能混在同一个 run 中。

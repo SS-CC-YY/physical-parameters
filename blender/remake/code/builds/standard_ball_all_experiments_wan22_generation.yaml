@@ -1,0 +1,21 @@
+schema_version: 1.0.0
+build_id: standard_ball_all13_wan22_i2v_speed_generation
+description: Speed-first generation-only Wan2.2 build for standard_ball across all 13 experiments, 69 frozen parameter anchors, 9 scenes and 3 cameras.
+workflow: generation_only
+workspace_root: ${REMAKE_ROOT:-/root/data/heyuanyu/yefei/chenyu/remake/data/blender/remake}
+output_root: ${OUTPUT_ROOT:-outputs}
+profiles:
+  experiment: configs/experiments/all_experiments_full.yaml
+  prompt: configs/prompts/all_experiments_explicit_v1.yaml
+  model: configs/models/wan22_i2v_a14b_full_server.yaml
+  evaluation: configs/evaluations/basic_video_v1.yaml
+overrides:
+  experiment:
+    suite_id: ppb-remake-all-13-standard-ball-speed
+    selection:
+      objects: [standard_ball]
+    generation:
+      num_frames: ${NUM_FRAMES:-81}
+  model:
+    generation:
+      frame_num: ${NUM_FRAMES:-81}

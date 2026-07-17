@@ -27,6 +27,11 @@ class FrameworkTests(unittest.TestCase):
             CODE_ROOT / "builds" / "all_experiments_wan22_generation.yaml", WORKSPACE_ROOT
         )
         cls.full_jobs = build_jobs(cls.full_resolved)
+        cls.standard_ball_resolved = resolve_build(
+            CODE_ROOT / "builds" / "standard_ball_all_experiments_wan22_generation.yaml",
+            WORKSPACE_ROOT,
+        )
+        cls.standard_ball_jobs = build_jobs(cls.standard_ball_resolved)
 
     def test_demo_build_creates_sixty_three_view_jobs_from_five_sampled_scenes(self) -> None:
         jobs = build_jobs(self.resolved)
@@ -141,6 +146,27 @@ class FrameworkTests(unittest.TestCase):
         self.assertEqual(
             {job["prompt_template_id"] for job in self.full_jobs},
             {"ppb_all_13_explicit_physics"},
+        )
+
+    def test_standard_ball_speed_build_has_1863_jobs(self) -> None:
+        jobs = self.standard_ball_jobs
+        self.assertEqual(len(jobs), 1863)
+        self.assertEqual({job["factors"]["object_id"] for job in jobs}, {"standard_ball"})
+        self.assertEqual(len({job["inputs"]["image"] for job in jobs}), 351)
+        parameter_tuples = Counter(
+            (job["experiment_id"], job["factors"]["parameter_tuple_id"])
+            for job in jobs
+        )
+        self.assertEqual(len(parameter_tuples), 69)
+        self.assertEqual(set(parameter_tuples.values()), {27})
+        self.assertEqual({job["generation"]["num_frames"] for job in jobs}, {81})
+        self.assertEqual(
+            int(self.standard_ball_resolved["model"]["generation"]["frame_num"]),
+            81,
+        )
+        self.assertEqual(
+            self.standard_ball_resolved["applied_overrides"]["experiment"]["selection"]["objects"],
+            ["standard_ball"],
         )
 
 

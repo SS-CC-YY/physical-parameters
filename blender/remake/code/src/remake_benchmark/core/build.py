@@ -134,6 +134,11 @@ def resolve_build(build_path: Path, workspace_root_override: Path | None = None)
         profile_hashes[name] = _sha256(path)
         profile_files[name] = str(path)
 
+    overrides = source.get("overrides", {})
+    for name, override in overrides.items():
+        resolved[name] = _deep_merge(resolved[name], override)
+    resolved["applied_overrides"] = overrides
+
     _validate_components(resolved, origins)
     resolved["provenance"] = {
         "build_file": str(build_path),

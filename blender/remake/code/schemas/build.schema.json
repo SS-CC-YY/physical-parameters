@@ -22,6 +22,17 @@
         "model": {"type": "string", "minLength": 1},
         "evaluation": {"type": "string", "minLength": 1}
       }
+    },
+    "overrides": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "experiment": {"type": "object"},
+        "prompt": {"type": "object"},
+        "model": {"type": "object"},
+        "evaluation": {"type": "object"}
+      }
     }
   }
 }

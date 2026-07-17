@@ -95,29 +95,32 @@ run       --build <build.yaml> --run-dir <dir>
 python code/scripts/remake_benchmark.py --help
 ```
 
-## 正式全量生成矩阵
+## 标准球优先生成矩阵
 
-正式 experiment profile 为 `configs/experiments/all_experiments_full.yaml`，参数来自冻结的 13 实验设计，而不是旧版 v1/v2/v3 prompt 文档。范围为：
+首轮正式 build 为 `builds/standard_ball_all_experiments_wan22_generation.yaml`。它通过 build override 复用完整实验配置，只选择 `standard_ball` 并将默认输出设为 81 帧：
 
 - 13 个实验：`v1_A–v1_D`、`v2_A–v2_E`、`v3_A–v3_D`；
 - 69 个冻结 parameter anchor tuples；
 - 9 个场景：baseline、4 个 indoor、4 个 outdoor；
-- 4 个物体；
+- 1 个物体：`standard_ball`；
 - 3 个视角；
 - seed 36；
-- 每模型共 `69 × 9 × 4 × 3 = 7452` 个视频；
-- 使用全部 1404 张首帧 PNG，每个 PNG 对应多个显式物理参数 continuation。
+- 每模型共 `69 × 9 × 1 × 3 = 1863` 个视频；
+- 使用 351 张标准球首帧 PNG，每个 PNG 对应多个显式物理参数 continuation；
+- 默认 81 帧、16 fps、40 sampling steps，Wan2.2 模型常驻且 H20 默认不 offload。
 
 V3 多参数实验只运行 registry 中有物理意义的联合参数锚点，不把各参数独立做笛卡尔积。尤其 `v3_B` 的冻结实验是“带摩擦的左右墙非对称重复碰撞”，不是旧文件名所暗示的弹簧阻尼实验。
 
-当前可直接运行的 reference build 是 `builds/all_experiments_wan22_generation.yaml`。执行：
+执行：
 
 ```bash
 DETACHED=1 GPU_ID=7 \
-bash code/scripts/run_full_generation.sh
+bash code/scripts/run_standard_ball_generation.sh
 ```
 
 脚本只调用 `prepare` 和 `generate`；不会产生 `eval/`，也不会因检测或拟合结果中断生成。相同 `RUN_DIR` 再次执行会复用不可变 manifest，并跳过已有非空视频。
+
+完整的四物体、161 帧 build `builds/all_experiments_wan22_generation.yaml` 仍然保留，但当前不运行。81 帧是 speed-first 条件，计算量显著降低；部分长周期 V2/V3 实验在未来做完整拟合时可能需要单独补跑 161 帧条件。
 
 ## 旧 Wan2.2 60-job demo
 
