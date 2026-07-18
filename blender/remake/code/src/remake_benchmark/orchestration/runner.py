@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from remake_benchmark.core.errors import BenchmarkError, ConfigError
-from remake_benchmark.core.io import append_jsonl, read_jsonl, read_yaml, write_json
+from remake_benchmark.core.io import append_jsonl, read_json, read_jsonl, read_yaml, write_json
 from remake_benchmark.models import get_adapter
 from remake_benchmark.models.wan22 import Wan22Adapter
 
@@ -19,6 +19,22 @@ from .wan_session import PersistentWan22Session
 
 def _timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _enforce_max_billable_jobs_per_run(model: dict[str, Any], job_count: int) -> None:
+    safety = model.get("safety", {})
+    if not isinstance(safety, dict) or safety.get("max_billable_jobs_per_run") is None:
+        return
+    try:
+        maximum = int(safety["max_billable_jobs_per_run"])
+    except (TypeError, ValueError) as exc:
+        raise ConfigError("model safety.max_billable_jobs_per_run must be a positive integer") from exc
+    if maximum <= 0:
+        raise ConfigError("model safety.max_billable_jobs_per_run must be a positive integer")
+    if job_count > maximum:
+        raise ConfigError(
+            f"refusing to run {job_count} jobs: model safety.max_billable_jobs_per_run is {maximum}"
+        )
 
 
 def generate_run(
@@ -32,9 +48,13 @@ def generate_run(
 ) -> dict[str, int]:
     run_dir = run_dir.resolve()
     resolved = read_yaml(run_dir / "resolved_build.yaml")
-    jobs = read_jsonl(run_dir / "manifest.jsonl")[start_index:]
+    all_jobs = read_jsonl(run_dir / "manifest.jsonl")
+    _enforce_max_billable_jobs_per_run(resolved["model"], len(all_jobs))
+    jobs = all_jobs[start_index:]
     if max_jobs is not None:
         jobs = jobs[:max_jobs]
+    if overwrite and resolved["model"].get("safety", {}).get("max_billable_jobs_per_run") is not None:
+        raise ConfigError("--overwrite is disabled for billable API runs; use the saved task ID or a new run tag")
     workspace_root = Path(resolved["workspace_root"])
     adapter = get_adapter(resolved["model"], workspace_root)
     videos_dir = run_dir / "videos"
@@ -64,6 +84,7 @@ def generate_run(
         for offset, job in enumerate(jobs, start_index):
             job_id = job["job_id"]
             output_video = videos_dir / f"{job_id}.mp4"
+            invocation = None
             command_path = logs_dir / f"{job_id}.command.json"
             stdout_path = logs_dir / f"{job_id}.stdout.log"
             stderr_path = logs_dir / f"{job_id}.stderr.log"
@@ -85,7 +106,27 @@ def generate_run(
                     append_jsonl(state_path, {"timestamp": _timestamp(), "status": "dry_run", "job_id": job_id})
                     counts["dry_run"] += 1
                     continue
-                if output_video.is_file() and output_video.stat().st_size > 0 and not overwrite:
+                output_ready = output_video.is_file() and output_video.stat().st_size > 0
+                primary_metadata_ready = (metadata_dir / f"{job_id}.json").is_file()
+                provider_metadata_ready = True
+                if invocation.result_metadata is not None:
+                    provider_metadata_ready = False
+                    if invocation.result_metadata.is_file():
+                        try:
+                            provider_record = read_json(invocation.result_metadata)
+                            provider_metadata_ready = bool(
+                                isinstance(provider_record, dict)
+                                and provider_record.get("status") == "succeeded"
+                                and provider_record.get("task_id")
+                            )
+                        except (OSError, ValueError):
+                            provider_metadata_ready = False
+                if (
+                    output_ready
+                    and provider_metadata_ready
+                    and (invocation.result_metadata is None or primary_metadata_ready)
+                    and not overwrite
+                ):
                     append_jsonl(
                         state_path,
                         {"timestamp": _timestamp(), "status": "skip", "job_id": job_id, "output_video": str(output_video)},
@@ -121,6 +162,9 @@ def generate_run(
                     actual_stderr_path = stderr_path
                 if not output_video.is_file() or output_video.stat().st_size == 0:
                     raise BenchmarkError(f"model produced no video; see {actual_stderr_path}")
+                provider_metrics = None
+                if invocation.result_metadata is not None and invocation.result_metadata.is_file():
+                    provider_metrics = read_json(invocation.result_metadata)
                 metadata = {
                     **job,
                     "model": adapter.provenance(),
@@ -132,23 +176,38 @@ def generate_run(
                     "elapsed_seconds": elapsed,
                     "completed_at": _timestamp(),
                 }
+                if provider_metrics is not None:
+                    metadata["provider_metrics"] = provider_metrics
+                    metadata["provider_metrics_file"] = str(invocation.result_metadata)
                 write_json(metadata_dir / f"{job_id}.json", metadata)
+                state_record = {
+                    "timestamp": _timestamp(),
+                    "status": "ok",
+                    "job_id": job_id,
+                    "output_video": str(output_video),
+                    "elapsed_seconds": elapsed,
+                }
+                if provider_metrics is not None:
+                    state_record.update(
+                        {
+                            "provider": provider_metrics.get("provider"),
+                            "provider_task_id": provider_metrics.get("task_id"),
+                            "provider_cost": provider_metrics.get("cost"),
+                        }
+                    )
                 append_jsonl(
                     state_path,
-                    {
-                        "timestamp": _timestamp(),
-                        "status": "ok",
-                        "job_id": job_id,
-                        "output_video": str(output_video),
-                        "elapsed_seconds": elapsed,
-                    },
+                    state_record,
                 )
                 counts["ok"] += 1
             except Exception as exc:
                 counts["error"] += 1
+                error_record = {"timestamp": _timestamp(), "status": "error", "job_id": job_id, "error": str(exc)}
+                if invocation is not None and invocation.result_metadata is not None:
+                    error_record["provider_metrics_file"] = str(invocation.result_metadata)
                 append_jsonl(
                     state_path,
-                    {"timestamp": _timestamp(), "status": "error", "job_id": job_id, "error": str(exc)},
+                    error_record,
                 )
                 print(f"[{offset + 1}] ERROR {job_id}: {exc}")
                 if fail_fast:

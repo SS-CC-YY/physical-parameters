@@ -1,0 +1,27 @@
+model_id: ${KLING_MODEL_ID:-kling-v3}
+model_revision: provider-managed-2026-07-19
+adapter: kling_api_v1
+capabilities: [i2v]
+runtime:
+  api_base: ${KLING_API_BASE:-https://api-beijing.klingai.com}
+  api_key_env: KLING_API_KEY
+  python: ${PYTHON:-python3}
+  poll_interval_seconds: 10
+  timeout_seconds: 1800
+  execution_mode: subprocess
+generation:
+  resolution: 720p
+  duration: 5
+  mode: std
+  sound: "off"
+  watermark: false
+  image_encoding: raw_base64
+  negative_prompt_strategy: separate
+safety:
+  max_billable_jobs_per_run: 20
+pricing:
+  currency: CREDITS
+  reference_spec: Kling VIDEO 3.0, std mode, no sound, 720p, 5 s
+  checked_on: 2026-07-19
+  source: https://github.com/KlingAIResearch/kling-skills/tree/main/klingai-video
+  note: Use final_unit_deduction from the completed task and reconcile it with the account balance.

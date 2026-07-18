@@ -1,0 +1,29 @@
+schema_version: 1.0.0
+build_id: v1a_seedance20_cn_api_cost20
+description: Exactly 20 matched 480p/5s Seedance 2.0 Beijing I2V jobs for token and latency measurement.
+workflow: generation_only
+workspace_root: ${REMAKE_ROOT:-/root/data/heyuanyu/yefei/chenyu/remake/data/blender/remake}
+output_root: ${OUTPUT_ROOT:-outputs}
+profiles:
+  experiment: configs/experiments/v1a_wan22_demo.yaml
+  prompt: configs/prompts/v1a_explicit_v1.yaml
+  model: configs/models/seedance20_i2v_cn_api.yaml
+  evaluation: configs/evaluations/basic_video_v1.yaml
+overrides:
+  experiment:
+    selection:
+      random_scene_sampling:
+        always_include: [baseline]
+        indoor_candidates: [indoor1, indoor2, indoor3, indoor4]
+        outdoor_candidates: [outdoor1, outdoor2, outdoor3, outdoor4]
+        indoor_count: 2
+        outdoor_count: 2
+        seed: 20260719
+      objects: [standard_ball]
+      cameras: [CAM_Side]
+      seeds: [341867882]
+      target_assignment: all_values
+    targets:
+      gravity_g:
+        unit: m/s^2
+        values: [2.0, 4.9, 9.81, 14.7]

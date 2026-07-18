@@ -6,10 +6,15 @@ from typing import Any
 from remake_benchmark.core.errors import ConfigError
 
 from .base import ModelAdapter
+from .closed_api import KlingApiAdapter, SeedanceArkApiAdapter
 from .wan22 import Wan22Adapter
 
 
-ADAPTERS: dict[str, type[ModelAdapter]] = {Wan22Adapter.adapter_id: Wan22Adapter}
+ADAPTERS: dict[str, type[ModelAdapter]] = {
+    Wan22Adapter.adapter_id: Wan22Adapter,
+    SeedanceArkApiAdapter.adapter_id: SeedanceArkApiAdapter,
+    KlingApiAdapter.adapter_id: KlingApiAdapter,
+}
 
 
 def get_adapter(model_config: dict[str, Any], workspace_root: Path) -> ModelAdapter:

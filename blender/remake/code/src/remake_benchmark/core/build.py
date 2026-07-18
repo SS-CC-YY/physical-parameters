@@ -93,6 +93,15 @@ def _validate_components(resolved: dict[str, Any], origins: dict[str, Path]) -> 
         )
     _require_mapping(model, "runtime", origins["model"])
     _require_mapping(model, "generation", origins["model"])
+    safety = model.get("safety")
+    if safety is not None:
+        if not isinstance(safety, dict):
+            raise ConfigError(f"{origins['model']}: 'safety' must be an object")
+        maximum = safety.get("max_billable_jobs_per_run")
+        if maximum is not None and (not isinstance(maximum, int) or isinstance(maximum, bool) or maximum <= 0):
+            raise ConfigError(
+                f"{origins['model']}: safety.max_billable_jobs_per_run must be a positive integer"
+            )
 
     evaluation = resolved["evaluation"]
     if not isinstance(evaluation.get("evaluators"), list) or not evaluation["evaluators"]:

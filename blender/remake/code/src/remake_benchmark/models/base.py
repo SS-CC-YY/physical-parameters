@@ -12,6 +12,7 @@ class Invocation:
     cwd: Path
     environment: dict[str, str] = field(default_factory=dict)
     output_video: Path | None = None
+    result_metadata: Path | None = None
 
 
 class ModelAdapter(ABC):

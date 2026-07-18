@@ -6,7 +6,13 @@ import sys
 from pathlib import Path
 
 from remake_benchmark.core.errors import BenchmarkError
-from remake_benchmark.orchestration import evaluate_run, generate_run, prepare_run, run_sequential
+from remake_benchmark.orchestration import (
+    evaluate_run,
+    generate_run,
+    prepare_run,
+    run_sequential,
+    summarize_api_run,
+)
 
 
 def _add_generation_options(parser: argparse.ArgumentParser) -> None:
@@ -43,6 +49,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     evaluate_parser = subparsers.add_parser("evaluate", help="evaluate canonical output videos")
     evaluate_parser.add_argument("--run-dir", type=Path, required=True)
+
+    api_summary_parser = subparsers.add_parser(
+        "summarize-api", help="write per-video cost and timing tables for a closed-API run"
+    )
+    api_summary_parser.add_argument("--run-dir", type=Path, required=True)
 
     run_parser = subparsers.add_parser(
         "run", help="prepare and generate one build; evaluation is an explicit later step"
@@ -94,6 +105,8 @@ def dispatch(args: argparse.Namespace) -> dict[str, object]:
         )
     if args.command == "evaluate":
         return evaluate_run(args.run_dir)
+    if args.command == "summarize-api":
+        return summarize_api_run(args.run_dir)
     if args.command == "run":
         _positive_int_or_none(args.max_jobs, "--max-jobs")
         resolved, jobs = prepare_run(

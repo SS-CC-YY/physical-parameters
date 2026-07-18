@@ -85,6 +85,7 @@ generate  --run-dir <dir> [--max-jobs N] [--dry-run]
 evaluate  --run-dir <dir>
 sequence  --run-dir <dir> [--max-jobs N] [--dry-run]
 run       --build <build.yaml> --run-dir <dir>
+summarize-api --run-dir <dir>
 ```
 
 `generate` 和 `run` 当前都只负责生成，不会调用 evaluator。`sequence` 作为旧的显式诊断入口保留，但正式批量生成不得使用它。评估必须等所有目标模型的视频生成完成后，再由人工明确执行 `evaluate`。生成阶段不得修改已经固化的 manifest，只把实际运行信息写入 metadata 和 run state。
@@ -182,6 +183,11 @@ MAX_JOBS=3 DRY_RUN=1 bash code/scripts/run_wan22_demo.sh
 ```
 
 dry-run 会完成 schema 校验、build 展开、输入检查、manifest 写入和完整模型命令生成，但不会加载模型。
+
+Seedance 2.0 与 Kling VIDEO 3.0（`std`、无音频）的北京 API 配对 20 条费用/耗时试跑见
+[`docs/closed_api_smoke.md`](docs/closed_api_smoke.md)。两模型共享同一组首帧和 prompt；服务器入口
+默认先做每家 1 条 canary，人工确认后才补齐到每家 20 条；保存 provider task ID、支持中断续查，
+并输出逐视频额度与时延 CSV。
 
 ## 预期输出目录
 
