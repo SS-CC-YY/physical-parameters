@@ -22,6 +22,6 @@ safety:
 pricing:
   currency: CREDITS
   reference_spec: Kling VIDEO 3.0, std mode, no sound, 720p, 5 s
-  checked_on: 2026-07-19
+  checked_on: "2026-07-19"
   source: https://github.com/KlingAIResearch/kling-skills/tree/main/klingai-video
   note: Use final_unit_deduction from the completed task and reconcile it with the account balance.

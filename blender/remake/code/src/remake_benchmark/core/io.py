@@ -4,6 +4,7 @@ import json
 import math
 import os
 import re
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -18,6 +19,8 @@ _ENV_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
 def _json_safe(value: Any) -> Any:
     if isinstance(value, float) and not math.isfinite(value):
         return None
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
     if isinstance(value, dict):
         return {key: _json_safe(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):

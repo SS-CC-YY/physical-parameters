@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from datetime import date, datetime, timezone
 import importlib.util
 import json
 import sys
@@ -19,6 +20,7 @@ sys.path.insert(0, str(CODE_ROOT / "src"))
 
 from remake_benchmark.core.build import resolve_build  # noqa: E402
 from remake_benchmark.core.errors import ConfigError  # noqa: E402
+from remake_benchmark.core.io import read_json, write_json  # noqa: E402
 from remake_benchmark.core.manifest import build_jobs  # noqa: E402
 from remake_benchmark.models import get_adapter  # noqa: E402
 from remake_benchmark.orchestration.api_summary import summarize_api_run  # noqa: E402
@@ -166,6 +168,20 @@ class ClosedApiTests(unittest.TestCase):
         _enforce_max_billable_jobs_per_run(model, 20)
         with self.assertRaises(ConfigError):
             _enforce_max_billable_jobs_per_run(model, 21)
+
+    def test_json_metadata_serializes_yaml_dates_as_iso_strings(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "metadata.json"
+            write_json(
+                output,
+                {
+                    "checked_on": date(2026, 7, 19),
+                    "completed_at": datetime(2026, 7, 19, 8, 30, tzinfo=timezone.utc),
+                },
+            )
+            value = read_json(output)
+            self.assertEqual(value["checked_on"], "2026-07-19")
+            self.assertEqual(value["completed_at"], "2026-07-19T08:30:00+00:00")
 
     def test_seedance_dry_run_command_never_contains_api_key(self) -> None:
         adapter = get_adapter(self.seedance["model"], WORKSPACE_ROOT)
