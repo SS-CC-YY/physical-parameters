@@ -12,6 +12,7 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 
 CODE_ROOT = Path(__file__).resolve().parents[1]
@@ -20,11 +21,20 @@ sys.path.insert(0, str(CODE_ROOT / "src"))
 
 from remake_benchmark.core.build import resolve_build  # noqa: E402
 from remake_benchmark.core.errors import ConfigError  # noqa: E402
-from remake_benchmark.core.io import read_json, write_json  # noqa: E402
+from remake_benchmark.core.io import read_json, read_jsonl, write_json, write_jsonl, write_yaml  # noqa: E402
 from remake_benchmark.core.manifest import build_jobs  # noqa: E402
+from remake_benchmark.cli import build_parser, dispatch  # noqa: E402
 from remake_benchmark.models import get_adapter  # noqa: E402
+from remake_benchmark.models.base import Invocation, ModelAdapter  # noqa: E402
+from remake_benchmark.models.registry import ADAPTERS  # noqa: E402
 from remake_benchmark.orchestration.api_summary import summarize_api_run  # noqa: E402
-from remake_benchmark.orchestration.runner import _enforce_max_billable_jobs_per_run  # noqa: E402
+from remake_benchmark.orchestration.runner import (  # noqa: E402
+    _enforce_concurrency,
+    _enforce_max_billable_jobs_per_run,
+    _run_bounded_jobs,
+    _runner_artifact_paths,
+    generate_run,
+)
 
 
 SCRIPT_SPEC = importlib.util.spec_from_file_location(
@@ -107,6 +117,29 @@ class _FakeProviderHandler(BaseHTTPRequestHandler):
         )
 
 
+class _ParallelFakeAdapter(ModelAdapter):
+    adapter_id = "test_parallel_subprocess"
+
+    def validate(self, job: dict[str, object], *, dry_run: bool) -> None:
+        if not job.get("job_id"):
+            raise ConfigError("test job has no job_id")
+
+    def build_invocation(self, job: dict[str, object], output_video: Path) -> Invocation:
+        code = (
+            "import pathlib,sys,time; "
+            "time.sleep(0.03); "
+            "pathlib.Path(sys.argv[1]).write_bytes(b'fake-video')"
+        )
+        return Invocation(
+            command=[sys.executable, "-c", code, str(output_video)],
+            cwd=CODE_ROOT,
+            output_video=output_video,
+        )
+
+    def provenance(self) -> dict[str, object]:
+        return {"adapter": self.adapter_id, "model_id": self.model_config["model_id"]}
+
+
 class ClosedApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -151,6 +184,8 @@ class ClosedApiTests(unittest.TestCase):
             {job["targets"]["gravity_g"] for job in self.seedance_jobs},
             {2.0, 4.9, 9.81, 14.7},
         )
+        self.assertEqual(self.seedance["model"]["safety"]["max_concurrent_jobs"], 3)
+        self.assertEqual(self.kling["model"]["safety"]["max_concurrent_jobs"], 5)
         self.assertEqual(
             Counter(
                 (job["factors"]["scene_id"], job["targets"]["gravity_g"])
@@ -168,6 +203,162 @@ class ClosedApiTests(unittest.TestCase):
         _enforce_max_billable_jobs_per_run(model, 20)
         with self.assertRaises(ConfigError):
             _enforce_max_billable_jobs_per_run(model, 21)
+
+    def test_provider_concurrency_caps_are_enforced_for_old_and_new_runs(self) -> None:
+        _enforce_concurrency(self.seedance["model"], 3, "subprocess")
+        _enforce_concurrency(self.kling["model"], 5, "subprocess")
+        with self.assertRaises(ConfigError):
+            _enforce_concurrency(self.seedance["model"], 4, "subprocess")
+        with self.assertRaises(ConfigError):
+            _enforce_concurrency(self.kling["model"], 6, "subprocess")
+
+        # Existing resolved_build.yaml files predate max_concurrent_jobs. The
+        # adapter-specific fallback caps let those runs resume safely.
+        _enforce_concurrency({"adapter": "seedance_ark_api", "safety": {}}, 3, "subprocess")
+        _enforce_concurrency({"adapter": "kling_api_v1", "safety": {}}, 5, "subprocess")
+        with self.assertRaises(ConfigError):
+            _enforce_concurrency(
+                {"adapter": "kling_api_v1", "safety": {"max_concurrent_jobs": 99}},
+                6,
+                "subprocess",
+            )
+        with self.assertRaises(ConfigError):
+            _enforce_concurrency({"adapter": "wan22", "safety": {}}, 2, "subprocess")
+        with self.assertRaises(ConfigError):
+            _enforce_concurrency(self.seedance["model"], 2, "persistent_worker")
+
+    def test_prepare_cli_does_not_require_a_generate_only_concurrency_argument(self) -> None:
+        parser = build_parser()
+        with tempfile.TemporaryDirectory() as temporary:
+            args = parser.parse_args(
+                [
+                    "prepare",
+                    "--build",
+                    str(CODE_ROOT / "builds" / "closed_api_cost20_seedance.yaml"),
+                    "--run-dir",
+                    temporary,
+                ]
+            )
+            self.assertFalse(hasattr(args, "concurrency"))
+            with patch(
+                "remake_benchmark.cli.prepare_run",
+                return_value=({"build_id": "prepare-regression"}, []),
+            ):
+                result = dispatch(args)
+            self.assertEqual(result["build_id"], "prepare-regression")
+
+    def test_bounded_scheduler_obeys_peak_concurrency(self) -> None:
+        lock = threading.Lock()
+        active = 0
+        peak = 0
+
+        def run_one(_index: int) -> dict[str, int]:
+            nonlocal active, peak
+            with lock:
+                active += 1
+                peak = max(peak, active)
+            time.sleep(0.02)
+            with lock:
+                active -= 1
+            return {"ok": 1, "skip": 0, "error": 0, "dry_run": 0, "total": 1}
+
+        results, failures, not_started = _run_bounded_jobs(
+            list(range(20)), concurrency=5, fail_fast=True, run_one=run_one
+        )
+        self.assertEqual(len(results), 20)
+        self.assertEqual(failures, [])
+        self.assertEqual(not_started, [])
+        self.assertEqual(peak, 5)
+
+        with lock:
+            active = 0
+            peak = 0
+        results, failures, not_started = _run_bounded_jobs(
+            [0], concurrency=5, fail_fast=True, run_one=run_one
+        )
+        self.assertEqual(len(results), 1)
+        self.assertEqual(failures, [])
+        self.assertEqual(not_started, [])
+        self.assertEqual(peak, 1)
+
+    def test_bounded_fail_fast_never_starts_more_than_initial_wave(self) -> None:
+        barrier = threading.Barrier(5)
+        started: list[int] = []
+        lock = threading.Lock()
+
+        def run_one(index: int) -> dict[str, int]:
+            with lock:
+                started.append(index)
+            barrier.wait(timeout=2)
+            if index == 0:
+                raise RuntimeError("intentional first-wave failure")
+            time.sleep(0.02)
+            return {"ok": 1, "skip": 0, "error": 0, "dry_run": 0, "total": 1}
+
+        results, failures, not_started = _run_bounded_jobs(
+            list(range(20)), concurrency=5, fail_fast=True, run_one=run_one
+        )
+        self.assertEqual(sorted(started), list(range(5)))
+        self.assertEqual(len(results), 4)
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(failures[0][0], 0)
+        self.assertEqual(not_started, list(range(5, 20)))
+
+    def test_parallel_worker_artifacts_are_isolated(self) -> None:
+        run_dir = Path("/tmp/demo")
+        paths = [_runner_artifact_paths(run_dir, f"parallel-{index:05d}") for index in range(20)]
+        self.assertEqual(len({state for state, _summary in paths}), 20)
+        self.assertEqual(len({summary for _state, summary in paths}), 20)
+
+    def test_canary_then_parallel_full_run_skips_the_completed_canary(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            run_dir = Path(temporary)
+            model = {
+                "model_id": "fake-parallel-model",
+                "adapter": _ParallelFakeAdapter.adapter_id,
+                "capabilities": ["i2v"],
+                "runtime": {"execution_mode": "subprocess"},
+                "generation": {},
+                "safety": {"max_billable_jobs_per_run": 20, "max_concurrent_jobs": 3},
+            }
+            write_yaml(
+                run_dir / "resolved_build.yaml",
+                {"workspace_root": str(WORKSPACE_ROOT), "model": model},
+            )
+            jobs = [dict(job) for job in self.seedance_jobs[:6]]
+            write_jsonl(run_dir / "manifest.jsonl", jobs)
+            ADAPTERS[_ParallelFakeAdapter.adapter_id] = _ParallelFakeAdapter
+            try:
+                canary = generate_run(run_dir, max_jobs=1, concurrency=1, fail_fast=True)
+                summary = generate_run(run_dir, max_jobs=6, concurrency=3, fail_fast=True)
+            finally:
+                ADAPTERS.pop(_ParallelFakeAdapter.adapter_id, None)
+
+            self.assertEqual(canary["ok"], 1)
+            self.assertEqual(summary["ok"], 5)
+            self.assertEqual(summary["skip"], 1)
+            self.assertEqual(summary["total"], 6)
+            self.assertEqual(summary["concurrency"], 3)
+            self.assertEqual(len(list((run_dir / "videos").glob("*.mp4"))), 6)
+            primary_metadata = [
+                path for path in (run_dir / "metadata").glob("*.json") if not path.name.endswith(".api.json")
+            ]
+            self.assertEqual(len(primary_metadata), 6)
+            aggregate = read_json(run_dir / "run_summary.json")
+            self.assertEqual(aggregate, summary)
+            self.assertEqual(len(list(run_dir.glob("run_state.parallel-*.jsonl"))), 6)
+            self.assertEqual(len(list(run_dir.glob("run_summary.parallel-*.json"))), 6)
+            main_state = read_jsonl(run_dir / "run_state.jsonl")
+            terminal_state = [row for row in main_state if row["status"] in {"ok", "skip"}]
+            self.assertEqual(len(terminal_state), 7)
+            self.assertEqual(
+                Counter(row["status"] for row in terminal_state),
+                Counter({"ok": 6, "skip": 1}),
+            )
+            self.assertEqual(
+                Counter(row["job_id"] for row in terminal_state),
+                Counter([jobs[0]["job_id"], *(job["job_id"] for job in jobs)]),
+            )
 
     def test_json_metadata_serializes_yaml_dates_as_iso_strings(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -398,6 +589,55 @@ class ClosedApiTests(unittest.TestCase):
                 )
                 with self.assertRaisesRegex(RuntimeError, "submission marker exists"):
                     runner(args, "test-key", metrics, time.monotonic())
+
+    def test_saved_task_id_resumes_without_another_post(self) -> None:
+        for provider in ("seedance", "kling"):
+            with self.subTest(provider=provider), tempfile.TemporaryDirectory() as temporary:
+                args = self._fake_args(temporary, provider)
+                task_id = "seed-task" if provider == "seedance" else "kling-task"
+                args.metrics_out.write_text(
+                    json.dumps(
+                        {
+                            "provider": provider,
+                            "model_id": args.model,
+                            "status": "submitted",
+                            "task_id": task_id,
+                            "timing": {"wall_seconds": 1.0},
+                            "poll_history": [],
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                CLOSED_API_JOB._submission_marker_path(args.metrics_out).write_text("{}\n", encoding="utf-8")
+                _FakeProviderHandler.provider = provider
+                _FakeProviderHandler.post_count = 0
+                server = ThreadingHTTPServer(("127.0.0.1", 0), _FakeProviderHandler)
+                base_url = f"http://127.0.0.1:{server.server_port}"
+                _FakeProviderHandler.base_url = base_url
+                args.api_base = base_url
+                thread = threading.Thread(target=server.serve_forever, daemon=True)
+                thread.start()
+                metrics: dict[str, object] = {
+                    "provider": provider,
+                    "model_id": args.model,
+                    "status": "starting",
+                    "timing": {},
+                    "poll_history": [],
+                }
+                runner = (
+                    CLOSED_API_JOB._run_seedance
+                    if provider == "seedance"
+                    else CLOSED_API_JOB._run_kling
+                )
+                try:
+                    runner(args, "test-key", metrics, time.monotonic())
+                finally:
+                    server.shutdown()
+                    server.server_close()
+                    thread.join(timeout=2)
+                self.assertEqual(_FakeProviderHandler.post_count, 0)
+                self.assertEqual(metrics["task_id"], task_id)
+                self.assertTrue(args.output.is_file())
 
     def test_seedance_job_records_token_cost_and_downloads_video(self) -> None:
         metrics = self._run_fake_provider("seedance")

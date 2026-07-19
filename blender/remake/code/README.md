@@ -81,7 +81,7 @@ builds/v1a_new_model_explicit.yaml
 
 ```text
 prepare   --build <build.yaml> --run-dir <dir>
-generate  --run-dir <dir> [--max-jobs N] [--dry-run]
+generate  --run-dir <dir> [--max-jobs N] [--concurrency N] [--dry-run]
 evaluate  --run-dir <dir>
 sequence  --run-dir <dir> [--max-jobs N] [--dry-run]
 run       --build <build.yaml> --run-dir <dir>
@@ -187,7 +187,8 @@ dry-run 会完成 schema 校验、build 展开、输入检查、manifest 写入�
 Seedance 2.0 与 Kling VIDEO 3.0（`std`、无音频）的北京 API 配对 20 条费用/耗时试跑见
 [`docs/closed_api_smoke.md`](docs/closed_api_smoke.md)。两模型共享同一组首帧和 prompt；服务器入口
 默认先做每家 1 条 canary，人工确认后才补齐到每家 20 条；保存 provider task ID、支持中断续查，
-并输出逐视频额度与时延 CSV。
+并输出逐视频额度与时延 CSV。完整阶段支持显式设置 `SEEDANCE_CONCURRENCY=3` 和
+`KLING_CONCURRENCY=5` 的有界并发；canary 始终保持单任务。
 
 ## 预期输出目录
 

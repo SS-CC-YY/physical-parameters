@@ -97,11 +97,12 @@ def _validate_components(resolved: dict[str, Any], origins: dict[str, Path]) -> 
     if safety is not None:
         if not isinstance(safety, dict):
             raise ConfigError(f"{origins['model']}: 'safety' must be an object")
-        maximum = safety.get("max_billable_jobs_per_run")
-        if maximum is not None and (not isinstance(maximum, int) or isinstance(maximum, bool) or maximum <= 0):
-            raise ConfigError(
-                f"{origins['model']}: safety.max_billable_jobs_per_run must be a positive integer"
-            )
+        for key in ("max_billable_jobs_per_run", "max_concurrent_jobs"):
+            maximum = safety.get(key)
+            if maximum is not None and (
+                not isinstance(maximum, int) or isinstance(maximum, bool) or maximum <= 0
+            ):
+                raise ConfigError(f"{origins['model']}: safety.{key} must be a positive integer")
 
     evaluation = resolved["evaluation"]
     if not isinstance(evaluation.get("evaluators"), list) or not evaluation["evaluators"]:

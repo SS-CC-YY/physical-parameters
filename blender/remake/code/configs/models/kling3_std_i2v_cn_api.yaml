@@ -19,6 +19,7 @@ generation:
   negative_prompt_strategy: separate
 safety:
   max_billable_jobs_per_run: 20
+  max_concurrent_jobs: 5
 pricing:
   currency: CREDITS
   reference_spec: Kling VIDEO 3.0, std mode, no sound, 720p, 5 s

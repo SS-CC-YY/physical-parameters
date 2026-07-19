@@ -38,6 +38,12 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser = subparsers.add_parser("generate", help="run model adapter jobs from a prepared run")
     generate_parser.add_argument("--run-dir", type=Path, required=True)
     _add_generation_options(generate_parser)
+    generate_parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=1,
+        help="maximum subprocess jobs in flight; capped by the model safety profile",
+    )
 
     sequence_parser = subparsers.add_parser(
         "sequence",
@@ -84,6 +90,9 @@ def dispatch(args: argparse.Namespace) -> dict[str, object]:
         return {"build_id": resolved["build_id"], "jobs": len(jobs), "run_dir": str(args.run_dir.resolve())}
     if args.command == "generate":
         _positive_int_or_none(args.max_jobs, "--max-jobs")
+        _positive_int_or_none(args.concurrency, "--concurrency")
+        if args.start_index < 0:
+            raise BenchmarkError("--start-index must be non-negative")
         return generate_run(
             args.run_dir,
             dry_run=args.dry_run,
@@ -91,6 +100,7 @@ def dispatch(args: argparse.Namespace) -> dict[str, object]:
             start_index=args.start_index,
             overwrite=args.overwrite,
             fail_fast=args.fail_fast,
+            concurrency=args.concurrency,
         )
     if args.command == "sequence":
         _positive_int_or_none(args.max_jobs, "--max-jobs")

@@ -102,7 +102,8 @@ RUN_TAG=closed_api_cost20_20260719 \
 bash code/scripts/run_closed_api_cost20_background.sh
 ```
 
-默认会让 Seedance 和 Kling 并行运行，但每家最多只有 1 个在途任务。完成后检查：
+默认会让 Seedance 和 Kling 并行运行，但 canary 每家固定只有 1 个在途任务；即使设置了完整阶段的
+并发环境变量，canary 也不会扩成 3/5 条。完成后检查：
 
 ```bash
 RUN_ROOT=outputs/closed_api_cost20/closed_api_cost20_20260719
@@ -142,8 +143,26 @@ bash code/scripts/run_closed_api_cost20_background.sh
 ```
 
 runner 会跳过已经成功的 canary，所以总数是每家 20 条，不是 21 条。两家 provider 彼此并行，
-每家内部保持串行，以便获得清晰的逐条延迟并避免未知并发额度导致 429。中断后继续使用相同
-`RUN_TAG`；已保存 task id 的任务会续查，已有视频会跳过。
+默认仍保持每家内部串行。确认当前账户的试用资源包分别允许 Seedance 3 条、Kling 5 条在途任务后，
+可以只在完整阶段显式提速：
+
+```bash
+# 两家同时跑：总并发上限为 3 + 5
+PYTHON="$PWD/.venv-api/bin/python" RUN_TAG=closed_api_cost20_20260719 \
+PROVIDERS=both SEEDANCE_CONCURRENCY=3 KLING_CONCURRENCY=5 \
+CONFIRM_BILLABLE_20=YES bash code/scripts/run_closed_api_cost20_background.sh
+
+# 只补 Kling：最多 5 条在途任务
+PYTHON="$PWD/.venv-api/bin/python" RUN_TAG=closed_api_cost20_20260719 \
+PROVIDERS=kling KLING_CONCURRENCY=5 \
+CONFIRM_BILLABLE_20=YES bash code/scripts/run_closed_api_cost20_background.sh
+```
+
+runner 在单个进程内做有界调度，不会一次性排队全部 20 条：初始只启动并发上限数量，每完成一条才
+补入下一条；若 `--fail-fast` 检测到失败，会停止补入新任务并等待已经在途的任务收尾。不要通过多开
+launcher 或手工启动多个 `generate` 进程来增加并发。中断后继续使用相同 `RUN_TAG`；已保存 task id
+的任务会续查，已有视频会跳过。3/5 是 API 账户的全局在途额度；如果同一 API 账户还有其他任务，
+应把并发变量设为扣除其他在途任务后的剩余空槽。
 
 ## 防重复计费与异常恢复
 

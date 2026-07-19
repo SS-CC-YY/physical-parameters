@@ -13,6 +13,8 @@ DRY_RUN_ONLY="${DRY_RUN_ONLY:-0}"
 DETACHED="${DETACHED:-1}"
 CONFIRM_BILLABLE_20="${CONFIRM_BILLABLE_20:-NO}"
 PROVIDERS="${PROVIDERS:-both}"
+SEEDANCE_CONCURRENCY="${SEEDANCE_CONCURRENCY:-1}"
+KLING_CONCURRENCY="${KLING_CONCURRENCY:-1}"
 
 case "${PROVIDERS}" in
   both)
@@ -32,6 +34,21 @@ case "${PROVIDERS}" in
     exit 2
     ;;
 esac
+
+validate_concurrency() {
+  local name="$1"
+  local value="$2"
+  local maximum="$3"
+  if [[ ! "${value}" =~ ^[1-9][0-9]*$ ]] || (( value > maximum )); then
+    echo "${name} must be an integer in [1, ${maximum}], got: ${value}"
+    exit 2
+  fi
+}
+
+# These hard caps match the account quotas confirmed for this benchmark. The
+# default remains one so another account never gains concurrency implicitly.
+validate_concurrency SEEDANCE_CONCURRENCY "${SEEDANCE_CONCURRENCY}" 3
+validate_concurrency KLING_CONCURRENCY "${KLING_CONCURRENCY}" 5
 
 # REST generation is remote; hide local GPUs from all child processes so this
 # test never competes with Wan2.2 jobs on CUDA_VISIBLE_DEVICES=4,5,6,7.
@@ -61,6 +78,7 @@ if [[ "${DETACHED}" == "1" ]]; then
   DETACHED=0 DRY_RUN_ONLY="${DRY_RUN_ONLY}" PYTHON="${PYTHON_BIN}" \
     RUN_TAG="${RUN_TAG}" OUTPUT_ROOT="${OUTPUT_ROOT}" WORKSPACE_ROOT="${WORKSPACE_ROOT}" \
     CONFIRM_BILLABLE_20="${CONFIRM_BILLABLE_20}" PROVIDERS="${PROVIDERS}" \
+    SEEDANCE_CONCURRENCY="${SEEDANCE_CONCURRENCY}" KLING_CONCURRENCY="${KLING_CONCURRENCY}" \
     nohup bash "$0" >>"${BATCH_DIR}/master.log" 2>&1 &
   MASTER_PID=$!
   echo "${MASTER_PID}" >"${BATCH_DIR}/master.pid"
@@ -133,14 +151,20 @@ fi
 run_provider() {
   local provider="$1"
   local run_dir="$2"
+  local requested_concurrency="$3"
   local provider_log="${BATCH_DIR}/${provider}_${PHASE}.log"
   local generate_rc=0
   local summary_rc=0
+  local concurrency=1
+  if [[ "${PHASE}" == "full20" ]]; then
+    concurrency="${requested_concurrency}"
+  fi
   {
-    echo "Starting ${provider} phase=${PHASE} max_jobs=${MAX_JOBS}"
+    echo "Starting ${provider} phase=${PHASE} max_jobs=${MAX_JOBS} concurrency=${concurrency}"
     "${PYTHON_BIN}" "${WORKSPACE_ROOT}/code/scripts/remake_benchmark.py" generate \
       --run-dir "${run_dir}" \
       --max-jobs "${MAX_JOBS}" \
+      --concurrency "${concurrency}" \
       --fail-fast || generate_rc=$?
     "${PYTHON_BIN}" "${WORKSPACE_ROOT}/code/scripts/remake_benchmark.py" summarize-api \
       --run-dir "${run_dir}" || summary_rc=$?
@@ -153,16 +177,16 @@ run_provider() {
   } >"${provider_log}" 2>&1
 }
 
-# With PROVIDERS=both the providers run in parallel; each provider still has
-# at most one billable task in flight.
+# With PROVIDERS=both the providers run in parallel. Canary is always one task;
+# full20 uses the explicit per-provider concurrency values above.
 SEEDANCE_PID=""
 KLING_PID=""
 if [[ "${RUN_SEEDANCE}" == "1" ]]; then
-  run_provider seedance "${SEEDANCE_RUN}" &
+  run_provider seedance "${SEEDANCE_RUN}" "${SEEDANCE_CONCURRENCY}" &
   SEEDANCE_PID=$!
 fi
 if [[ "${RUN_KLING}" == "1" ]]; then
-  run_provider kling "${KLING_RUN}" &
+  run_provider kling "${KLING_RUN}" "${KLING_CONCURRENCY}" &
   KLING_PID=$!
 fi
 

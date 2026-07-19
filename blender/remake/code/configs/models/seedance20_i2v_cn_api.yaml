@@ -24,6 +24,7 @@ generation:
   negative_prompt_strategy: append
 safety:
   max_billable_jobs_per_run: 20
+  max_concurrent_jobs: 3
 pricing:
   currency: CNY
   reference_spec: 480p, 5 s, first-frame image input

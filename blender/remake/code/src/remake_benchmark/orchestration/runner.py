@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import subprocess
 import time
+from collections import deque
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from contextlib import nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from remake_benchmark.core.errors import BenchmarkError, ConfigError
 from remake_benchmark.core.io import append_jsonl, read_json, read_jsonl, read_yaml, write_json
@@ -15,6 +18,10 @@ from remake_benchmark.models import get_adapter
 from remake_benchmark.models.wan22 import Wan22Adapter
 
 from .wan_session import PersistentWan22Session
+
+
+_WORKER_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+_BUILTIN_CONCURRENCY_CAPS = {"seedance_ark_api": 3, "kling_api_v1": 5}
 
 
 def _timestamp() -> str:
@@ -37,6 +44,152 @@ def _enforce_max_billable_jobs_per_run(model: dict[str, Any], job_count: int) ->
         )
 
 
+def _runner_artifact_paths(run_dir: Path, worker_id: str | None) -> tuple[Path, Path]:
+    if worker_id is None:
+        return run_dir / "run_state.jsonl", run_dir / "run_summary.json"
+    if not _WORKER_ID_PATTERN.fullmatch(worker_id):
+        raise ConfigError(
+            "worker_id must start with an alphanumeric character and contain only "
+            "letters, digits, '.', '_' or '-' (maximum 64 characters)"
+        )
+    return (
+        run_dir / f"run_state.{worker_id}.jsonl",
+        run_dir / f"run_summary.{worker_id}.json",
+    )
+
+
+def _enforce_concurrency(model: dict[str, Any], concurrency: int, execution_mode: str) -> None:
+    if isinstance(concurrency, bool) or not isinstance(concurrency, int) or concurrency <= 0:
+        raise ConfigError("concurrency must be a positive integer")
+    if concurrency == 1:
+        return
+    if execution_mode == "persistent_worker":
+        raise ConfigError("persistent_worker generation does not support concurrency greater than one")
+    safety = model.get("safety", {})
+    builtin_maximum = _BUILTIN_CONCURRENCY_CAPS.get(str(model.get("adapter", "")))
+    configured = safety.get("max_concurrent_jobs") if isinstance(safety, dict) else None
+    if configured is None:
+        configured = builtin_maximum
+    if configured is None:
+        raise ConfigError("this model has no safety.max_concurrent_jobs; concurrency must remain one")
+    try:
+        maximum = int(configured)
+    except (TypeError, ValueError) as exc:
+        raise ConfigError("model safety.max_concurrent_jobs must be a positive integer") from exc
+    if maximum <= 0:
+        raise ConfigError("model safety.max_concurrent_jobs must be a positive integer")
+    if builtin_maximum is not None:
+        maximum = min(maximum, builtin_maximum)
+    if concurrency > maximum:
+        raise ConfigError(
+            f"requested concurrency {concurrency} exceeds model safety.max_concurrent_jobs {maximum}"
+        )
+
+
+def _run_bounded_jobs(
+    job_indices: list[int],
+    *,
+    concurrency: int,
+    fail_fast: bool,
+    run_one: Callable[[int], dict[str, int]],
+) -> tuple[list[dict[str, int]], list[tuple[int, Exception]], list[int]]:
+    """Run at most ``concurrency`` jobs and stop replenishing after a failure."""
+
+    remaining = deque(job_indices)
+    results: list[dict[str, int]] = []
+    failures: list[tuple[int, Exception]] = []
+    active: dict[Future[dict[str, int]], int] = {}
+    stopped = False
+
+    with ThreadPoolExecutor(max_workers=min(concurrency, max(1, len(job_indices)))) as executor:
+        while remaining and len(active) < concurrency:
+            index = remaining.popleft()
+            active[executor.submit(run_one, index)] = index
+
+        while active:
+            completed, _ = wait(active, return_when=FIRST_COMPLETED)
+            for future in completed:
+                index = active.pop(future)
+                try:
+                    results.append(future.result())
+                except Exception as exc:
+                    failures.append((index, exc))
+                    if fail_fast:
+                        stopped = True
+            while remaining and len(active) < concurrency and not stopped:
+                index = remaining.popleft()
+                active[executor.submit(run_one, index)] = index
+
+    return results, failures, list(remaining)
+
+
+def _generate_parallel_run(
+    run_dir: Path,
+    *,
+    job_indices: list[int],
+    concurrency: int,
+    overwrite: bool,
+    fail_fast: bool,
+) -> dict[str, int]:
+    def run_one(index: int) -> dict[str, int]:
+        return generate_run(
+            run_dir,
+            max_jobs=1,
+            start_index=index,
+            overwrite=overwrite,
+            fail_fast=True,
+            concurrency=1,
+            _worker_id=f"parallel-{index:05d}",
+        )
+
+    results, failures, not_started = _run_bounded_jobs(
+        job_indices,
+        concurrency=concurrency,
+        fail_fast=fail_fast,
+        run_one=run_one,
+    )
+    counts = {
+        "ok": sum(result.get("ok", 0) for result in results),
+        "skip": sum(result.get("skip", 0) for result in results),
+        "error": len(failures),
+        "dry_run": sum(result.get("dry_run", 0) for result in results),
+        "not_started": len(not_started),
+        "total": len(job_indices),
+        "concurrency": concurrency,
+    }
+    main_state_path = run_dir / "run_state.jsonl"
+    manifest = read_jsonl(run_dir / "manifest.jsonl")
+    not_started_set = set(not_started)
+    for index in job_indices:
+        if index in not_started_set:
+            append_jsonl(
+                main_state_path,
+                {
+                    "timestamp": _timestamp(),
+                    "status": "not_started_after_fail_fast",
+                    "manifest_index": index,
+                    "job_id": manifest[index].get("job_id"),
+                },
+            )
+            continue
+        worker_state_path, _ = _runner_artifact_paths(run_dir, f"parallel-{index:05d}")
+        worker_records = read_jsonl(worker_state_path) if worker_state_path.is_file() else []
+        if worker_records:
+            record = dict(worker_records[-1])
+            record["parallel_worker_state"] = str(worker_state_path)
+            append_jsonl(main_state_path, record)
+    write_json(run_dir / "run_summary.json", counts)
+    for index, exc in failures:
+        print(f"[{index + 1}] PARALLEL ERROR: {exc}")
+    if failures:
+        first_index, first_error = failures[0]
+        raise BenchmarkError(
+            f"{len(failures)} parallel generation job(s) failed; first failure at "
+            f"manifest index {first_index}: {first_error}"
+        )
+    return counts
+
+
 def generate_run(
     run_dir: Path,
     *,
@@ -45,26 +198,39 @@ def generate_run(
     start_index: int = 0,
     overwrite: bool = False,
     fail_fast: bool = False,
+    concurrency: int = 1,
+    _worker_id: str | None = None,
 ) -> dict[str, int]:
     run_dir = run_dir.resolve()
+    if start_index < 0:
+        raise ConfigError("start_index must be non-negative")
+    state_path, summary_path = _runner_artifact_paths(run_dir, _worker_id)
     resolved = read_yaml(run_dir / "resolved_build.yaml")
     all_jobs = read_jsonl(run_dir / "manifest.jsonl")
     _enforce_max_billable_jobs_per_run(resolved["model"], len(all_jobs))
     jobs = all_jobs[start_index:]
     if max_jobs is not None:
         jobs = jobs[:max_jobs]
+    execution_mode = str(resolved["model"].get("runtime", {}).get("execution_mode", "subprocess"))
+    _enforce_concurrency(resolved["model"], concurrency, execution_mode)
     if overwrite and resolved["model"].get("safety", {}).get("max_billable_jobs_per_run") is not None:
         raise ConfigError("--overwrite is disabled for billable API runs; use the saved task ID or a new run tag")
     workspace_root = Path(resolved["workspace_root"])
     adapter = get_adapter(resolved["model"], workspace_root)
+    if concurrency > 1 and not dry_run and len(jobs) > 1:
+        return _generate_parallel_run(
+            run_dir,
+            job_indices=list(range(start_index, start_index + len(jobs))),
+            concurrency=concurrency,
+            overwrite=overwrite,
+            fail_fast=fail_fast,
+        )
     videos_dir = run_dir / "videos"
     metadata_dir = run_dir / "metadata"
     logs_dir = run_dir / "logs"
     for directory in (videos_dir, metadata_dir, logs_dir):
         directory.mkdir(parents=True, exist_ok=True)
-    state_path = run_dir / "run_state.jsonl"
     counts = {"ok": 0, "skip": 0, "error": 0, "dry_run": 0, "total": len(jobs)}
-    execution_mode = str(resolved["model"].get("runtime", {}).get("execution_mode", "subprocess"))
     persistent = execution_mode == "persistent_worker"
     if persistent and not isinstance(adapter, Wan22Adapter):
         raise ConfigError("persistent_worker execution currently requires the Wan2.2 adapter")
@@ -213,7 +379,7 @@ def generate_run(
                 if fail_fast:
                     raise
 
-    write_json(run_dir / "run_summary.json", counts)
+    write_json(summary_path, counts)
     if counts["error"]:
         raise BenchmarkError(f"{counts['error']} generation job(s) failed")
     return counts
