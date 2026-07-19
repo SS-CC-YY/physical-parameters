@@ -1,0 +1,33 @@
+model_id: ${SEEDANCE_MODEL_ID:-doubao-seedance-2-0-260128}
+model_revision: provider-managed
+adapter: seedance_ark_api
+capabilities: [i2v]
+runtime:
+  api_base: ${SEEDANCE_API_BASE:-https://ark.cn-beijing.volces.com/api/v3}
+  api_key_env: ARK_API_KEY
+  python: ${PYTHON:-python3}
+  poll_interval_seconds: 5
+  timeout_seconds: 1800
+  execution_mode: subprocess
+generation:
+  resolution: ${SEEDANCE_RESOLUTION:-480p}
+  duration: 5
+  ratio: "16:9"
+  # Seedance 2.0 currently ignores/rejects API seed and camera_fixed controls.
+  # The canonical benchmark seed remains in metadata, but is not sent.
+  camera_fixed: true
+  send_seed: false
+  send_camera_fixed: false
+  generate_audio: false
+  watermark: false
+  image_encoding: data_uri
+  negative_prompt_strategy: append
+safety:
+  max_billable_jobs_per_run: 978
+  max_concurrent_jobs: 3
+pricing:
+  currency: CNY
+  reference_spec: ${SEEDANCE_RESOLUTION:-480p}, 5 s, first-frame image input
+  checked_on: "2026-07-19"
+  source: https://api.volcengine.com/api-docs/view?action=GetContentsGenerationsTask&serviceCode=ark&version=2024-01-01
+  note: The API returns token usage, not the actual CNY deduction. Reconcile returned tokens with the account bill or resource package.
