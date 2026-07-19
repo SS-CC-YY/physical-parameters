@@ -666,16 +666,31 @@ def main() -> int:
     root = args.bundle_root.resolve(strict=True)
 
     checked = 0
+    indexed = set()
     for line_number, line in enumerate((root / "sha256sums.txt").read_text(encoding="utf-8").splitlines(), 1):
         match = re.fullmatch(r"([0-9a-f]{64})  (.+)", line)
         if not match:
             raise ValueError(f"invalid sha256sums.txt line {line_number}")
         expected, raw = match.groups()
+        if raw in indexed:
+            raise ValueError(f"duplicate checksum path: {raw}")
+        indexed.add(raw)
         path = safe_file(root, raw)
         actual = sha256(path)
         if actual != expected:
             raise ValueError(f"SHA-256 mismatch: {raw}")
         checked += 1
+
+    actual = {
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*")
+        if path.is_file() and path.name != "sha256sums.txt"
+    }
+    if actual != indexed:
+        raise ValueError(
+            "checksum index coverage differs: "
+            f"unindexed={sorted(actual - indexed)[:5]}, missing={sorted(indexed - actual)[:5]}"
+        )
 
     jobs = []
     with (root / "manifest.jsonl").open("r", encoding="utf-8") as handle:
