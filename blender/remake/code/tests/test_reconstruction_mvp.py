@@ -18,6 +18,7 @@ try:
         DEFAULT_CONFIG,
         _job_worker,
         _mark_identity_and_lift,
+        _relative_artifacts,
         _valid_components,
         fit_freefall_physics,
         parse_video_job,
@@ -195,6 +196,13 @@ class ReconstructionMvpTests(unittest.TestCase):
             (output / ".reconstruction_mvp.lock").write_text("occupied\n", encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, "already in use"):
                 run_reconstruction_batch(root, root / "videos", output)
+
+    def test_artifact_contract_is_portable_relative_to_result(self) -> None:
+        artifacts = _relative_artifacts(Path("ignored"), "/machine/specific/path/track_overlay.mp4")
+        self.assertEqual(artifacts["path_base"], "result_json_directory")
+        self.assertEqual(artifacts["trajectory_world_csv"], "trajectory_world.csv")
+        self.assertEqual(artifacts["overlay_video"], "track_overlay.mp4")
+        self.assertFalse(Path(artifacts["trajectory_world_csv"]).is_absolute())
 
 
 if __name__ == "__main__":

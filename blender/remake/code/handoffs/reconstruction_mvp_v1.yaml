@@ -1,0 +1,65 @@
+handoff_id: reconstruction_mvp_v1
+version: 1.0.0
+git:
+  branch: codex/remake-wan22-lfs
+  base_reconstruction_commit: 558bcbb
+  handoff_scripts: use_latest_branch_head
+
+scope:
+  status: diagnostic_mvp
+  supported_experiment: v1_A
+  supported_object: standard_ball
+  supported_camera: CAM_Side
+  supported_target: gravity_g
+  reconstruction_mode: known_object_size_side_view_1d_approx
+  strict_metric_3d: false
+
+required_repo_paths:
+  - code/src/remake_benchmark/
+  - code/configs/reconstruction/object_centric_mvp_v1.yaml
+  - code/scripts/run_reconstruction_mvp.py
+  - code/scripts/check_reconstruction_handoff.py
+  - code/scripts/run_reconstruction_handoff.sh
+  - code/requirements.txt
+  - first_frames_v1_0/images/v1_A/
+
+external_input:
+  kind: flat_mp4_directory
+  filename_pattern: "v1_A__gravity_g-<value>__<scene>__standard_ball__CAM_Side__seed-<integer>.mp4"
+  example: v1_A__gravity_g-9p81__indoor3__standard_ball__CAM_Side__seed-341867882.mp4
+  do_not_transcode: true
+  preserve_native_timestamps: true
+
+recommended_run:
+  cpu_workers: 4
+  overlay_count: 5
+  command: bash code/scripts/run_reconstruction_handoff.sh <videos_dir> <output_dir> 4 5
+
+return_artifacts:
+  required:
+    - aggregate.json
+    - summary.csv
+    - results.jsonl
+    - report/
+    - "*/result.json"
+    - "*/reconstruction_validity.json"
+    - "*/physics_adherence.json"
+    - "*/video_probe.json"
+    - "*/reference_alignment.json"
+    - "*/camera_motion.csv"
+    - "*/trajectory_world.csv"
+    - "*/trajectory.ply"
+    - "*/trajectory_diagnostics.png"
+  sampled:
+    - "*/track_overlay.mp4"
+
+upstream_generation_contract:
+  freeze_once:
+    - manifest.jsonl
+    - manifest.selection.json
+    - canonical prompts and negative prompts
+    - first-frame PNG files
+    - job ids and target values
+  video_path: videos/<job_id>.mp4
+  preserve_original_provider_output: true
+  preserve_run_metadata: true

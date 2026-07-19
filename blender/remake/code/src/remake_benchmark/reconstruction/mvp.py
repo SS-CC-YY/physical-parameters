@@ -984,18 +984,19 @@ def _write_overlay(video_path: Path, trajectory: list[dict[str, Any]], output_pa
 
 def _relative_artifacts(job_dir: Path, overlay: str | None) -> dict[str, Any]:
     artifacts: dict[str, Any] = {
-        "result_json": str((job_dir / "result.json").resolve()),
-        "video_probe_json": str((job_dir / "video_probe.json").resolve()),
-        "reference_alignment_json": str((job_dir / "reference_alignment.json").resolve()),
-        "camera_motion_csv": str((job_dir / "camera_motion.csv").resolve()),
-        "trajectory_world_csv": str((job_dir / "trajectory_world.csv").resolve()),
-        "trajectory_ply": str((job_dir / "trajectory.ply").resolve()),
-        "diagnostic_plot": str((job_dir / "trajectory_diagnostics.png").resolve()),
-        "reconstruction_validity_json": str((job_dir / "reconstruction_validity.json").resolve()),
-        "physics_adherence_json": str((job_dir / "physics_adherence.json").resolve()),
+        "path_base": "result_json_directory",
+        "result_json": "result.json",
+        "video_probe_json": "video_probe.json",
+        "reference_alignment_json": "reference_alignment.json",
+        "camera_motion_csv": "camera_motion.csv",
+        "trajectory_world_csv": "trajectory_world.csv",
+        "trajectory_ply": "trajectory.ply",
+        "diagnostic_plot": "trajectory_diagnostics.png",
+        "reconstruction_validity_json": "reconstruction_validity.json",
+        "physics_adherence_json": "physics_adherence.json",
     }
     if overlay:
-        artifacts["overlay_video"] = overlay
+        artifacts["overlay_video"] = Path(overlay).name
     return artifacts
 
 
@@ -1104,7 +1105,7 @@ def _job_worker(payload: dict[str, Any]) -> dict[str, Any]:
                 "strict_metric_3d_valid": False,
             },
             "physics_adherence": {"status": "not_run"},
-            "artifacts": {"result_json": str((job_dir / "result.json").resolve())},
+            "artifacts": {"path_base": "result_json_directory", "result_json": "result.json"},
         }
         # Always replace a result from an older successful attempt so the new
         # batch report cannot silently point at stale success metadata.
