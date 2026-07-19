@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://physical-parameter-benchmark.local/schemas/reconstruction_result.schema.json",
+  "title": "Object-centric reconstruction MVP result",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "module_version",
+    "job_id",
+    "source_video",
+    "media",
+    "camera_motion",
+    "tracking",
+    "calibration",
+    "reconstruction_validity",
+    "physics_adherence",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "module_version": {"type": "string"},
+    "job_id": {"type": "string", "minLength": 1},
+    "source_video": {"type": "string", "minLength": 1},
+    "media": {
+      "type": "object",
+      "required": ["width", "height", "fps", "decoded_frames", "timeline_method", "complete_decode"],
+      "properties": {
+        "width": {"type": "integer", "minimum": 1},
+        "height": {"type": "integer", "minimum": 1},
+        "fps": {"type": "number", "exclusiveMinimum": 0},
+        "decoded_frames": {"type": "integer", "minimum": 1},
+        "timeline_method": {"type": "string"},
+        "complete_decode": {"type": "boolean"}
+      }
+    },
+    "camera_motion": {"type": "object"},
+    "tracking": {"type": "object"},
+    "calibration": {
+      "type": "object",
+      "required": ["mode", "strict_metric_3d", "pixels_per_meter", "assumptions"],
+      "properties": {
+        "mode": {"type": "string"},
+        "strict_metric_3d": {"type": "boolean"},
+        "pixels_per_meter": {"type": "number", "exclusiveMinimum": 0},
+        "assumptions": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "reconstruction_validity": {
+      "type": "object",
+      "required": ["status", "constrained_trajectory_valid", "strict_metric_3d_valid", "gates"],
+      "properties": {
+        "status": {"enum": ["pass", "invalid", "error"]},
+        "constrained_trajectory_valid": {"type": "boolean"},
+        "strict_metric_3d_valid": {"type": "boolean"},
+        "gates": {"type": "object", "additionalProperties": {"type": "boolean"}}
+      }
+    },
+    "physics_adherence": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {"enum": ["pass", "fail", "insufficient", "not_run"]}
+      }
+    },
+    "artifacts": {"type": "object"}
+  }
+}

@@ -1,0 +1,71 @@
+version: 0.1.0
+
+# Fast CPU path. Camera motion is measured against frame 0 after masking the
+# object's full vertical corridor; this is a measurement-confidence diagnostic,
+# not a source of synthetic parallax for scene reconstruction.
+camera:
+  sample_stride: 4
+  max_corners: 600
+  quality_level: 0.01
+  min_distance_px: 8
+  min_features: 20
+  ransac_threshold_px: 2.0
+
+tracker:
+  tracker: auto
+  min_template_score: 0.18
+  motion_threshold: 14
+  size_lock_warmup_frames: 3
+  size_lock_warmup_max_dimension_ratio: 1.35
+  min_locked_bbox_dimension_ratio: 0.85
+  max_locked_bbox_dimension_ratio: 1.10
+  lock_bbox_size_near_support: true
+  deformation_min_dimension_change_ratio: 0.22
+  deformation_max_area_change_ratio: 1.30
+  deformation_confirmation_frames: 3
+
+identity:
+  max_horizontal_object_widths: 2.2
+  max_step_object_diagonals: 3.0
+  fallback_max_step_object_diagonals: 1.25
+  min_bbox_dimension_ratio: 0.65
+  max_bbox_dimension_ratio: 1.40
+
+# The current MP4-only sample has no full K/T sidecar. The known sphere size
+# supplies a scale under a fixed side-view depth assumption, but this remains a
+# constrained 1-D/2.5-D approximation rather than independently observable 3-D.
+calibration:
+  mode: known_object_size_side_view_1d_approx
+  object_diameter_m: 0.48
+  initial_height_z0_m: 4.20
+  contact_height_zc_m: 0.44
+  drop_distance_m: 3.76
+  scale_relative_uncertainty: 0.05
+  center_uncertainty_px: 1.5
+
+validity:
+  min_reference_correlation: 0.80
+  min_camera_success_fraction: 0.75
+  min_camera_inlier_ratio: 0.35
+  max_camera_residual_p95_px: 2.0
+  min_identity_valid_fraction: 0.30
+  max_bridge_gap_frames: 2
+  min_primary_component_coverage: 0.85
+  min_valid_points: 20
+  min_longest_valid_run: 12
+  min_vertical_span_object_diameters: 2.0
+  max_diameter_cv: 0.15
+
+physics:
+  min_fit_points: 12
+  min_fit_duration_s: 0.40
+  smoothing_window_s: 0.20
+  release_pre_roll_s: 0.17
+  release_motion_object_diameters: 0.15
+  reversal_speed_object_diameters_per_s: 1.20
+  reversal_duration_s: 0.08
+  contact_drop_fraction: 0.88
+  fit_min_r2: 0.90
+  similarity_pass: 0.75
+  robust_iterations: 4
+  robust_sigma: 3.0
