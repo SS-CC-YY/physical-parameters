@@ -1,0 +1,29 @@
+{
+  "experiment_id": "v1_A",
+  "factor": "gravity",
+  "factor_token": "g9p81",
+  "physical_value": -9.81,
+  "physical_unit": "m/s^2",
+  "object_id": "standard_ball",
+  "seed": 341867882,
+  "source_fps": 24.0,
+  "scenes": [
+    "baseline",
+    "indoor1",
+    "indoor2",
+    "indoor3",
+    "indoor4",
+    "outdoor1",
+    "outdoor2",
+    "outdoor3",
+    "outdoor4"
+  ],
+  "cameras": [
+    "CAM_Main",
+    "CAM_Side",
+    "CAM_Top"
+  ],
+  "calibration_scene_aliases": {
+    "baseline": "base"
+  }
+}

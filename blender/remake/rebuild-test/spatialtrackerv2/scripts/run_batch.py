@@ -1,0 +1,281 @@
+#!/usr/bin/env python3
+"""Sequential, resumable SpatialTrackerV2 runner for the fixed 27-video test."""
+
+from __future__ import annotations
+
+import argparse
+import contextlib
+import csv
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
+import traceback
+from pathlib import Path
+
+from postprocess_result import postprocess
+from prepare_queries import prepare_queries
+
+
+HERE = Path(__file__).resolve().parent
+PACKAGE_ROOT = HERE.parent
+REMAKE_ROOT = PACKAGE_ROOT.parents[1]
+UPSTREAM = PACKAGE_ROOT / "upstream" / "SpaTrackerV2"
+DEFAULT_MANIFEST = PACKAGE_ROOT / "manifests" / "v1a_seedance27.jsonl"
+DEFAULT_OUTPUT = PACKAGE_ROOT / "outputs" / "v1a_seedance27"
+DEFAULT_WORK = PACKAGE_ROOT / "work" / "v1a_seedance27"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
+    parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--work-root", type=Path, default=DEFAULT_WORK)
+    parser.add_argument("--max-jobs", type=int, default=None)
+    parser.add_argument("--frame-stride", type=int, default=1)
+    parser.add_argument("--track-mode", choices=["offline", "online"], default="offline")
+    parser.add_argument("--object-points", type=int, default=64)
+    parser.add_argument("--anchor-points", type=int, default=128)
+    parser.add_argument("--align-threshold-m", type=float, default=0.30)
+    parser.add_argument("--rerun", action="store_true")
+    parser.add_argument(
+        "--isolated-process",
+        action="store_true",
+        help="Reload models for each job; slower, but useful to isolate a crashing video",
+    )
+    parser.add_argument("--job-id", action="append", default=[], help="Run only an exact job id; repeatable")
+    return parser.parse_args()
+
+
+def resolve_remake(relative: str) -> Path:
+    return REMAKE_ROOT / Path(relative)
+
+
+def successful_result(path: Path) -> bool:
+    if not path.is_file():
+        return False
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("status") == "succeeded"
+    except (OSError, json.JSONDecodeError):
+        return False
+
+
+def write_failed_result(result_path: Path, job: dict, error: str, elapsed: float) -> None:
+    result_path.parent.mkdir(parents=True, exist_ok=True)
+    result_path.write_text(
+        json.dumps(
+            {
+                "status": "failed",
+                "job_id": job["job_id"],
+                "error": error,
+                "elapsed_seconds": elapsed,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+
+def refresh_summary(manifest: list[dict], output_root: Path) -> None:
+    rows = []
+    for job in manifest:
+        result_path = output_root / job["job_id"] / "result.json"
+        if result_path.is_file():
+            try:
+                result = json.loads(result_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                result = {"status": "invalid_result_json"}
+        else:
+            result = {"status": "pending"}
+        rows.append(
+            {
+                "job_id": job["job_id"],
+                "scene": job["scene"],
+                "camera": job["camera"],
+                "status": result.get("status"),
+                "quality_pass": result.get("quality_pass"),
+                "trajectory_valid_fraction": result.get("trajectory_valid_fraction"),
+                "alignment_direct_fraction": result.get("alignment_direct_fraction"),
+                "median_anchor_rmse_m": result.get("median_anchor_rmse_m"),
+                "median_object_rigid_rmse_m": result.get("median_object_rigid_rmse_m"),
+                "elapsed_seconds": result.get("elapsed_seconds"),
+                "error": result.get("error"),
+            }
+        )
+    output_root.mkdir(parents=True, exist_ok=True)
+    fields = list(rows[0])
+    with (output_root / "summary.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
+    counts = {}
+    for row in rows:
+        counts[row["status"]] = counts.get(row["status"], 0) + 1
+    scene_rows = []
+    for scene in dict.fromkeys(job["scene"] for job in manifest):
+        group = [row for row in rows if row["scene"] == scene]
+        scene_rows.append(
+            {
+                "scene": scene,
+                "succeeded_views": sum(row["status"] == "succeeded" for row in group),
+                "quality_pass_views": sum(row["quality_pass"] is True for row in group),
+                "CAM_Main_status": next(row["status"] for row in group if row["camera"] == "CAM_Main"),
+                "CAM_Side_status": next(row["status"] for row in group if row["camera"] == "CAM_Side"),
+                "CAM_Top_status": next(row["status"] for row in group if row["camera"] == "CAM_Top"),
+            }
+        )
+    with (output_root / "summary_by_scene.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(scene_rows[0]))
+        writer.writeheader()
+        writer.writerows(scene_rows)
+    (output_root / "summary.json").write_text(
+        json.dumps(
+            {"jobs": len(rows), "status_counts": counts, "scene_rows": scene_rows, "rows": rows},
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+
+def main() -> None:
+    args = parse_args()
+    if args.frame_stride < 1:
+        raise ValueError("--frame-stride must be >= 1")
+    if not args.manifest.is_file():
+        subprocess.run([sys.executable, str(HERE / "build_manifest.py"), "--strict"], check=True)
+    manifest = [json.loads(line) for line in args.manifest.read_text(encoding="utf-8").splitlines() if line.strip()]
+    selected_ids = set(args.job_id)
+    selected = [job for job in manifest if not selected_ids or job["job_id"] in selected_ids]
+    if selected_ids - {job["job_id"] for job in selected}:
+        raise ValueError(f"Unknown job ids: {sorted(selected_ids - {job['job_id'] for job in selected})}")
+
+    model_cache = PACKAGE_ROOT / "models" / "huggingface"
+    model_cache.mkdir(parents=True, exist_ok=True)
+    environment = os.environ.copy()
+    environment.setdefault("HF_HOME", str(model_cache))
+    environment.setdefault("HUGGINGFACE_HUB_CACHE", str(model_cache / "hub"))
+    environment["PYTHONUNBUFFERED"] = "1"
+    os.environ.setdefault("HF_HOME", environment["HF_HOME"])
+    os.environ.setdefault("HUGGINGFACE_HUB_CACHE", environment["HUGGINGFACE_HUB_CACHE"])
+
+    attempted = 0
+    session = None
+    for ordinal, job in enumerate(selected, start=1):
+        output_dir = args.output_root / job["job_id"]
+        result_path = output_dir / "result.json"
+        if not args.rerun and successful_result(result_path):
+            print(f"[{ordinal}/{len(selected)}] SKIP {job['job_id']}")
+            continue
+        if args.max_jobs is not None and attempted >= args.max_jobs:
+            break
+        attempted += 1
+        output_dir.mkdir(parents=True, exist_ok=True)
+        work_dir = args.work_root / job["job_id"]
+        work_dir.mkdir(parents=True, exist_ok=True)
+        video = resolve_remake(job["video"])
+        first_frame = resolve_remake(job["first_frame"])
+        calibration = resolve_remake(job["calibration"])
+        queries_path = work_dir / "queries.npz"
+        start = time.perf_counter()
+        print(f"[{ordinal}/{len(selected)}] START {job['job_id']}", flush=True)
+        try:
+            prepare_queries(
+                video,
+                first_frame,
+                calibration,
+                queries_path,
+                output_dir / "queries_frame0.png",
+                args.object_points,
+                args.anchor_points,
+            )
+            log_path = output_dir / "spatialtrackerv2.log"
+            raw_path = output_dir / "raw_spatialtrackerv2.npz"
+            if raw_path.exists():
+                raw_path.unlink()
+            if args.isolated_process:
+                command = [
+                    sys.executable,
+                    str(UPSTREAM / "inference.py"),
+                    "--data_type",
+                    "RGB",
+                    "--track_mode",
+                    args.track_mode,
+                    "--video_path",
+                    str(video),
+                    "--queries_path",
+                    str(queries_path),
+                    "--output_dir",
+                    str(output_dir),
+                    "--source_fps",
+                    str(job["source_fps"]),
+                    "--fps",
+                    str(args.frame_stride),
+                    "--vo_points",
+                    str(max(256, args.object_points + args.anchor_points)),
+                    "--no_viz",
+                ]
+                with log_path.open("w", encoding="utf-8") as log:
+                    process = subprocess.run(
+                        command,
+                        cwd=UPSTREAM,
+                        env=environment,
+                        stdout=log,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                    )
+                if process.returncode != 0:
+                    raise RuntimeError(f"SpatialTrackerV2 exited with code {process.returncode}; see {log_path}")
+                upstream_raw = output_dir / "result.npz"
+                if not upstream_raw.is_file():
+                    raise FileNotFoundError(f"Missing upstream result: {upstream_raw}")
+                shutil.move(str(upstream_raw), str(raw_path))
+            else:
+                if session is None:
+                    from spatialtracker_session import SpatialTrackerSession
+
+                    session = SpatialTrackerSession(
+                        args.track_mode,
+                        max(256, args.object_points + args.anchor_points),
+                    )
+                with log_path.open("w", encoding="utf-8") as log, contextlib.redirect_stdout(log), contextlib.redirect_stderr(log):
+                    session.run(
+                        video,
+                        queries_path,
+                        raw_path,
+                        float(job["source_fps"]),
+                        args.frame_stride,
+                    )
+            result = postprocess(raw_path, video, output_dir, args.align_threshold_m)
+            elapsed = time.perf_counter() - start
+            result.update(
+                {
+                    "job_id": job["job_id"],
+                    "scene": job["scene"],
+                    "camera": job["camera"],
+                    "frame_stride": args.frame_stride,
+                    "elapsed_seconds": elapsed,
+                    "ground_truth_comparison": False,
+                }
+            )
+            result_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
+            print(
+                f"[{ordinal}/{len(selected)}] DONE {job['job_id']} "
+                f"quality_pass={result['quality_pass']} elapsed={elapsed:.1f}s",
+                flush=True,
+            )
+        except Exception as exc:
+            elapsed = time.perf_counter() - start
+            with (output_dir / "spatialtrackerv2.log").open("a", encoding="utf-8") as log:
+                traceback.print_exc(file=log)
+            write_failed_result(result_path, job, f"{type(exc).__name__}: {exc}", elapsed)
+            print(f"[{ordinal}/{len(selected)}] ERROR {job['job_id']}: {exc}", file=sys.stderr, flush=True)
+        refresh_summary(manifest, args.output_root)
+
+    refresh_summary(manifest, args.output_root)
+    print(f"summary: {args.output_root / 'summary.csv'}")
+
+
+if __name__ == "__main__":
+    main()

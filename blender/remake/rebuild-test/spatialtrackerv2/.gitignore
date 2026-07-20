@@ -1,0 +1,7 @@
+models/
+outputs/
+work/
+logs/
+__pycache__/
+*.pyc
+*.pyo

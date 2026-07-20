@@ -1,0 +1,493 @@
+{
+  "schema_version": "1.0.0",
+  "exporter_version": "1.1.0",
+  "experiment_id": "v1_A",
+  "scene_id": "outdoor2",
+  "camera_name": "CAM_Main",
+  "source": {
+    "blend_path": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\A\\generated_scenarios\\baselinev1_A_outdoor2.blend",
+    "blend_filename": "baselinev1_A_outdoor2.blend",
+    "blend_sha256": "1cf0601340955eaa98d0587d024a9bbbddb16f15dfee2714857a35d6c3940791",
+    "frame": 1,
+    "source_opened_read_only": true,
+    "frozen_first_frame_was_not_opened_or_modified": true
+  },
+  "image": {
+    "width_px": 1280,
+    "height_px": 720,
+    "origin": "top_left",
+    "u_axis": "right",
+    "v_axis": "down",
+    "pixel_coordinate_convention": "OpenCV continuous pixel coordinates",
+    "pixel_aspect_x": 1.0,
+    "pixel_aspect_y": 1.0
+  },
+  "camera": {
+    "model": "pinhole",
+    "blender_type": "PERSP",
+    "lens_mm": 36.0,
+    "sensor_width_mm": 32.0,
+    "sensor_height_mm": 24.0,
+    "sensor_fit": "AUTO",
+    "shift_x": 0.0,
+    "shift_y": 0.0,
+    "clip_start_m": 0.05000000074505806,
+    "clip_end_m": 1000.0,
+    "K": [
+      [
+        1440.0,
+        0.0,
+        640.0
+      ],
+      [
+        0.0,
+        1440.0,
+        360.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "intrinsic_parameters": {
+      "fx_px": 1440.0,
+      "fy_px": 1440.0,
+      "cx_px": 640.0,
+      "cy_px": 360.0,
+      "resolved_sensor_fit": "HORIZONTAL",
+      "pixel_aspect_y_over_x": 1.0
+    },
+    "T_world_from_camera_blender": [
+      [
+        0.9108530879020691,
+        -0.07088670879602432,
+        0.40659773349761963,
+        5.800000190734863
+      ],
+      [
+        0.41273069381713867,
+        0.15643948316574097,
+        -0.8973182439804077,
+        -12.800000190734863
+      ],
+      [
+        0.0,
+        0.9851405024528503,
+        0.1717505007982254,
+        4.800000190734863
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "T_camera_from_world_blender": [
+      [
+        0.9108531475067139,
+        0.41273072361946106,
+        0.0,
+        5.316279384715017e-06
+      ],
+      [
+        -0.07088670134544373,
+        0.15643946826457977,
+        0.9851404428482056,
+        -2.3151063919067383
+      ],
+      [
+        0.40659773349761963,
+        -0.8973182439804077,
+        0.1717505007982254,
+        -14.668343544006348
+      ],
+      [
+        -0.0,
+        0.0,
+        -0.0,
+        1.0
+      ]
+    ],
+    "R_world_to_camera_opencv": [
+      [
+        0.9108530879020691,
+        0.41273069381713867,
+        0.0
+      ],
+      [
+        0.07088670879602432,
+        -0.15643948316574097,
+        -0.9851405024528503
+      ],
+      [
+        -0.40659773349761963,
+        0.8973182439804077,
+        -0.1717505007982254
+      ]
+    ],
+    "t_world_to_camera_opencv_m": [
+      4.76837158203125e-06,
+      2.315106153488159,
+      14.668343544006348
+    ],
+    "T_world_to_camera_opencv": [
+      [
+        0.9108530879020691,
+        0.41273069381713867,
+        0.0,
+        4.76837158203125e-06
+      ],
+      [
+        0.07088670879602432,
+        -0.15643948316574097,
+        -0.9851405024528503,
+        2.315106153488159
+      ],
+      [
+        -0.40659773349761963,
+        0.8973182439804077,
+        -0.1717505007982254,
+        14.668343544006348
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "P_world_to_image_opencv": [
+      [
+        1051.405897140503,
+        1168.6158752441406,
+        -109.92032051086426,
+        9387.74673461914
+      ],
+      [
+        -44.29832339286804,
+        97.76171207427979,
+        -1480.4325038194656,
+        8614.356536865234
+      ],
+      [
+        -0.40659773349761963,
+        0.8973182439804077,
+        -0.1717505007982254,
+        14.668343544006348
+      ]
+    ]
+  },
+  "object": {
+    "object_id": "standard_ball",
+    "root_object": "A_Object_standard_ball_ROOT",
+    "mesh_objects": [
+      "A_Ball"
+    ],
+    "initial_center_world_m": [
+      0.0,
+      0.0,
+      4.199999809265137
+    ],
+    "known_radius_m": 0.24,
+    "known_diameter_m": 0.48,
+    "mesh_world_dimensions_m": [
+      0.48000025749206543,
+      0.48000040650367737,
+      0.47999998927116394
+    ],
+    "mesh_world_bbox_m": [
+      [
+        -0.2400001883506775,
+        -0.2400001436471939,
+        3.9599997997283936
+      ],
+      [
+        -0.2400001883506775,
+        -0.2400001436471939,
+        4.439999580383301
+      ],
+      [
+        -0.2400001883506775,
+        0.24000026285648346,
+        4.439999580383301
+      ],
+      [
+        -0.2400001883506775,
+        0.24000026285648346,
+        3.9599997997283936
+      ],
+      [
+        0.24000005424022675,
+        -0.2400001436471939,
+        3.9599997997283936
+      ],
+      [
+        0.24000005424022675,
+        -0.2400001436471939,
+        4.439999580383301
+      ],
+      [
+        0.24000005424022675,
+        0.24000026285648346,
+        4.439999580383301
+      ],
+      [
+        0.24000005424022675,
+        0.24000026285648346,
+        3.9599997997283936
+      ]
+    ],
+    "motion_line": {
+      "constraint": "known_vertical_line",
+      "origin_world_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "direction_world": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "gravity_direction_world": [
+        -0.0,
+        -0.0,
+        -1.0
+      ],
+      "parent_axis_scale": 1.0,
+      "parameterization": "X(zeta) = origin_world_m + zeta * direction_world"
+    }
+  },
+  "support": {
+    "primary_object": "A_Floor",
+    "related_support_objects": [
+      "A_Floor",
+      "A_FloorSupport_LB",
+      "A_FloorSupport_LF",
+      "A_FloorSupport_RB",
+      "A_FloorSupport_RF",
+      "A_Platform_front_subtle_edge_shadow_strip",
+      "A_Platform_rear_subtle_edge_shadow_strip",
+      "A_Platform_wood_plank_recessed_seam_00",
+      "A_Platform_wood_plank_recessed_seam_01",
+      "A_Platform_wood_plank_recessed_seam_02",
+      "A_Platform_wood_plank_recessed_seam_03",
+      "A_Platform_wood_plank_recessed_seam_04",
+      "A_Platform_wood_plank_recessed_seam_05",
+      "A_Platform_wood_plank_recessed_seam_06",
+      "A_Platform_wood_plank_recessed_seam_07",
+      "A_Platform_wood_plank_recessed_seam_08",
+      "A_Platform_wood_plank_recessed_seam_09",
+      "A_Platform_wood_plank_recessed_seam_10",
+      "A_Platform_wood_plank_recessed_seam_11"
+    ],
+    "top_plane": {
+      "point_world_m": [
+        0.0,
+        0.0,
+        0.19999998807907104
+      ],
+      "normal_world": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "equation": "normal dot X + offset_m = 0",
+      "offset_m": -0.19999998807907104
+    },
+    "primary_object_world_bbox_m": [
+      [
+        -5.800000190734863,
+        -0.7799999713897705,
+        0.03999999910593033
+      ],
+      [
+        -5.800000190734863,
+        -0.7799999713897705,
+        0.19999998807907104
+      ],
+      [
+        -5.800000190734863,
+        0.7799999713897705,
+        0.19999998807907104
+      ],
+      [
+        -5.800000190734863,
+        0.7799999713897705,
+        0.03999999910593033
+      ],
+      [
+        5.800000190734863,
+        -0.7799999713897705,
+        0.03999999910593033
+      ],
+      [
+        5.800000190734863,
+        -0.7799999713897705,
+        0.19999998807907104
+      ],
+      [
+        5.800000190734863,
+        0.7799999713897705,
+        0.19999998807907104
+      ],
+      [
+        5.800000190734863,
+        0.7799999713897705,
+        0.03999999910593033
+      ]
+    ],
+    "sphere_center_at_first_contact_world_m": [
+      0.0,
+      0.0,
+      0.4399999976158142
+    ]
+  },
+  "projection_validation": {
+    "initial_center_uv_from_blender": [
+      640.0005340576172,
+      171.83213710784912
+    ],
+    "initial_center_uv_from_opencv_P": [
+      640.0004923251793,
+      171.83206197280154
+    ],
+    "max_abs_error_px": 7.513504758094314e-05,
+    "initial_mesh_vertex_bbox_xyxy_px": [
+      615.2480316162109,
+      146.7906904220581,
+      664.7805786132812,
+      196.72595500946045
+    ]
+  },
+  "reference_geometry_anchors": {
+    "enabled": true,
+    "path": "anchors/outdoor2/CAM_Main.npz",
+    "format": "numpy_npz",
+    "arrays": {
+      "uv_px": "float32[N,2]",
+      "xyz_world_m": "float32[N,3]",
+      "normal_world": "float32[N,3]",
+      "face_index": "int32[N]",
+      "object_name": "unicode[N]"
+    },
+    "method": "regular_pixel_grid_pinhole_ray_cast_first_static_visible_surface",
+    "stride_px": 32,
+    "margin_px": 8,
+    "attempted_rays": 858,
+    "dynamic_corridor_excluded_rays": 143,
+    "dynamic_corridor_uv": [
+      [
+        640.0004923251793,
+        171.83206197280154
+      ],
+      [
+        640.0004705380481,
+        545.6787453542328
+      ]
+    ],
+    "dynamic_corridor_exclusion_radius_px": 124.33476448059082,
+    "hit_count": 648,
+    "dynamic_objects_excluded": [
+      "A_Ball",
+      "A_Object_cardboard_box_ROOT",
+      "A_Object_cardboard_box_front_lower_edge",
+      "A_Object_cardboard_box_front_vertical_tape",
+      "A_Object_cardboard_box_kraft_body",
+      "A_Object_cardboard_box_left_fold_line",
+      "A_Object_cardboard_box_rear_lower_edge",
+      "A_Object_cardboard_box_rear_vertical_tape",
+      "A_Object_cardboard_box_right_fold_line",
+      "A_Object_cardboard_box_top_center_tape",
+      "A_Object_standard_ball_ROOT",
+      "A_Object_standard_cube_ROOT",
+      "A_Object_standard_cube_body",
+      "A_Object_volleyball_ROOT",
+      "A_Object_volleyball_colored_panel_sphere_v2",
+      "A_Object_volleyball_dark_curved_seam_00_equator_twist",
+      "A_Object_volleyball_dark_curved_seam_01_vertical_x",
+      "A_Object_volleyball_dark_curved_seam_02_vertical_y",
+      "A_Object_volleyball_dark_curved_seam_03_diagonal_a",
+      "A_Object_volleyball_dark_curved_seam_04_diagonal_b",
+      "A_Object_volleyball_reference_color_band_00_blue_band_a",
+      "A_Object_volleyball_reference_color_band_01_blue_band_b",
+      "A_Object_volleyball_reference_color_band_02_yellow_band_a"
+    ],
+    "hits_by_object": {
+      "A_Floor": 58,
+      "A_Platform_rear_subtle_edge_shadow_strip": 1,
+      "OUTDOOR2_Building_REAL_color_panel_00": 2,
+      "OUTDOOR2_Building_REAL_color_panel_02": 3,
+      "OUTDOOR2_Building_REAL_color_panel_03": 3,
+      "OUTDOOR2_Building_REAL_sky_backdrop_panel": 81,
+      "OUTDOOR2_Building_distant_campus_mass_02": 2,
+      "OUTDOOR2_Building_distant_campus_mass_03": 6,
+      "OUTDOOR2_Building_distant_campus_mass_04": 6,
+      "OUTDOOR2_Building_distant_campus_mass_05": 4,
+      "OUTDOOR2_Building_distant_window_hint_03": 2,
+      "OUTDOOR2_Building_distant_window_hint_05": 1,
+      "OUTDOOR2_Building_left_edge_office_block": 88,
+      "OUTDOOR2_Building_left_glass_panel_02": 3,
+      "OUTDOOR2_Building_left_glass_panel_03": 6,
+      "OUTDOOR2_Building_left_glass_panel_04": 3,
+      "OUTDOOR2_Building_rear_dark_base_band": 18,
+      "OUTDOOR2_Building_rear_facade_separator_05": 3,
+      "OUTDOOR2_Building_rear_glass_window_panel_02": 2,
+      "OUTDOOR2_Building_rear_glass_window_panel_03": 4,
+      "OUTDOOR2_Building_rear_glass_window_panel_04": 9,
+      "OUTDOOR2_Building_rear_glass_window_panel_05": 9,
+      "OUTDOOR2_Building_rear_low_graphite_reveal_04": 2,
+      "OUTDOOR2_Building_rear_modern_facade_mass": 36,
+      "OUTDOOR2_Building_rear_upper_graphite_band": 15,
+      "OUTDOOR2_Building_rear_window_frame_left_03": 2,
+      "OUTDOOR2_Building_rear_window_frame_left_05": 1,
+      "OUTDOOR2_Furniture_edge_planter_box_02": 2,
+      "OUTDOOR2_Furniture_left_edge_bench_01_back": 3,
+      "OUTDOOR2_Furniture_left_edge_bench_01_front_leg_1": 1,
+      "OUTDOOR2_Furniture_left_edge_bench_01_seat": 1,
+      "OUTDOOR2_Furniture_rear_edge_bench_00_back": 4,
+      "OUTDOOR2_Furniture_rear_edge_bench_00_seat": 1,
+      "OUTDOOR2_Ground_REAL_dark_grout_cross_01": 2,
+      "OUTDOOR2_Ground_REAL_dark_grout_cross_02": 1,
+      "OUTDOOR2_Ground_REAL_dark_grout_long_01": 2,
+      "OUTDOOR2_Ground_REAL_dark_grout_long_02": 1,
+      "OUTDOOR2_Ground_REAL_dark_grout_long_03": 1,
+      "OUTDOOR2_Ground_REAL_visible_bluestone_surface": 204,
+      "OUTDOOR2_Ground_REAL_warm_inlaid_stone_band_01": 1,
+      "OUTDOOR2_Ground_rear_walkway_strip": 24,
+      "OUTDOOR2_Lighting_perimeter_lamp_head_02": 1,
+      "OUTDOOR2_Vegetation_layered_leaf_cluster_02_05": 1,
+      "OUTDOOR2_Walkway_left_boundary_handrail": 2,
+      "OUTDOOR2_Walkway_rear_canopy_front_edge_trim": 11,
+      "OUTDOOR2_Walkway_rear_canopy_roof_single_slab": 12,
+      "OUTDOOR2_Walkway_rear_column_03": 3
+    },
+    "note": "These are geometric reference candidates, not automatically accepted image features. Downstream PnP must select textured, stable points and use RANSAC."
+  },
+  "scene": {
+    "fps": 24.0,
+    "frame_start": 1,
+    "frame_end": 192,
+    "unit_system": "METRIC",
+    "unit_scale_length": 1.0,
+    "metric_assumption": "benchmark contract treats one Blender unit as one meter",
+    "custom_properties": {
+      "benchmark_experiment": "A_freefall_hidden_gravity",
+      "benchmark_scenario": "outdoor2",
+      "A_motion_method": "computed_keyframes_no_rigidbody",
+      "A_selected_object": "standard_ball",
+      "A_hidden_g": 9.81
+    }
+  },
+  "conventions": {
+    "matrix_storage": "row_major JSON arrays; transforms multiply column homogeneous vectors",
+    "blender_camera_axes": "+X right, +Y up, camera looks along local -Z",
+    "opencv_camera_axes": "+X right, +Y down, +Z forward",
+    "opencv_axis_conversion_from_blender_camera": "diag(1,-1,-1)",
+    "projection_equation": "s*[u,v,1]^T = K * [R_world_to_camera_opencv | t_world_to_camera_opencv_m] * [X,Y,Z,1]^T",
+    "world_axes": "Blender world coordinates; V1A gravity is motion_line.gravity_direction_world",
+    "generated_video_note": "K and P are expressed in the frozen 1280x720 reference-image coordinates. Compose the measured reference-to-video crop/resize/registration transform before applying them to generated-video pixels."
+  }
+}
