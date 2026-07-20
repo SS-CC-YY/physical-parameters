@@ -22,7 +22,7 @@ from remake_benchmark.core.io import read_yaml, write_json
 from remake_benchmark.evaluators.freefall import _track_video
 
 
-RECONSTRUCTION_MVP_VERSION = "0.1.0"
+RECONSTRUCTION_MVP_VERSION = "0.2.0"
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "version": RECONSTRUCTION_MVP_VERSION,
@@ -46,11 +46,24 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "deformation_min_dimension_change_ratio": 0.22,
         "deformation_max_area_change_ratio": 1.30,
         "deformation_confirmation_frames": 3,
+        "temporal_mask_association": True,
+        "temporal_mask_objects": ["standard_ball"],
+        "temporal_mask_min_dimension_ratio": 0.55,
+        "temporal_mask_max_dimension_ratio": 1.65,
+        "temporal_mask_min_bbox_area_ratio": 0.25,
+        "temporal_mask_max_bbox_area_ratio": 2.20,
+        "temporal_mask_min_contour_area_ratio": 0.15,
+        "temporal_mask_max_distance_diagonals": 3.5,
+        "reject_inconsistent_size_fallback": True,
+        "unrefined_fallback_max_distance_diagonals": 2.0,
+        "reject_untrusted_horizontal_jumps": True,
+        "untrusted_max_horizontal_step_object_widths": 0.50,
+        "support_min_initial_gap_heights": 3.0,
     },
     "identity": {
         "max_horizontal_object_widths": 2.2,
         "max_step_object_diagonals": 3.0,
-        "fallback_max_step_object_diagonals": 1.25,
+        "fallback_max_step_object_diagonals": 0.90,
         "min_bbox_dimension_ratio": 0.65,
         "max_bbox_dimension_ratio": 1.40,
     },
@@ -68,7 +81,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "min_camera_success_fraction": 0.75,
         "min_camera_inlier_ratio": 0.35,
         "max_camera_residual_p95_px": 2.0,
-        "min_identity_valid_fraction": 0.30,
+        "min_identity_valid_fraction": 0.65,
         "max_bridge_gap_frames": 2,
         "min_primary_component_coverage": 0.85,
         "min_valid_points": 20,
@@ -579,6 +592,12 @@ def _mark_identity_and_lift(
         if primary_rows
         else 0.0
     )
+    primary_horizontal_span_px = (
+        max(row["center_x_stabilized_px"] for row in primary_rows)
+        - min(row["center_x_stabilized_px"] for row in primary_rows)
+        if primary_rows
+        else 0.0
+    )
     primary_coverage = (
         len(primary) / max(primary[-1] - primary[0] + 1, 1)
         if primary
@@ -603,6 +622,9 @@ def _mark_identity_and_lift(
         "primary_component_longest_valid_run": primary_longest_run,
         "primary_component_vertical_span_px": primary_span_px,
         "primary_component_vertical_span_object_diameters": primary_span_px / max(diameter_px, 1e-9),
+        "primary_component_horizontal_span_px": primary_horizontal_span_px,
+        "primary_component_horizontal_span_object_widths": primary_horizontal_span_px
+        / max(ref_width, 1e-9),
         "reference_center_px": [ref_x, ref_y],
         "reference_bbox_px": [ref_width, ref_height],
         "vertical_span_px": (
@@ -693,6 +715,13 @@ def fit_freefall_physics(
     pre_roll = max(0, int(round(float(physics["release_pre_roll_s"]) / median_dt)))
     release_local = max(0, int(moved[0]) - pre_roll) if len(moved) else 0
     stop_local = len(indices) - 1
+    # Reconstruction components may bridge a very short identity gap for
+    # visualization, but a physics fit must never interpolate across a missing
+    # contact frame and then absorb a later bounce/reappearance as one flight.
+    for local_index in range(release_local + 1, len(indices)):
+        if int(indices[local_index]) != int(indices[local_index - 1]) + 1:
+            stop_local = min(stop_local, local_index - 1)
+            break
     expected_drop_px = float(calibration["drop_distance_m"]) * float(calibration["pixels_per_meter"])
     contact_candidates = np.flatnonzero(
         smooth - opening >= float(physics["contact_drop_fraction"]) * expected_drop_px
@@ -848,6 +877,19 @@ def _write_ply(path: Path, rows: list[dict[str, Any]]) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _contiguous_row_segments(rows: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    """Split display paths at every missing/rejected frame."""
+    if not rows:
+        return []
+    segments: list[list[dict[str, Any]]] = [[rows[0]]]
+    for row in rows[1:]:
+        if int(row["frame_index"]) == int(segments[-1][-1]["frame_index"]) + 1:
+            segments[-1].append(row)
+        else:
+            segments.append([row])
+    return segments
+
+
 def _plot_diagnostics(
     video_path: Path,
     trajectory: list[dict[str, Any]],
@@ -861,6 +903,7 @@ def _plot_diagnostics(
         return
     frame0 = cv2.cvtColor(frame0, cv2.COLOR_BGR2RGB)
     valid = [row for row in trajectory if row.get("primary_trajectory")]
+    valid_segments = _contiguous_row_segments(valid)
     secondary = [
         row for row in trajectory if row["measurement_valid"] and not row.get("primary_trajectory")
     ]
@@ -868,13 +911,23 @@ def _plot_diagnostics(
     figure = plt.figure(figsize=(15, 4.6), constrained_layout=True)
     axis_image = figure.add_subplot(1, 3, 1)
     axis_image.imshow(frame0)
-    axis_image.plot(
-        [row["center_x_stabilized_px"] for row in valid],
-        [row["center_y_stabilized_px"] for row in valid],
-        color="#00d084",
-        linewidth=2,
-        label="valid measurement",
-    )
+    for segment_index, segment in enumerate(valid_segments):
+        axis_image.plot(
+            [row["center_x_stabilized_px"] for row in segment],
+            [row["center_y_stabilized_px"] for row in segment],
+            color="#00d084",
+            linewidth=2,
+            label="primary measurement" if segment_index == 0 else None,
+        )
+    fit_rows = [row for row in valid if row.get("physics_fit_used")]
+    if fit_rows:
+        axis_image.scatter(
+            [row["center_x_stabilized_px"] for row in fit_rows],
+            [row["center_y_stabilized_px"] for row in fit_rows],
+            s=8,
+            color="#1769aa",
+            label="physics fit segment",
+        )
     if invalid:
         axis_image.scatter(
             [row["center_x_stabilized_px"] for row in invalid],
@@ -896,7 +949,14 @@ def _plot_diagnostics(
     axis_image.legend(loc="lower left", fontsize=8)
 
     axis_height = figure.add_subplot(1, 3, 2)
-    axis_height.plot([row["time_s"] for row in valid], [row["z_m"] for row in valid], ".-", ms=3, label="reconstructed")
+    for segment_index, segment in enumerate(valid_segments):
+        axis_height.plot(
+            [row["time_s"] for row in segment],
+            [row["z_m"] for row in segment],
+            ".-",
+            ms=3,
+            label="measured" if segment_index == 0 else None,
+        )
     if physics.get("fit_valid"):
         start = int(physics["segment_frame_start"])
         end = int(physics["segment_frame_end"])
@@ -919,20 +979,29 @@ def _plot_diagnostics(
     axis_height.legend(fontsize=8)
     axis_height.set_title("Height over time")
 
-    axis_3d = figure.add_subplot(1, 3, 3, projection="3d")
-    axis_3d.plot(
-        [row["x_m"] for row in valid],
-        [row["y_m"] for row in valid],
-        [row["z_m"] for row in valid],
-        color="#228be6",
-        linewidth=2,
+    axis_path = figure.add_subplot(1, 3, 3)
+    for segment in valid_segments:
+        axis_path.plot(
+            [row["x_m"] for row in segment],
+            [row["z_m"] for row in segment],
+            color="#228be6",
+            linewidth=2,
+        )
+    axis_path.scatter([valid[0]["x_m"]], [valid[0]["z_m"]], color="#00a86b", s=28)
+    axis_path.annotate(
+        "start",
+        (valid[0]["x_m"], valid[0]["z_m"]),
+        xytext=(5, -5),
+        textcoords="offset points",
+        fontsize=8,
     )
-    axis_3d.scatter([valid[0]["x_m"]], [0.0], [valid[0]["z_m"]], color="#00a86b", s=28, label="start")
-    axis_3d.set_xlabel("x (m)")
-    axis_3d.set_ylabel("y (constrained)")
-    axis_3d.set_zlabel("z (m)")
-    axis_3d.set_title("Constrained 2.5D path")
-    axis_3d.legend(fontsize=8)
+    x_extent = max(0.5, max(abs(float(row["x_m"])) for row in valid) * 1.15)
+    axis_path.set_xlim(-x_extent, x_extent)
+    axis_path.set_aspect("equal", adjustable="box")
+    axis_path.set_xlabel("x (m, approximate)")
+    axis_path.set_ylabel("z (m, approximate)")
+    axis_path.set_title("Constrained x-z path (equal scale)")
+    axis_path.grid(alpha=0.25)
     figure.suptitle(video_path.stem, fontsize=10)
     figure.savefig(output_path, dpi=145)
     plt.close(figure)
@@ -1155,6 +1224,10 @@ def _summary_row(result: dict[str, Any]) -> dict[str, Any]:
         "primary_component_span_object_diameters": tracking.get(
             "primary_component_vertical_span_object_diameters"
         ),
+        "primary_component_horizontal_span_px": tracking.get("primary_component_horizontal_span_px"),
+        "primary_component_horizontal_span_object_widths": tracking.get(
+            "primary_component_horizontal_span_object_widths"
+        ),
         "longest_valid_run": tracking.get("longest_valid_run"),
         "calibration_mode": calibration.get("mode"),
         "estimated_gravity_m_s2": physics.get("estimated_gravity_m_s2"),
@@ -1177,11 +1250,15 @@ def _write_html_report(output_root: Path, results: list[dict[str, Any]], aggrega
         gravity = summary["estimated_gravity_m_s2"]
         similarity = summary["parameter_similarity"]
         camera_drift = summary["camera_translation_p95_px"]
-        identity_fraction = summary["primary_component_coverage"]
+        identity_fraction = summary["identity_valid_fraction"]
+        primary_coverage = summary["primary_component_coverage"]
+        horizontal_span = summary["primary_component_horizontal_span_px"]
         gravity_text = "" if gravity is None else f"{gravity:.3f}"
         similarity_text = "" if similarity is None else f"{similarity:.3f}"
         camera_drift_text = "" if camera_drift is None else f"{camera_drift:.3f}"
         identity_text = "" if identity_fraction is None else f"{identity_fraction:.3f}"
+        primary_coverage_text = "" if primary_coverage is None else f"{primary_coverage:.3f}"
+        horizontal_span_text = "" if horizontal_span is None else f"{horizontal_span:.2f}"
         artifacts = result.get("artifacts", {})
         artifact_links: list[str] = []
         if artifacts.get("diagnostic_plot"):
@@ -1197,6 +1274,8 @@ def _write_html_report(output_root: Path, results: list[dict[str, Any]], aggrega
             f"<td>{similarity_text}</td>"
             f"<td>{camera_drift_text}</td>"
             f"<td>{identity_text}</td>"
+            f"<td>{primary_coverage_text}</td>"
+            f"<td>{horizontal_span_text}</td>"
             f"<td>{' · '.join(artifact_links)}</td></tr>"
         )
     document = f"""<!doctype html>
@@ -1205,7 +1284,7 @@ def _write_html_report(output_root: Path, results: list[dict[str, Any]], aggrega
 <body><h1>Seedance 20 — object-centric reconstruction MVP</h1>
 <div class="note"><b>Interpretation boundary:</b> <code>constrained_trajectory_valid</code> checks whether the side-view object trajectory is measurable. <code>physics_status</code> independently checks the target equation/parameter. Fixed-view MP4 without full K/T cannot pass <code>strict_metric_3d_valid</code>.</div>
 <p>Total: {aggregate['jobs']} · constrained pass: {aggregate['constrained_trajectory_passed']} · physics pass: {aggregate['physics_passed']} · errors: {aggregate['errors']} · wall time: {aggregate['wall_seconds']:.1f}s</p>
-<table><thead><tr><th>job</th><th>reconstruction</th><th>physics</th><th>target g</th><th>estimated g</th><th>similarity</th><th>camera drift p95 px</th><th>primary coverage</th><th>artifacts</th></tr></thead><tbody>{''.join(rows)}</tbody></table>
+<table><thead><tr><th>job</th><th>reconstruction</th><th>physics</th><th>target g</th><th>estimated g</th><th>similarity</th><th>camera drift p95 px</th><th>full-track valid fraction</th><th>primary coverage</th><th>horizontal span px</th><th>artifacts</th></tr></thead><tbody>{''.join(rows)}</tbody></table>
 </body></html>"""
     report_dir = output_root / "report"
     report_dir.mkdir(parents=True, exist_ok=True)

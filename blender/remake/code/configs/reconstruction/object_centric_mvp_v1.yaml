@@ -23,11 +23,30 @@ tracker:
   deformation_min_dimension_change_ratio: 0.22
   deformation_max_area_change_ratio: 1.30
   deformation_confirmation_frames: 3
+  # The global masked template score is ambiguous in indoor scenes. Prefer a
+  # size-consistent orange component associated with recent position/velocity.
+  temporal_mask_association: true
+  temporal_mask_objects: [standard_ball]
+  temporal_mask_min_dimension_ratio: 0.55
+  temporal_mask_max_dimension_ratio: 1.65
+  temporal_mask_min_bbox_area_ratio: 0.25
+  temporal_mask_max_bbox_area_ratio: 2.20
+  temporal_mask_min_contour_area_ratio: 0.15
+  temporal_mask_max_distance_diagonals: 3.5
+  reject_inconsistent_size_fallback: true
+  unrefined_fallback_max_distance_diagonals: 2.0
+  # A mask merge alone is not enough to drop a real contact frame. Reject it
+  # only when its fixed-size center also jumps horizontally off the trajectory.
+  reject_untrusted_horizontal_jumps: true
+  untrusted_max_horizontal_step_object_widths: 0.50
+  # Reject indoor wall/tool-board components accidentally classified as the
+  # lower support surface when they are too close to the initial ball.
+  support_min_initial_gap_heights: 3.0
 
 identity:
   max_horizontal_object_widths: 2.2
   max_step_object_diagonals: 3.0
-  fallback_max_step_object_diagonals: 1.25
+  fallback_max_step_object_diagonals: 0.90
   min_bbox_dimension_ratio: 0.65
   max_bbox_dimension_ratio: 1.40
 
@@ -48,7 +67,9 @@ validity:
   min_camera_success_fraction: 0.75
   min_camera_inlier_ratio: 0.35
   max_camera_residual_p95_px: 2.0
-  min_identity_valid_fraction: 0.30
+  # A short clean fragment is useful for inspection but is not a reliable
+  # full-video reconstruction.  Require most of the decoded timeline.
+  min_identity_valid_fraction: 0.65
   max_bridge_gap_frames: 2
   min_primary_component_coverage: 0.85
   min_valid_points: 20

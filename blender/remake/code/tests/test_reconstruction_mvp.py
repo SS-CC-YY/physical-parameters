@@ -119,6 +119,19 @@ class ReconstructionMvpTests(unittest.TestCase):
         self.assertEqual(result["status"], "fail")
         self.assertLess(result["parameter_similarity"], 0.5)
 
+    def test_physics_fit_stops_before_identity_gap(self) -> None:
+        config = deepcopy(DEFAULT_CONFIG)
+        config["physics"]["contact_drop_fraction"] = 2.0
+        trajectory, calibration = self._synthetic_trajectory(24.0, 9.81)
+        # Extend the sequence with an apparent post-gap return.  The visual
+        # component may bridge two missing frames, but the flight fit must not.
+        for row in trajectory:
+            if row["frame_index"] in {12, 13}:
+                row["primary_trajectory"] = False
+        result = fit_freefall_physics(trajectory, 9.81, calibration, config)
+        self.assertTrue(result["fit_valid"])
+        self.assertLessEqual(result["segment_frame_end"], 11)
+
     def test_full_inverse_affine_stabilizes_static_center(self) -> None:
         angle = np.deg2rad(8.0)
         scale = 1.08

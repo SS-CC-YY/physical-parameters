@@ -16,7 +16,9 @@ try:
     from remake_benchmark.evaluators.freefall import (
         _conditioning_bbox,
         _deformation_evidence,
+        _horizontal_center_is_temporally_consistent,
         _physical_gate,
+        _temporal_mask_detection,
         _track_video,
         aggregate_freefall,
         evaluate_freefall_job,
@@ -51,6 +53,44 @@ class FreefallEvaluatorTests(unittest.TestCase):
         self.assertTrue(_deformation_evidence((130.0, 77.0), (100.0, 100.0), config))
         self.assertFalse(_deformation_evidence((150.0, 100.0), (100.0, 100.0), config))
         self.assertFalse(_deformation_evidence((120.0, 84.0), (100.0, 100.0), config))
+
+    def test_temporal_mask_prefers_predicted_ball_over_orange_indoor_distractor(self) -> None:
+        frame = np.full((240, 320, 3), 55, dtype=np.uint8)
+        # Same-size high-chroma distractor that can produce a near-perfect
+        # masked template score in an indoor scene.
+        cv2.circle(frame, (70, 125), 13, (0, 140, 255), -1)
+        cv2.circle(frame, (160, 125), 13, (0, 140, 255), -1)
+        cv2.rectangle(frame, (20, 190), (300, 215), (0, 120, 220), -1)
+        detection = _temporal_mask_detection(
+            frame,
+            "standard_ball",
+            (27.0, 27.0),
+            [(160.0, 80.0), (160.0, 100.0)],
+            {
+                "temporal_mask_association": True,
+                "temporal_mask_objects": ["standard_ball"],
+                "temporal_mask_max_distance_diagonals": 3.5,
+            },
+        )
+        self.assertIsNotNone(detection)
+        bbox, _ = detection
+        center = (0.5 * (bbox[0] + bbox[2]), 0.5 * (bbox[1] + bbox[3]))
+        self.assertAlmostEqual(center[0], 160.0, delta=2.0)
+        self.assertAlmostEqual(center[1], 125.0, delta=2.0)
+
+    def test_untrusted_horizontal_gate_preserves_fast_vertical_motion(self) -> None:
+        history = [(160.0, 80.0), (160.5, 110.0), (161.0, 150.0)]
+        reference_size = (38.0, 38.0)
+        self.assertTrue(
+            _horizontal_center_is_temporally_consistent(
+                (161.5, 205.0), history, reference_size, 0.50
+            )
+        )
+        self.assertFalse(
+            _horizontal_center_is_temporally_consistent(
+                (190.0, 205.0), history, reference_size, 0.50
+            )
+        )
 
     def test_aggregate_ignores_missing_fit_r2(self) -> None:
         def row(job_id: str, fit_r2: float | None, acceleration: float) -> dict:
@@ -264,6 +304,8 @@ class FreefallEvaluatorTests(unittest.TestCase):
                     "max_locked_bbox_dimension_ratio": 1.10,
                     "lock_bbox_size_near_support": True,
                     "deformation_confirmation_frames": 3,
+                    "reject_untrusted_horizontal_jumps": True,
+                    "untrusted_max_horizontal_step_object_widths": 0.50,
                 },
             )
             constrained = [row for row in tracks if row["bbox_size_constrained"]]
@@ -275,6 +317,68 @@ class FreefallEvaluatorTests(unittest.TestCase):
                     float(row["bbox_width_px"]),
                     float(row["bbox_reference_width_px"]) + 1.0,
                 )
+
+    def test_horizontally_shifted_template_merge_is_not_kept_as_ball(self) -> None:
+        with tempfile.TemporaryDirectory(dir=CODE_ROOT / "tests") as temporary:
+            root = Path(temporary)
+            image_path = root / "conditioning.png"
+            video_path = root / "indoor_false_match.mp4"
+            width, height, fps = 320, 240, 20.0
+            background = np.full((height, width, 3), 50, dtype=np.uint8)
+            conditioning = background.copy()
+            cv2.circle(conditioning, (160, 42), 13, (0, 140, 255), -1)
+            self.assertTrue(cv2.imwrite(str(image_path), conditioning))
+            writer = cv2.VideoWriter(
+                str(video_path),
+                cv2.VideoWriter_fourcc(*"mp4v"),
+                fps,
+                (width, height),
+            )
+            self.assertTrue(writer.isOpened())
+            for frame_index in range(16):
+                frame = background.copy()
+                if frame_index < 8:
+                    cv2.circle(frame, (160, 42 + 10 * frame_index), 13, (0, 140, 255), -1)
+                else:
+                    # The real ball disappears at contact.  A nearby, much
+                    # larger orange floor component remains highly correlated
+                    # with the masked ball template.
+                    cv2.circle(frame, (188, 145), 36, (0, 140, 255), -1)
+                writer.write(frame)
+            writer.release()
+            tracks, _, _ = _track_video(
+                {
+                    "job_id": "synthetic_indoor_false_match",
+                    "factors": {"object_id": "standard_ball"},
+                    "generation": {"fps": fps},
+                },
+                video_path,
+                image_path,
+                {
+                    "tracker": "auto",
+                    "min_template_score": 0.10,
+                    "size_lock_warmup_frames": 3,
+                    "max_locked_bbox_dimension_ratio": 1.10,
+                    "temporal_mask_association": True,
+                    "temporal_mask_objects": ["standard_ball"],
+                    "temporal_mask_max_distance_diagonals": 3.5,
+                    "reject_inconsistent_size_fallback": True,
+                    "unrefined_fallback_max_distance_diagonals": 2.0,
+                    "reject_untrusted_horizontal_jumps": True,
+                    "untrusted_max_horizontal_step_object_widths": 0.50,
+                },
+            )
+            rejected = [
+                row for row in tracks[8:] if "horizontal-jump-rejected" in row["tracking_source"]
+            ]
+            self.assertTrue(rejected)
+            self.assertTrue(all(not row["found"] for row in rejected))
+            self.assertFalse(
+                any(
+                    row["found"] and float(row["center_x_px"]) > 175.0
+                    for row in tracks[8:]
+                )
+            )
 
     def test_support_penetration_is_reported_as_rigid_violation(self) -> None:
         with tempfile.TemporaryDirectory(dir=CODE_ROOT / "tests") as temporary:

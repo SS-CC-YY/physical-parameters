@@ -383,6 +383,129 @@ def _deformation_evidence(
     return reciprocal_change and 1.0 / max_area_ratio <= area_ratio <= max_area_ratio
 
 
+def _predict_center(
+    center_history: list[tuple[float, float]],
+    reference_size: tuple[float, float],
+) -> tuple[float, float]:
+    """Predict one frame ahead without letting a single jump dominate."""
+    if not center_history:
+        raise ValueError("center history cannot be empty")
+    previous = np.asarray(center_history[-1], dtype=float)
+    if len(center_history) < 2:
+        return float(previous[0]), float(previous[1])
+    recent = np.asarray(center_history[-5:], dtype=float)
+    velocity = np.median(np.diff(recent, axis=0), axis=0)
+    diagonal = max(1.0, math.hypot(*reference_size))
+    speed = float(np.linalg.norm(velocity))
+    if speed > 3.0 * diagonal:
+        velocity *= 3.0 * diagonal / speed
+    predicted = previous + velocity
+    return float(predicted[0]), float(predicted[1])
+
+
+def _temporal_mask_detection(
+    frame: np.ndarray,
+    object_id: str,
+    reference_size: tuple[float, float],
+    center_history: list[tuple[float, float]],
+    config: dict[str, Any],
+) -> tuple[tuple[int, int, int, int], float] | None:
+    """Associate a color-mask component with the recent object trajectory.
+
+    The original global template score is nearly degenerate for the orange
+    standard ball in indoor scenes: static tools and floor tiles can also score
+    above 0.99.  A component must therefore agree in size and with the recent
+    center/velocity before it can supersede the template candidate.
+    """
+    enabled = bool(config.get("temporal_mask_association", False))
+    allowed_objects = config.get("temporal_mask_objects", ["standard_ball"])
+    if not enabled or object_id not in allowed_objects or not center_history:
+        return None
+    reference_width, reference_height = reference_size
+    if reference_width <= 1 or reference_height <= 1:
+        return None
+    mask = _object_mask(frame, object_id)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    previous = np.asarray(center_history[-1], dtype=float)
+    predicted = np.asarray(_predict_center(center_history, reference_size), dtype=float)
+    reference_area = reference_width * reference_height
+    diagonal = math.hypot(reference_width, reference_height)
+    minimum_dimension_ratio = float(config.get("temporal_mask_min_dimension_ratio", 0.55))
+    maximum_dimension_ratio = float(config.get("temporal_mask_max_dimension_ratio", 1.65))
+    minimum_bbox_area_ratio = float(config.get("temporal_mask_min_bbox_area_ratio", 0.25))
+    maximum_bbox_area_ratio = float(config.get("temporal_mask_max_bbox_area_ratio", 2.20))
+    minimum_contour_area_ratio = float(config.get("temporal_mask_min_contour_area_ratio", 0.15))
+    max_distance = float(config.get("temporal_mask_max_distance_diagonals", 3.5)) * diagonal
+    best: tuple[float, tuple[int, int, int, int], float] | None = None
+    for contour in contours:
+        contour_area = float(cv2.contourArea(contour))
+        x, y, width, height = cv2.boundingRect(contour)
+        width_ratio = width / reference_width
+        height_ratio = height / reference_height
+        bbox_area_ratio = width * height / reference_area
+        if not (
+            minimum_dimension_ratio <= width_ratio <= maximum_dimension_ratio
+            and minimum_dimension_ratio <= height_ratio <= maximum_dimension_ratio
+            and minimum_bbox_area_ratio <= bbox_area_ratio <= maximum_bbox_area_ratio
+            and contour_area >= minimum_contour_area_ratio * reference_area
+        ):
+            continue
+        center = np.asarray((x + width / 2.0, y + height / 2.0), dtype=float)
+        # Near a bounce, constant-velocity prediction overshoots.  Accept a
+        # candidate that is close to either the prediction or the last reliable
+        # center, while still rejecting distant indoor distractors.
+        distance = min(
+            float(np.linalg.norm(center - predicted)),
+            1.15 * float(np.linalg.norm(center - previous)),
+        )
+        if distance > max_distance:
+            continue
+        fill = contour_area / max(width * height, 1)
+        cost = (
+            distance / max(diagonal, 1.0)
+            + 1.2 * (abs(math.log(width_ratio)) + abs(math.log(height_ratio)))
+            - 0.35 * fill
+        )
+        confidence = 1.0 / (1.0 + max(0.0, cost))
+        bbox = (x, y, x + width, y + height)
+        if best is None or cost < best[0]:
+            best = (cost, bbox, confidence)
+    return None if best is None else (best[1], best[2])
+
+
+def _center_is_temporally_consistent(
+    center: tuple[float, float],
+    center_history: list[tuple[float, float]],
+    reference_size: tuple[float, float],
+    max_distance_diagonals: float,
+) -> bool:
+    if not center_history:
+        return True
+    predicted = np.asarray(_predict_center(center_history, reference_size), dtype=float)
+    previous = np.asarray(center_history[-1], dtype=float)
+    candidate = np.asarray(center, dtype=float)
+    distance = min(
+        float(np.linalg.norm(candidate - predicted)),
+        1.15 * float(np.linalg.norm(candidate - previous)),
+    )
+    return distance <= float(max_distance_diagonals) * max(1.0, math.hypot(*reference_size))
+
+
+def _horizontal_center_is_temporally_consistent(
+    center: tuple[float, float],
+    center_history: list[tuple[float, float]],
+    reference_size: tuple[float, float],
+    max_distance_widths: float,
+) -> bool:
+    """Gate only abrupt horizontal jumps while preserving fast vertical fall."""
+    if not center_history:
+        return True
+    predicted_x = _predict_center(center_history, reference_size)[0]
+    previous_x = center_history[-1][0]
+    distance_x = min(abs(center[0] - predicted_x), 1.15 * abs(center[0] - previous_x))
+    return distance_x <= float(max_distance_widths) * max(1.0, reference_size[0])
+
+
 def _track_video(job: dict[str, Any], video_path: Path, image_path: Path, config: dict[str, Any]) -> tuple[list[dict[str, Any]], float, tuple[int, int]]:
     object_id = str(job["factors"]["object_id"])
     source_bbox, source_shape = _conditioning_bbox(image_path, object_id)
@@ -409,11 +532,21 @@ def _track_video(job: dict[str, Any], video_path: Path, image_path: Path, config
     template_mask = _object_mask(template, object_id)
     previous, frame = first, first
     previous_center = ((x0 + x1) / 2.0, (y0 + y1) / 2.0)
+    reliable_center_history: list[tuple[float, float]] = [previous_center]
     stable_size: tuple[float, float] | None = None
     size_samples: list[tuple[float, float]] = []
     size_locked = False
     deformation_candidate_run = 0
     support_profile = _support_surface_profile(image_path, frame_shape)
+    support_profile_sanity_rejected = False
+    if support_profile is not None:
+        initial_center_x = min(frame_shape[1] - 1, max(0, int(round(previous_center[0]))))
+        initial_height = max(1.0, float(y1 - y0))
+        initial_gap = float(support_profile[initial_center_x] - y1)
+        minimum_gap = float(config.get("support_min_initial_gap_heights", 0.0)) * initial_height
+        if initial_gap < minimum_gap:
+            support_profile = None
+            support_profile_sanity_rejected = True
     tracks: list[dict[str, Any]] = []
     frame_index = 0
     tracker = str(config.get("tracker", "auto"))
@@ -426,6 +559,15 @@ def _track_video(job: dict[str, Any], video_path: Path, image_path: Path, config
             initial_bbox,
         )
         template_found = template_bbox is not None and math.isfinite(template_score) and template_score >= min_template_score
+        temporal_mask = None
+        if stable_size is not None:
+            temporal_mask = _temporal_mask_detection(
+                frame,
+                object_id,
+                stable_size,
+                reliable_center_history,
+                config,
+            )
         motion = None
         if frame_index > 0 and tracker != "template":
             motion = _motion_detection(
@@ -440,6 +582,11 @@ def _track_video(job: dict[str, Any], video_path: Path, image_path: Path, config
             source = "motion" if motion else "missing"
             score = motion[1] if motion else None
             bbox = motion[0] if motion else None
+        elif temporal_mask is not None:
+            chosen = temporal_mask
+            source = "temporal-mask"
+            score = temporal_mask[1]
+            bbox = temporal_mask[0]
         elif tracker == "template":
             chosen = (template_bbox, template_score) if template_found else None
             source = "template" if chosen else "missing"
@@ -563,11 +710,56 @@ def _track_video(job: dict[str, Any], video_path: Path, image_path: Path, config
             elif stable_size is not None:
                 deformation_candidate_run = 0
                 coarse_center = (0.5 * (bbox[0] + bbox[2]), 0.5 * (bbox[1] + bbox[3]))
-                bbox = _centered_bbox(coarse_center, stable_size, frame_shape)
-                bbox_size_constrained = True
-                source = f"{source}+size-fallback"
-            center_x, center_y = (bbox[0] + bbox[2]) / 2.0, (bbox[1] + bbox[3]) / 2.0
-            previous_center = (center_x, center_y)
+                mask_supported = source.startswith("temporal-mask")
+                fallback_consistent = _center_is_temporally_consistent(
+                    coarse_center,
+                    reliable_center_history,
+                    stable_size,
+                    float(config.get("unrefined_fallback_max_distance_diagonals", 2.0)),
+                )
+                reject_inconsistent = bool(config.get("reject_inconsistent_size_fallback", False))
+                if reject_inconsistent and not mask_supported and not fallback_consistent:
+                    bbox = None
+                    source = f"{source}+fallback-rejected"
+                    score = None
+                else:
+                    bbox = _centered_bbox(coarse_center, stable_size, frame_shape)
+                    bbox_size_constrained = True
+                    source = f"{source}+size-fallback"
+            if (
+                bbox is not None
+                and stable_size is not None
+                and refinement_rejected
+                and not source.startswith("temporal-mask")
+                and bool(config.get("reject_untrusted_horizontal_jumps", False))
+            ):
+                candidate_center = (
+                    0.5 * (bbox[0] + bbox[2]),
+                    0.5 * (bbox[1] + bbox[3]),
+                )
+                horizontal_consistent = _horizontal_center_is_temporally_consistent(
+                    candidate_center,
+                    reliable_center_history,
+                    stable_size,
+                    float(config.get("untrusted_max_horizontal_step_object_widths", 0.50)),
+                )
+                if not horizontal_consistent:
+                    bbox = None
+                    score = None
+                    source = f"{source}+horizontal-jump-rejected"
+            if bbox is not None:
+                center_x, center_y = (bbox[0] + bbox[2]) / 2.0, (bbox[1] + bbox[3]) / 2.0
+                previous_center = (center_x, center_y)
+                # Never let an unrefined template fallback steer the next
+                # association.  A mask-supported candidate or successful color
+                # refinement is required to update reliable motion history.
+                if not refinement_rejected and (
+                    refined is not None or source.startswith("temporal-mask")
+                ):
+                    reliable_center_history.append(previous_center)
+                    reliable_center_history = reliable_center_history[-8:]
+            else:
+                center_x = center_y = None
         else:
             deformation_candidate_run = 0
             center_x = center_y = None
@@ -593,6 +785,7 @@ def _track_video(job: dict[str, Any], video_path: Path, image_path: Path, config
                 "refinement_rejected": refinement_rejected,
                 "refinement_area_ratio": _finite(refinement_area_ratio),
                 "near_support": near_support,
+                "support_profile_sanity_rejected": support_profile_sanity_rejected,
                 "bbox_size_locked": size_locked,
                 "bbox_size_constrained": bbox_size_constrained,
                 "bbox_reference_width_px": None if stable_size is None else _finite(stable_size[0]),
