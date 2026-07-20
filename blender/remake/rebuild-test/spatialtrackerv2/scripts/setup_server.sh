@@ -4,18 +4,19 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 UPSTREAM="$ROOT/upstream/SpaTrackerV2"
+ENV_PREFIX="$ROOT/env"
 
 if ! command -v conda >/dev/null 2>&1; then
   echo "error: conda is required" >&2
   exit 1
 fi
 
-if ! conda env list | awk '{print $1}' | grep -qx spatialtrackerv2; then
-  conda create -y -n spatialtrackerv2 python=3.11
+if [[ ! -x "$ENV_PREFIX/bin/python" ]]; then
+  conda create -y -p "$ENV_PREFIX" python=3.11
 fi
 
 eval "$(conda shell.bash hook)"
-conda activate spatialtrackerv2
+conda activate "$ENV_PREFIX"
 python -m pip install --upgrade pip setuptools wheel
 python -m pip install \
   torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 \
@@ -40,3 +41,4 @@ for repo in [
 PY
 
 echo "SpatialTrackerV2 environment and weights are ready under: $ROOT"
+echo "activate with: conda activate '$ENV_PREFIX'"

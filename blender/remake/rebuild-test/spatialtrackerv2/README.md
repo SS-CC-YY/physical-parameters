@@ -38,7 +38,7 @@ SpatialTrackerV2 输出所有查询点的 3D 时序。每一帧用静态锚点�
 ```bash
 cd /path/to/physical-parameters/blender/remake/rebuild-test/spatialtrackerv2
 bash scripts/setup_server.sh
-conda activate spatialtrackerv2
+conda activate "$PWD/env"
 
 python scripts/build_manifest.py --strict
 python scripts/preflight.py

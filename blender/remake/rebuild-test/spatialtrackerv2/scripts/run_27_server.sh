@@ -8,7 +8,7 @@ MAX_JOBS="${MAX_JOBS:-}"
 VIDEOS_ROOT="${VIDEOS_ROOT:-}"
 
 eval "$(conda shell.bash hook)"
-conda activate spatialtrackerv2
+conda activate "$ROOT/env"
 cd "$ROOT"
 
 manifest_args=(--strict)
