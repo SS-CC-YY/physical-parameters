@@ -3,6 +3,8 @@ env/
 outputs/
 work/
 logs/
+build/
+*.egg-info/
 __pycache__/
 *.pyc
 *.pyo
