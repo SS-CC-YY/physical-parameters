@@ -1,0 +1,432 @@
+{
+  "schema_version": "1.0.0",
+  "exporter_version": "1.0.0",
+  "experiment_id": "v3_A",
+  "scene_id": "baseline",
+  "camera_name": "CAM_Side",
+  "frame": 1,
+  "source": {
+    "blend_path": "v3/A/baselinev3_A_ball_projectile_drag_bounce.blend",
+    "blend_filename": "baselinev3_A_ball_projectile_drag_bounce.blend",
+    "blend_resolution_origin": "registry_canonical_blend",
+    "blend_sha256": "0e8b9a1d6dca7ac38eebf0b24dd732393e253f5756330a93d8994c29a9b0668b",
+    "opened_read_only": true,
+    "save_operator_invoked": false
+  },
+  "source_image": {
+    "width_px": 1280,
+    "height_px": 720,
+    "origin": "top_left",
+    "u_axis": "right",
+    "v_axis": "down",
+    "pixel_coordinate_convention": "OpenCV continuous pixel coordinates",
+    "blender_stored_render_settings": {
+      "resolution_x_px": 1920,
+      "resolution_y_px": 1080,
+      "resolution_percentage": 100.0,
+      "effective_width_px": 1920.0,
+      "effective_height_px": 1080.0,
+      "pixel_aspect_x": 1.0,
+      "pixel_aspect_y": 1.0
+    }
+  },
+  "camera": {
+    "model": "pinhole",
+    "blender_type": "PERSP",
+    "lens_mm": 42.0,
+    "sensor_width_mm": 36.0,
+    "sensor_height_mm": 24.0,
+    "sensor_fit": "AUTO",
+    "shift_x": 0.0,
+    "shift_y": 0.0,
+    "clip_start_m": 0.10000000149011612,
+    "clip_end_m": 200.0,
+    "K": [
+      [
+        1493.3333333333333,
+        0.0,
+        640.0
+      ],
+      [
+        0.0,
+        1493.3333333333333,
+        360.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "intrinsic_parameters": {
+      "fx_px": 1493.3333333333333,
+      "fy_px": 1493.3333333333333,
+      "cx_px": 640.0,
+      "cy_px": 360.0,
+      "resolved_sensor_fit": "HORIZONTAL",
+      "pixel_aspect_y_over_x": 1.0
+    },
+    "matrix_world_blender": [
+      [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.10452806949615479,
+        -0.9945219159126282,
+        -13.800000190734863
+      ],
+      [
+        0.0,
+        0.9945219159126282,
+        0.10452806949615479,
+        3.5999999046325684
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "T_world_from_camera_blender": [
+      [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.10452806949615479,
+        -0.9945219159126282,
+        -13.800000190734863
+      ],
+      [
+        0.0,
+        0.9945219159126282,
+        0.10452806949615479,
+        3.5999999046325684
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "T_camera_from_world_blender": [
+      [
+        1.0,
+        -0.0,
+        0.0,
+        -0.0
+      ],
+      [
+        -0.0,
+        0.10452807694673538,
+        0.994521975517273,
+        -2.137791872024536
+      ],
+      [
+        0.0,
+        -0.994521975517273,
+        0.10452807694673538,
+        -14.100704193115234
+      ],
+      [
+        -0.0,
+        0.0,
+        -0.0,
+        1.0
+      ]
+    ],
+    "R_world_to_camera_opencv": [
+      [
+        1.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        -0.10452806949615479,
+        -0.9945219159126282
+      ],
+      [
+        0.0,
+        0.9945219159126282,
+        -0.10452806949615479
+      ]
+    ],
+    "t_world_to_camera_opencv_m": [
+      0.0,
+      2.137791633605957,
+      14.100703239440918
+    ],
+    "T_world_to_camera_opencv": [
+      [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        -0.10452806949615479,
+        -0.9945219159126282,
+        2.137791633605957
+      ],
+      [
+        0.0,
+        0.9945219159126282,
+        -0.10452806949615479,
+        14.100703239440918
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "P_world_to_image_opencv": [
+      [
+        1493.3333333333333,
+        636.494026184082,
+        -66.89796447753906,
+        9024.450073242188
+      ],
+      [
+        0.0,
+        201.93263928095502,
+        -1522.7828327814736,
+        8268.688672383625
+      ],
+      [
+        0.0,
+        0.9945219159126282,
+        -0.10452806949615479,
+        14.100703239440918
+      ]
+    ],
+    "custom_properties": {}
+  },
+  "standard_ball": {
+    "object_id": "standard_ball",
+    "selected_mesh_object": "A_Object_standard_ball",
+    "standard_ball_ancestor": "A_Object_standard_ball",
+    "ancestor_chain": [
+      "A_Object_standard_ball",
+      "A_Option_standard_ball_ROOT",
+      "A_PROJECTILE_DRAG_BOUNCE_MOTION_ROOT"
+    ],
+    "mesh_object_origin_world_m": [
+      -3.200000047683716,
+      0.0,
+      2.799999952316284
+    ],
+    "center_world_m": [
+      -3.200000047683716,
+      -4.470348358154297e-08,
+      2.799999952316284
+    ],
+    "radius_m": 0.25999998122303064,
+    "diameter_m": 0.5199999624460613,
+    "mesh_world_bbox_min_m": [
+      -3.4600000381469727,
+      -0.2599999010562897,
+      2.5399999618530273
+    ],
+    "mesh_world_bbox_max_m": [
+      -2.940000057220459,
+      0.2599998116493225,
+      3.059999942779541
+    ],
+    "mesh_world_dimensions_m": [
+      0.5199999809265137,
+      0.5199997425079346,
+      0.5199999809265137
+    ],
+    "radial_distance_min_m": 0.25999968692784764,
+    "radial_distance_max_m": 0.2600001964688705,
+    "radial_distance_median_m": 0.25999998122303064,
+    "pendulum_ancestor_pivot": null,
+    "selection_policy": {
+      "requires_name_or_ancestor_containing": "standard_ball",
+      "minimum_near_sphere_axis_ratio": 0.75,
+      "ranking": "largest_world_axis_aligned_bounding_box_volume_then_name",
+      "eligible_candidates": [
+        {
+          "mesh_object": "A_Object_standard_ball",
+          "matching_name_or_ancestors": [
+            "A_Object_standard_ball",
+            "A_Option_standard_ball_ROOT"
+          ],
+          "world_dimensions_m": [
+            0.5199998617172241,
+            0.5199997425079346,
+            0.5199999809265137
+          ],
+          "min_to_max_axis_ratio": 0.9999995415027156,
+          "bounding_box_volume_m3": 0.14060788782503464,
+          "near_spherical": true
+        }
+      ]
+    }
+  },
+  "frame1_projection": {
+    "center_uv_px": [
+      293.92104414317504,
+      290.0412563445672
+    ],
+    "center_camera_depth_m": 13.808024605377376,
+    "mesh_vertex_bbox_xyxy_px": [
+      264.9723201399314,
+      261.8832644193573,
+      322.6590215740528,
+      318.164726070509
+    ],
+    "mesh_vertex_bbox_width_px": 57.6867014341214,
+    "mesh_vertex_bbox_height_px": 56.28146165115169,
+    "mesh_vertex_projected_radius_px": 28.492040771318273,
+    "all_mesh_vertices_in_front_of_camera": true,
+    "minimum_mesh_vertex_camera_depth_m": 13.548030305428377,
+    "maximum_mesh_vertex_camera_depth_m": 14.068019083160754
+  },
+  "projection_validation": {
+    "center_uv_from_blender": [
+      293.9210510253906,
+      290.04125118255615
+    ],
+    "center_uv_from_opencv_P": [
+      293.92104414317504,
+      290.0412563445672
+    ],
+    "center_max_abs_error_px": 6.882215586756502e-06,
+    "mesh_bbox_from_blender_xyxy_px": [
+      264.9723243713379,
+      261.8832492828369,
+      322.6590347290039,
+      318.1647062301636
+    ],
+    "mesh_bbox_from_opencv_P_xyxy_px": [
+      264.9723201399314,
+      261.8832644193573,
+      322.6590215740528,
+      318.164726070509
+    ],
+    "mesh_bbox_max_abs_error_px": 1.984034543056623e-05
+  },
+  "scene": {
+    "frame_current": 1,
+    "frame_start": 1,
+    "frame_end": 240,
+    "fps": 24.0,
+    "fps_base": 1.0,
+    "effective_fps": 24.0,
+    "gravity_world_mps2": [
+      0.0,
+      0.0,
+      -9.800000190734863
+    ],
+    "unit_system": "METRIC",
+    "unit_scale_length": 1.0,
+    "metric_assumption": "benchmark contract treats one Blender unit as one meter",
+    "custom_properties": {
+      "A_clear_impact_count": 15,
+      "A_contact_friction_used": false,
+      "A_continuous_hidden_parameters": "gravity_acceleration_g,linear_air_drag_beta",
+      "A_current_object_option": "standard_ball",
+      "A_design_note": "g and beta act continuously in every 2D flight; e acts at repeated impacts. Known initial state, no friction, no spin, no speed reset.",
+      "A_discrete_hidden_parameter": "normal_restitution_e",
+      "A_first_impact_frame": 8,
+      "A_hidden_gravity_mps2": 9.8,
+      "A_hidden_linear_drag_per_s": 0.14,
+      "A_hidden_parameter_count": 3,
+      "A_hidden_parameters": "gravity_acceleration_g,linear_air_drag_beta,normal_restitution_e",
+      "A_hidden_restitution": 0.88,
+      "A_impact_count": 22,
+      "A_impact_records_json": "[{\"time_s\": 0.29128540009848825, \"frame\": 8, \"x_m\": -2.843217480486547, \"pre_horizontal_velocity_mps\": 1.2000504472681166, \"pre_vertical_velocity_mps\": -8.077396920965185, \"post_vertical_velocity_mps\": 7.108109290449363, \"recovered_restitution\": 0.88}, {\"time_s\": 1.6959133969593947, \"frame\": 42, \"x_m\": -1.3129800904473103, \"pre_horizontal_velocity_mps\": 0.9858172126626235, \"pre_vertical_velocity_mps\": -6.657245078787518, \"post_vertical_velocity_mps\": 5.858375669333016, \"recovered_restitution\": 0.88}, {\"time_s\": 2.8599007008897526, \"frame\": 70, \"x_m\": -0.2541186310667134, \"pre_horizontal_velocity_mps\": 0.8375766083493399, \"pre_vertical_velocity_mps\": -5.548699909184492, \"post_vertical_velocity_mps\": 4.882855920082354, \"recovered_restitution\": 0.8800000000000001}, {\"time_s\": 3.834256813177084, \"frame\": 93, \"x_m\": 0.5087642938413965, \"pre_horizontal_velocity_mps\": 0.7307729988622045, \"pre_vertical_velocity_mps\": -4.6658339803335025, \"post_vertical_velocity_mps\": 4.105933902693482, \"recovered_restitution\": 0.88}, {\"time_s\": 4.6564332601784, \"frame\": 113, \"x_m\": 1.0762992013571233, \"pre_horizontal_velocity_mps\": 0.6513181118100028, \"pre_vertical_velocity_mps\": -3.951395277919417, \"post_vertical_velocity_mps\": 3.477227844569087, \"recovered_restitution\": 0.88}, {\"time_s\": 5.3546967303410025, \"frame\": 130, \"x_m\": 1.5095683390088304, \"pre_horizontal_velocity_mps\": 0.5906604325387638, \"pre_vertical_velocity_mps\": -3.3657541630244197, \"post_vertical_velocity_mps\": 2.9618636634614894, \"recovered_restitution\": 0.88}, {\"time_s\": 5.950866567430937, \"frame\": 144, \"x_m\": 1.8474075077373493, \"pre_horizontal_velocity_mps\": 0.5433629489167712, \"pre_vertical_velocity_mps\": -2.8806007400198723, \"post_vertical_velocity_mps\": 2.534928651217488, \"recovered_restitution\": 0.88}, {\"time_s\": 6.462101049602037, \"frame\": 156, \"x_m\": 2.1154854071577893, \"pre_horizontal_velocity_mps\": 0.5058320429979095, \"pre_vertical_velocity_mps\": -2.475169274059283, \"post_vertical_velocity_mps\": 2.178148961172169, \"recovered_restitution\": 0.88}, {\"time_s\": 6.902104134748152, \"frame\": 167, \"x_m\": 2.3313365530817447, \"pre_horizontal_velocity_mps\": 0.4756128825685558, \"pre_vertical_velocity_mps\": -2.1338812732597603, \"post_vertical_velocity_mps\": 1.8778155204685891, \"recovered_restitution\": 0.88}, {\"time_s\": 7.281965082748121, \"frame\": 176, \"x_m\": 2.5072833753407333, \"pre_horizontal_velocity_mps\": 0.4509803274522973, \"pre_vertical_velocity_mps\": -1.8448217699311158, \"post_vertical_velocity_mps\": 1.623443157539382, \"recovered_restitution\": 0.88}, {\"time_s\": 7.610757662191277, \"frame\": 184, \"x_m\": 2.652201414774427, \"pre_horizontal_velocity_mps\": 0.4306918019315802, \"pre_vertical_velocity_mps\": -1.5987241210035563, \"post_vertical_velocity_mps\": 1.4068772264831295, \"recovered_restitution\": 0.88}, {\"time_s\": 7.89597734109977, \"frame\": 191, \"x_m\": 2.772622930962675, \"pre_horizontal_velocity_mps\": 0.41383278966522546, \"pre_vertical_velocity_mps\": -1.3882756268200893, \"post_vertical_velocity_mps\": 1.2216825516016787, \"recovered_restitution\": 0.8800000000000001}, {\"time_s\": 8.143866528446889, \"frame\": 196, \"x_m\": 2.8734479454480675, \"pre_horizontal_velocity_mps\": 0.39971728763727055, \"pre_vertical_velocity_mps\": -1.207631484400082, \"post_vertical_velocity_mps\": 1.062715706272072, \"recovered_restitution\": 0.8799999999999999}, {\"time_s\": 8.359660734769438, \"frame\": 202, \"x_m\": 2.9584146847392194, \"pre_horizontal_velocity_mps\": 0.3878219441365093, \"pre_vertical_velocity_mps\": -1.052067515688904, \"post_vertical_velocity_mps\": 0.9258194138062357, \"recovered_restitution\": 0.88}, {\"time_s\": 8.547777761459118, \"frame\": 206, \"x_m\": 3.0304182768489203, \"pre_horizontal_velocity_mps\": 0.37774144124115117, \"pre_vertical_velocity_mps\": -0.9177274477526254, \"post_vertical_velocity_mps\": 0.8076001540223103, \"recovered_restitution\": 0.88}, {\"time_s\": 8.71196511691576, \"frame\": 210, \"x_m\": 3.0917312682569045, \"pre_horizontal_velocity_mps\": 0.3691576224440334, \"pre_vertical_velocity_mps\": -0.8014359294527793, \"post_vertical_velocity_mps\": 0.7052636179184458, \"recovered_restitution\": 0.88}, {\"time_s\": 8.855416311682527, \"frame\": 214, \"x_m\": 3.14415914915431, \"pre_horizontal_velocity_mps\": 0.3618177191183966, \"pre_vertical_velocity_mps\": -0.700558090795866, \"post_vertical_velocity_mps\": 0.6164911199003621, \"recovered_restitution\": 0.8800000000000001}, {\"time_s\": 8.98086363047373, \"frame\": 217, \"x_m\": 3.189151959508253, \"pre_horizontal_velocity_mps\": 0.35551872566884457, \"pre_vertical_velocity_mps\": -0.6128926042534317, \"post_vertical_velocity_mps\": 0.5393454917430199, \"recovered_restitution\": 0.88}, {\"time_s\": 9.090652887544229, \"frame\": 219, \"x_m\": 3.2278856556399838, \"pre_horizontal_velocity_mps\": 0.35009600821040227, \"pre_vertical_velocity_mps\": -0.5365892275478785, \"post_vertical_velocity_mps\": 0.4721985202421331, \"recovered_restitution\": 0.88}, {\"time_s\": 9.186804214663262, \"frame\": 221, \"x_m\": 3.2613222981184866, \"pre_horizontal_velocity_mps\": 0.3454148782634119, \"pre_vertical_velocity_mps\": -0.47008448552438153, \"post_vertical_velocity_mps\": 0.41367434726145574, \"recovered_restitution\": 0.88}, {\"time_s\": 9.27106189954912, \"frame\": 224, \"x_m\": 3.290255173396165, \"pre_horizontal_velocity_mps\": 0.3413642757245369, \"pre_vertical_velocity_mps\": -0.4120509646199366, \"post_vertical_velocity_mps\": 0.3626048488655442, \"recovered_restitution\": 0.88}, {\"time_s\": 9.344935551955002, \"frame\": 225, \"x_m\": 3.3153430423458414, \"pre_horizontal_velocity_mps\": 0.33785197407158224, \"pre_vertical_velocity_mps\": -0.36135694471209945, \"post_vertical_velocity_mps\": 0.3179941113466475, \"recovered_restitution\": 0.88}]",
+      "A_known_contact_center_z_m": 0.82,
+      "A_known_initial_center_z_m": 2.8,
+      "A_known_initial_horizontal_velocity_mps": 1.25,
+      "A_known_initial_vertical_velocity_mps": -5.5,
+      "A_known_initial_x_m": -3.2,
+      "A_motion_method": "closed_form_piecewise_linear_drag_projectile_bounce_keyframes_no_rigidbody",
+      "A_no_trajectory_visualization": true,
+      "A_object_options": "standard_ball,standard_cube,volleyball,cardboard_box",
+      "A_parameter_recovery_json": "{\"recovered_gravity_mps2\": 9.800000000000008, \"recovered_linear_drag_per_s\": 0.1400000000000001, \"recovered_restitution_mean\": 0.8800000000000001, \"gravity_observable\": \"vertical velocity evolution after drag is recovered\", \"linear_drag_observable\": \"exponential horizontal-speed decay\", \"restitution_observable\": \"post-impact / pre-impact normal-speed ratio\", \"gravity_error\": 7.105427357601002e-15, \"linear_drag_error\": 8.326672684688674e-17, \"restitution_error\": 1.1102230246251565e-16}",
+      "A_parameters_jointly_determine_long_horizon_sequence": true,
+      "A_repeated_flight_and_impact_stages": true,
+      "A_rigid_body_used": false,
+      "A_seed_frames_1_10_contain_impact": true,
+      "A_settled_time_s": 9.344935551955002,
+      "A_speed_reset_used": false,
+      "A_spin_used": false,
+      "A_trajectory_x_bounds_m": "[-3.2, 3.5139316966555256]",
+      "A_trajectory_z_bounds_m": "[0.82, 3.2340335508907856]",
+      "A_v2_distinction": "Extends V2-E g+e vertical bounce with a third parameter beta and a 2D projectile trajectory.",
+      "A_visual_payload_does_not_change_dynamics": true,
+      "benchmark_experiment": "v3_A_long_horizon_projectile_drag_repeated_bounce"
+    }
+  },
+  "registry_experiment": {
+    "id": "v3_A",
+    "level": 3,
+    "title": "Long-horizon projectile with linear drag and repeated bounce",
+    "canonical_blend": "v3/A/baselinev3_A_ball_projectile_drag_bounce.blend",
+    "hidden_parameters": [
+      {
+        "default": 9.8,
+        "name": "gravity_g",
+        "unit": "m/s^2",
+        "valid_range": [
+          8.0,
+          11.5
+        ]
+      },
+      {
+        "default": 0.14,
+        "name": "linear_drag_beta",
+        "unit": "1/s",
+        "valid_range": [
+          0.1,
+          0.24
+        ]
+      },
+      {
+        "default": 0.88,
+        "name": "restitution_e",
+        "unit": "1",
+        "valid_range": [
+          0.72,
+          0.92
+        ]
+      }
+    ],
+    "known_parameters": [
+      "initial_position",
+      "initial_velocity",
+      "ground_height",
+      "contact_friction=0"
+    ],
+    "equations": [
+      "v_x_dot=-beta*v_x",
+      "v_z_dot=-g-beta*v_z",
+      "v_z_plus=-e*v_z_minus"
+    ],
+    "identifiability": "Horizontal exponential decay identifies beta; vertical dynamics identify g; normal impact-speed ratios identify e.",
+    "observation_policy": "Include the first ground impact and at least 12 post-impact frames."
+  },
+  "conventions": {
+    "matrix_storage": "row_major JSON arrays; transforms multiply column homogeneous vectors",
+    "blender_camera_axes": "+X right, +Y up, camera looks along local -Z",
+    "opencv_camera_axes": "+X right, +Y down, +Z forward",
+    "opencv_axis_conversion_from_blender_camera": "diag(1,-1,-1)",
+    "projection_equation": "s*[u,v,1]^T = K * [R_world_to_camera_opencv | t_world_to_camera_opencv_m] * [X,Y,Z,1]^T",
+    "generated_video_note": "K and P use source_image pixel coordinates. Compose the actual source-to-generated crop/resize transform before lifting generated-video pixels."
+  }
+}

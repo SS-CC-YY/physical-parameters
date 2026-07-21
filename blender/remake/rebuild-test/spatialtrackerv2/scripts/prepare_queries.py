@@ -1,5 +1,18 @@
 #!/usr/bin/env python3
-"""Prepare ball and static-scene queries for one generated V1A video."""
+"""Prepare ball and static-scene queries for one generated benchmark video.
+
+Two calibration layouts are accepted:
+
+* the original V1A calibration, which contains metric Blender scene anchors;
+* the frozen all-experiment calibration sidecars, which contain camera/object
+  geometry but intentionally do not duplicate the large anchor point clouds.
+
+For the latter, textured points in generated frame 0 become *self-reference*
+background anchors.  SpatialTrackerV2 supplies their 3D locations; the
+postprocessor freezes the aligned frame-0 locations and robustly registers later
+frames to them.  This removes global camera drift without pretending that those
+points have Blender ground-truth coordinates.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +23,47 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+
+
+def normalize_calibration(calibration: dict) -> dict:
+    """Return the small common calibration schema used by this adapter.
+
+    The function is deliberately non-destructive so callers can still retain
+    experiment-specific fields from the exported sidecar.
+    """
+    normalized = dict(calibration)
+    if "image" not in normalized:
+        source_image = normalized.get("source_image")
+        if not isinstance(source_image, dict):
+            raise KeyError("Calibration has neither 'image' nor 'source_image'")
+        normalized["image"] = source_image
+
+    if "object" not in normalized:
+        ball = normalized.get("standard_ball")
+        if not isinstance(ball, dict):
+            raise KeyError("Calibration has neither 'object' nor 'standard_ball'")
+        normalized["object"] = {
+            "object_id": ball.get("object_id", "standard_ball"),
+            "initial_center_world_m": ball["center_world_m"],
+            "known_radius_m": ball["radius_m"],
+            "known_diameter_m": ball.get("diameter_m", 2.0 * float(ball["radius_m"])),
+        }
+
+    projection_validation = normalized.get("projection_validation")
+    has_common_projection = bool(
+        isinstance(projection_validation, dict)
+        and "initial_center_uv_from_opencv_P" in projection_validation
+        and "initial_mesh_vertex_bbox_xyxy_px" in projection_validation
+    )
+    if not has_common_projection:
+        projection = normalized.get("frame1_projection")
+        if not isinstance(projection, dict):
+            raise KeyError("Calibration has neither 'projection_validation' nor 'frame1_projection'")
+        normalized["projection_validation"] = {
+            "initial_center_uv_from_opencv_P": projection["center_uv_px"],
+            "initial_mesh_vertex_bbox_xyxy_px": projection["mesh_vertex_bbox_xyxy_px"],
+        }
+    return normalized
 
 
 def load_first_frame(video_path: Path) -> tuple[np.ndarray, float, int]:
@@ -105,6 +159,75 @@ def farthest_point_subset(points: np.ndarray, count: int) -> np.ndarray:
     return pool[np.asarray(chosen, dtype=np.int64)]
 
 
+def self_reference_anchor_points(
+    frame0_bgr: np.ndarray,
+    object_center_uv: np.ndarray,
+    object_radius_px: float,
+    count: int,
+) -> np.ndarray:
+    """Select textured, spatially distributed frame-0 background queries.
+
+    Only image evidence is used here.  The generous exclusion disk prevents
+    points on the ball (and its immediately adjacent halo) from leaking into
+    the background registration.  A robust Sim(3) in postprocessing is
+    responsible for rejecting any remaining moving apparatus points.
+    """
+    height, width = frame0_bgr.shape[:2]
+    gray = cv2.cvtColor(frame0_bgr, cv2.COLOR_BGR2GRAY)
+    mask = np.full((height, width), 255, dtype=np.uint8)
+    border = max(8, int(round(0.015 * min(height, width))))
+    mask[:border] = 0
+    mask[-border:] = 0
+    mask[:, :border] = 0
+    mask[:, -border:] = 0
+    cv2.circle(
+        mask,
+        tuple(np.rint(object_center_uv).astype(int)),
+        int(math.ceil(max(10.0, 3.0 * object_radius_px))),
+        0,
+        -1,
+    )
+
+    candidates: list[np.ndarray] = []
+    corners = cv2.goodFeaturesToTrack(
+        gray,
+        maxCorners=max(1000, count * 12),
+        qualityLevel=0.005,
+        minDistance=5,
+        mask=mask,
+        blockSize=7,
+        useHarrisDetector=False,
+    )
+    if corners is not None:
+        candidates.append(corners.reshape(-1, 2))
+
+    # ORB recovers textured locations in low-contrast synthetic backgrounds
+    # where Shi-Tomasi sometimes produces too few candidates.
+    orb = cv2.ORB_create(nfeatures=max(1500, count * 16), fastThreshold=5)
+    keypoints = orb.detect(gray, mask)
+    if keypoints:
+        candidates.append(np.asarray([point.pt for point in keypoints], dtype=np.float32))
+    if not candidates:
+        raise RuntimeError("No textured self-reference background anchors were detected")
+
+    points = np.concatenate(candidates, axis=0).astype(np.float32)
+    rounded = np.rint(points * 2.0).astype(np.int32)
+    _, unique_indices = np.unique(rounded, axis=0, return_index=True)
+    points = points[np.sort(unique_indices)]
+    in_bounds = (
+        (points[:, 0] >= border)
+        & (points[:, 0] < width - border)
+        & (points[:, 1] >= border)
+        & (points[:, 1] < height - border)
+    )
+    away = np.linalg.norm(points - np.asarray(object_center_uv), axis=1) > 3.0 * object_radius_px
+    points = points[in_bounds & away]
+    if len(points) < 12:
+        raise RuntimeError(f"Only {len(points)} textured self-reference background anchors were detected")
+    selected = farthest_point_subset(points, min(count, len(points)))
+    return points[selected].astype(np.float32)
+
+
 def ray_sphere_intersections(
     uv_source: np.ndarray,
     calibration: dict,
@@ -156,7 +279,8 @@ def prepare_queries(
     reference = cv2.imread(str(first_frame_path), cv2.IMREAD_COLOR)
     if reference is None:
         raise RuntimeError(f"Cannot read first frame: {first_frame_path}")
-    calibration = json.loads(calibration_path.read_text(encoding="utf-8"))
+    calibration_raw = json.loads(calibration_path.read_text(encoding="utf-8"))
+    calibration = normalize_calibration(calibration_raw)
     source_width = int(calibration["image"]["width_px"])
     source_height = int(calibration["image"]["height_px"])
     height, width = frame0.shape[:2]
@@ -176,35 +300,56 @@ def prepare_queries(
     object_video = transform_points(object_source, source_to_video)
     object_initial_xyz = ray_sphere_intersections(object_source, calibration)
 
-    anchor_relative = Path(calibration["reference_geometry_anchors"]["path"])
-    calibration_root = calibration_path.parent.parent
-    anchor_path = calibration_root / anchor_relative
-    anchor_data = np.load(anchor_path, allow_pickle=True)
-    anchor_uv_source = np.asarray(anchor_data["uv_px"], dtype=np.float32)
-    anchor_xyz = np.asarray(anchor_data["xyz_world_m"], dtype=np.float32)
-    anchor_uv_video = transform_points(anchor_uv_source, source_to_video)
-    in_bounds = (
-        (anchor_uv_video[:, 0] >= 8)
-        & (anchor_uv_video[:, 0] < width - 8)
-        & (anchor_uv_video[:, 1] >= 8)
-        & (anchor_uv_video[:, 1] < height - 8)
-    )
     object_center_video = transform_points(center_source[None], source_to_video)[0]
     object_radius_video = np.maximum(
         np.linalg.norm(transform_points(np.asarray([center_source, center_source + [radii_source[0], 0]], dtype=np.float32), source_to_video)[1] - object_center_video),
         4.0,
     )
-    away_from_ball = np.linalg.norm(anchor_uv_video - object_center_video, axis=1) > 2.5 * object_radius_video
-    valid_anchor_indices = np.flatnonzero(in_bounds & away_from_ball)
-    if len(valid_anchor_indices) < 12:
-        raise RuntimeError(f"Only {len(valid_anchor_indices)} usable static anchors for {calibration_path}")
-    subset_local = farthest_point_subset(anchor_uv_video[valid_anchor_indices], anchor_points)
-    selected = valid_anchor_indices[subset_local]
-    selected_anchor_video = anchor_uv_video[selected]
-    selected_anchor_xyz = anchor_xyz[selected]
+
+    anchor_spec = calibration.get("reference_geometry_anchors")
+    has_metric_anchors = bool(
+        isinstance(anchor_spec, dict)
+        and anchor_spec.get("enabled", True)
+        and anchor_spec.get("path")
+    )
+    anchor_path: Path | None = None
+    if has_metric_anchors:
+        anchor_reference_mode = "calibrated_world"
+        anchor_relative = Path(anchor_spec["path"])
+        calibration_root = calibration_path.parent.parent
+        anchor_path = calibration_root / anchor_relative
+        anchor_data = np.load(anchor_path, allow_pickle=True)
+        anchor_uv_source = np.asarray(anchor_data["uv_px"], dtype=np.float32)
+        anchor_xyz = np.asarray(anchor_data["xyz_world_m"], dtype=np.float32)
+        anchor_uv_video = transform_points(anchor_uv_source, source_to_video)
+        in_bounds = (
+            (anchor_uv_video[:, 0] >= 8)
+            & (anchor_uv_video[:, 0] < width - 8)
+            & (anchor_uv_video[:, 1] >= 8)
+            & (anchor_uv_video[:, 1] < height - 8)
+        )
+        away_from_ball = np.linalg.norm(anchor_uv_video - object_center_video, axis=1) > 2.5 * object_radius_video
+        valid_anchor_indices = np.flatnonzero(in_bounds & away_from_ball)
+        if len(valid_anchor_indices) < 12:
+            raise RuntimeError(f"Only {len(valid_anchor_indices)} usable static anchors for {calibration_path}")
+        subset_local = farthest_point_subset(anchor_uv_video[valid_anchor_indices], anchor_points)
+        selected = valid_anchor_indices[subset_local]
+        selected_anchor_video = anchor_uv_video[selected]
+        selected_anchor_xyz = anchor_xyz[selected]
+    else:
+        anchor_reference_mode = "self_frame0"
+        selected_anchor_video = self_reference_anchor_points(
+            frame0,
+            object_center_video,
+            float(object_radius_video),
+            anchor_points,
+        )
+        selected_anchor_xyz = np.full((len(selected_anchor_video), 3), np.nan, dtype=np.float32)
 
     query_xy = np.concatenate([object_video, selected_anchor_video], axis=0).astype(np.float32)
-    query_kind = np.asarray(["object"] * len(object_video) + ["anchor"] * len(selected), dtype="U8")
+    query_kind = np.asarray(
+        ["object"] * len(object_video) + ["anchor"] * len(selected_anchor_video), dtype="U8"
+    )
     anchor_xyz_full = np.full((len(query_xy), 3), np.nan, dtype=np.float32)
     anchor_xyz_full[len(object_video) :] = selected_anchor_xyz
     object_xyz_full = np.full((len(query_xy), 3), np.nan, dtype=np.float32)
@@ -219,6 +364,7 @@ def prepare_queries(
         object_xyz_world_initial_m=object_xyz_full,
         object_initial_center_world_m=np.asarray(calibration["object"]["initial_center_world_m"], dtype=np.float32),
         known_radius_m=np.asarray(calibration["object"]["known_radius_m"], dtype=np.float32),
+        anchor_reference_mode=np.asarray(anchor_reference_mode),
         source_to_video_homography=source_to_video.astype(np.float64),
         video_frame_size_hw=np.asarray([height, width], dtype=np.int32),
         detected_fps=np.asarray(detected_fps, dtype=np.float32),
@@ -231,7 +377,7 @@ def prepare_queries(
         cv2.circle(diagnostic, (int(round(x)), int(round(y))), 2, colour, -1, cv2.LINE_AA)
     cv2.putText(
         diagnostic,
-        f"object={len(object_video)} anchors={len(selected)} reg={registration_stats['method']}",
+        f"object={len(object_video)} anchors={len(selected_anchor_video)} mode={anchor_reference_mode}",
         (12, 28),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.65,
@@ -248,9 +394,10 @@ def prepare_queries(
         "detected_fps": detected_fps,
         "frame_count": frame_count,
         "object_queries": len(object_video),
-        "anchor_queries": len(selected),
+        "anchor_queries": len(selected_anchor_video),
         "registration": registration_stats,
-        "anchor_file": str(anchor_path),
+        "anchor_reference_mode": anchor_reference_mode,
+        "anchor_file": None if anchor_path is None else str(anchor_path),
     }
     output_path.with_suffix(".json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     return metadata

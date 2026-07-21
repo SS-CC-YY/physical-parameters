@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sequential, resumable SpatialTrackerV2 runner for the fixed 27-video test."""
+"""Sequential, resumable SpatialTrackerV2 runner for benchmark manifests."""
 
 from __future__ import annotations
 
@@ -91,8 +91,11 @@ def refresh_summary(manifest: list[dict], output_root: Path) -> None:
         rows.append(
             {
                 "job_id": job["job_id"],
+                "experiment_id": job.get("experiment_id"),
+                "parameter_tuple_id": job.get("parameter_tuple_id", job.get("factor_token")),
                 "scene": job["scene"],
                 "camera": job["camera"],
+                "seed": job.get("seed"),
                 "status": result.get("status"),
                 "quality_pass": result.get("quality_pass"),
                 "trajectory_valid_fraction": result.get("trajectory_valid_fraction"),
@@ -112,26 +115,60 @@ def refresh_summary(manifest: list[dict], output_root: Path) -> None:
     counts = {}
     for row in rows:
         counts[row["status"]] = counts.get(row["status"], 0) + 1
-    scene_rows = []
-    for scene in dict.fromkeys(job["scene"] for job in manifest):
-        group = [row for row in rows if row["scene"] == scene]
-        scene_rows.append(
+    condition_rows = []
+    condition_keys = dict.fromkeys(
+        (
+            job.get("experiment_id"),
+            job.get("parameter_tuple_id", job.get("factor_token")),
+            job["scene"],
+            job.get("seed"),
+        )
+        for job in manifest
+    )
+    for experiment_id, parameter_tuple_id, scene, seed in condition_keys:
+        group = [
+            row
+            for row in rows
+            if (
+                row["experiment_id"],
+                row["parameter_tuple_id"],
+                row["scene"],
+                row["seed"],
+            )
+            == (experiment_id, parameter_tuple_id, scene, seed)
+        ]
+        status_by_camera = {row["camera"]: row["status"] for row in group}
+        condition_rows.append(
             {
+                "experiment_id": experiment_id,
+                "parameter_tuple_id": parameter_tuple_id,
                 "scene": scene,
+                "seed": seed,
                 "succeeded_views": sum(row["status"] == "succeeded" for row in group),
                 "quality_pass_views": sum(row["quality_pass"] is True for row in group),
-                "CAM_Main_status": next(row["status"] for row in group if row["camera"] == "CAM_Main"),
-                "CAM_Side_status": next(row["status"] for row in group if row["camera"] == "CAM_Side"),
-                "CAM_Top_status": next(row["status"] for row in group if row["camera"] == "CAM_Top"),
+                "CAM_Main_status": status_by_camera.get("CAM_Main"),
+                "CAM_Side_status": status_by_camera.get("CAM_Side"),
+                "CAM_Top_status": status_by_camera.get("CAM_Top"),
             }
         )
-    with (output_root / "summary_by_scene.csv").open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(scene_rows[0]))
+    with (output_root / "summary_by_condition.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(condition_rows[0]))
         writer.writeheader()
-        writer.writerows(scene_rows)
+        writer.writerows(condition_rows)
+    # Keep the legacy filename for the original 27-job workflow.
+    with (output_root / "summary_by_scene.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(condition_rows[0]))
+        writer.writeheader()
+        writer.writerows(condition_rows)
     (output_root / "summary.json").write_text(
         json.dumps(
-            {"jobs": len(rows), "status_counts": counts, "scene_rows": scene_rows, "rows": rows},
+            {
+                "jobs": len(rows),
+                "status_counts": counts,
+                "condition_rows": condition_rows,
+                "scene_rows": condition_rows,
+                "rows": rows,
+            },
             indent=2,
         ),
         encoding="utf-8",

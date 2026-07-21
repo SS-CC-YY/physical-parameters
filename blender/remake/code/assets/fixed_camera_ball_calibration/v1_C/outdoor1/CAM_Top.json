@@ -1,0 +1,396 @@
+{
+  "schema_version": "1.0.0",
+  "exporter_version": "1.0.0",
+  "experiment_id": "v1_C",
+  "scene_id": "outdoor1",
+  "camera_name": "CAM_Top",
+  "frame": 1,
+  "source": {
+    "blend_path": "v1/C/generated_scenarios/baselinev1_C_outdoor1.blend",
+    "blend_filename": "baselinev1_C_outdoor1.blend",
+    "blend_resolution_origin": "generated_scenarios_scene",
+    "blend_sha256": "931ddcaf8da5205ead9ac597cd5d3560177404877a3317036169063e61f8d361",
+    "opened_read_only": true,
+    "save_operator_invoked": false
+  },
+  "source_image": {
+    "width_px": 1280,
+    "height_px": 720,
+    "origin": "top_left",
+    "u_axis": "right",
+    "v_axis": "down",
+    "pixel_coordinate_convention": "OpenCV continuous pixel coordinates",
+    "blender_stored_render_settings": {
+      "resolution_x_px": 1920,
+      "resolution_y_px": 1080,
+      "resolution_percentage": 100.0,
+      "effective_width_px": 1920.0,
+      "effective_height_px": 1080.0,
+      "pixel_aspect_x": 1.0,
+      "pixel_aspect_y": 1.0
+    }
+  },
+  "camera": {
+    "model": "pinhole",
+    "blender_type": "PERSP",
+    "lens_mm": 48.0,
+    "sensor_width_mm": 36.0,
+    "sensor_height_mm": 24.0,
+    "sensor_fit": "AUTO",
+    "shift_x": 0.0,
+    "shift_y": 0.0,
+    "clip_start_m": 0.10000000149011612,
+    "clip_end_m": 1000.0,
+    "K": [
+      [
+        1706.6666666666667,
+        0.0,
+        640.0
+      ],
+      [
+        0.0,
+        1706.6666666666667,
+        360.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "intrinsic_parameters": {
+      "fx_px": 1706.6666666666667,
+      "fy_px": 1706.6666666666667,
+      "cx_px": 640.0,
+      "cy_px": 360.0,
+      "resolved_sensor_fit": "HORIZONTAL",
+      "pixel_aspect_y_over_x": 1.0
+    },
+    "matrix_world_blender": [
+      [
+        0.9138115644454956,
+        0.09362813085317612,
+        -0.3951989710330963,
+        -6.0
+      ],
+      [
+        -0.40613847970962524,
+        0.2106633335351944,
+        -0.8891976475715637,
+        -13.5
+      ],
+      [
+        1.917809200335796e-08,
+        0.9730646014213562,
+        0.23053257167339325,
+        4.800000190734863
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "T_world_from_camera_blender": [
+      [
+        0.9138115644454956,
+        0.09362813085317612,
+        -0.3951989710330963,
+        -6.0
+      ],
+      [
+        -0.40613847970962524,
+        0.2106633335351944,
+        -0.8891976475715637,
+        -13.5
+      ],
+      [
+        1.917809200335796e-08,
+        0.9730646014213562,
+        0.23053257167339325,
+        4.800000190734863
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "T_camera_from_world_blender": [
+      [
+        0.9138115644454956,
+        -0.40613844990730286,
+        2.2351741790771484e-08,
+        -4.470348358154297e-08
+      ],
+      [
+        0.09362813085317612,
+        0.2106633484363556,
+        0.9730645418167114,
+        -1.2649863958358765
+      ],
+      [
+        -0.3951989710330963,
+        -0.8891977071762085,
+        0.23053258657455444,
+        -15.481919288635254
+      ],
+      [
+        -0.0,
+        0.0,
+        -0.0,
+        1.0
+      ]
+    ],
+    "R_world_to_camera_opencv": [
+      [
+        0.9138115644454956,
+        -0.40613847970962524,
+        1.917809200335796e-08
+      ],
+      [
+        -0.09362813085317612,
+        -0.2106633335351944,
+        -0.9730646014213562
+      ],
+      [
+        0.3951989710330963,
+        0.8891976475715637,
+        -0.23053257167339325
+      ]
+    ],
+    "t_world_to_camera_opencv_m": [
+      -5.688920055035851e-07,
+      1.264986276626587,
+      15.481918334960938
+    ],
+    "T_world_to_camera_opencv": [
+      [
+        0.9138115644454956,
+        -0.40613847970962524,
+        1.917809200335796e-08,
+        -5.688920055035851e-07
+      ],
+      [
+        -0.09362813085317612,
+        -0.2106633335351944,
+        -0.9730646014213562,
+        1.264986276626587
+      ],
+      [
+        0.3951989710330963,
+        0.8891976475715637,
+        -0.23053257167339325,
+        15.481918334960938
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "P_world_to_image_opencv": [
+      [
+        1812.4990781148276,
+        -124.05651092529297,
+        -147.54081314036134,
+        9908.426763465977
+      ],
+      [
+        -17.52038041750592,
+        -39.4209361076355,
+        -1743.6886455615363,
+        7732.4005126953125
+      ],
+      [
+        0.3951989710330963,
+        0.8891976475715637,
+        -0.23053257167339325,
+        15.481918334960938
+      ]
+    ],
+    "custom_properties": {}
+  },
+  "standard_ball": {
+    "object_id": "standard_ball",
+    "selected_mesh_object": "C_Object_standard_ball_body",
+    "standard_ball_ancestor": "C_Object_standard_ball_body",
+    "ancestor_chain": [
+      "C_Object_standard_ball_body",
+      "C_Option_standard_ball_ROOT",
+      "C_EXPERIMENT_CORE_ROOT"
+    ],
+    "mesh_object_origin_world_m": [
+      -4.349999904632568,
+      0.0,
+      0.4399999976158142
+    ],
+    "center_world_m": [
+      -4.349999904632568,
+      1.2665987014770508e-07,
+      0.4399999976158142
+    ],
+    "radius_m": 0.24000007700406642,
+    "diameter_m": 0.48000015400813284,
+    "mesh_world_bbox_min_m": [
+      -4.590000152587891,
+      -0.24000026285648346,
+      0.20000000298023224
+    ],
+    "mesh_world_bbox_max_m": [
+      -4.109999656677246,
+      0.24000051617622375,
+      0.6800000071525574
+    ],
+    "mesh_world_dimensions_m": [
+      0.48000049591064453,
+      0.4800007939338684,
+      0.48000001907348633
+    ],
+    "radial_distance_min_m": 0.23999978596567878,
+    "radial_distance_max_m": 0.24000056255232427,
+    "radial_distance_median_m": 0.24000007700406642,
+    "pendulum_ancestor_pivot": null,
+    "selection_policy": {
+      "requires_name_or_ancestor_containing": "standard_ball",
+      "minimum_near_sphere_axis_ratio": 0.75,
+      "ranking": "largest_world_axis_aligned_bounding_box_volume_then_name",
+      "eligible_candidates": [
+        {
+          "mesh_object": "C_Object_standard_ball_body",
+          "matching_name_or_ancestors": [
+            "C_Object_standard_ball_body",
+            "C_Option_standard_ball_ROOT"
+          ],
+          "world_dimensions_m": [
+            0.48000049591064453,
+            0.4800007939338684,
+            0.47999998927116394
+          ],
+          "min_to_max_axis_ratio": 0.9999983236221385,
+          "bounding_box_volume_m3": 0.11059229470843429,
+          "near_spherical": true
+        }
+      ]
+    }
+  },
+  "frame1_projection": {
+    "center_uv_px": [
+      143.40715241607293,
+      515.4235531967818
+    ],
+    "center_camera_depth_m": 13.661368630295078,
+    "mesh_vertex_bbox_xyxy_px": [
+      112.05187212043147,
+      485.3888256674397,
+      174.47012298781797,
+      545.5810884009991
+    ],
+    "mesh_vertex_bbox_width_px": 62.418250867386504,
+    "mesh_vertex_bbox_height_px": 60.1922627335594,
+    "mesh_vertex_projected_radius_px": 30.652628400236477,
+    "all_mesh_vertices_in_front_of_camera": true,
+    "minimum_mesh_vertex_camera_depth_m": 13.421507443223609,
+    "maximum_mesh_vertex_camera_depth_m": 13.901229446364376
+  },
+  "projection_validation": {
+    "center_uv_from_blender": [
+      143.4072494506836,
+      515.4235625267029
+    ],
+    "center_uv_from_opencv_P": [
+      143.40715241607293,
+      515.4235531967818
+    ],
+    "center_max_abs_error_px": 9.703461066123964e-05,
+    "mesh_bbox_from_blender_xyxy_px": [
+      112.05194473266602,
+      485.38882970809937,
+      174.47019577026367,
+      545.5810976028442
+    ],
+    "mesh_bbox_from_opencv_P_xyxy_px": [
+      112.05187212043147,
+      485.3888256674397,
+      174.47012298781797,
+      545.5810884009991
+    ],
+    "mesh_bbox_max_abs_error_px": 7.278244569874914e-05
+  },
+  "scene": {
+    "frame_current": 1,
+    "frame_start": 1,
+    "frame_end": 192,
+    "fps": 24.0,
+    "fps_base": 1.0,
+    "effective_fps": 24.0,
+    "gravity_world_mps2": [
+      0.0,
+      0.0,
+      -9.8100004196167
+    ],
+    "unit_system": "METRIC",
+    "unit_scale_length": 1.0,
+    "metric_assumption": "benchmark contract treats one Blender unit as one meter",
+    "custom_properties": {
+      "C_current_object_option": "standard_ball",
+      "C_fixed_gravity_m_per_s2": 9.81,
+      "C_friction_mu": 0.11,
+      "C_hidden_parameter": "kinetic_friction_coefficient_mu",
+      "C_initial_speed_m_per_s": 3.6,
+      "C_motion_method": "computed_per_frame_keyframes_no_rigidbody_kinetic_friction",
+      "C_object_options": "standard_ball,standard_cube,volleyball,cardboard_box",
+      "C_valid_mu_range": "0.06-1.00",
+      "benchmark_build_method": "scenario_master_append_frozen_experiment_core",
+      "benchmark_experiment": "C_horizontal_slide_hidden_kinetic_friction",
+      "benchmark_scenario": "outdoor1",
+      "camera_names": "CAM_Main,CAM_Side,CAM_Top",
+      "collection_names": "OUTDOOR1_CAMERAS,OUTDOOR1_CITY_BACKGROUND,OUTDOOR1_LIGHTS,OUTDOOR1_REALISTIC_SCENE",
+      "contains_experiment_logic_scripts": false,
+      "contains_experiment_objects": false,
+      "master_scene_created_from": "baselinev1_A_ball_freefall_gravity_realistic_cabinets_outdoor.blend",
+      "scenario_master_id": "outdoor1",
+      "scenario_master_source": "C:\\Users\\30561\\Desktop\\physical-parameter-benchmark\\blender\\remake\\v1\\A\\baselinev1_A_ball_freefall_gravity_realistic_cabinets_outdoor.blend",
+      "scenario_master_type": "outdoor",
+      "scenario_master_usage": "append_freeze_into_experiment_files"
+    }
+  },
+  "registry_experiment": {
+    "id": "v1_C",
+    "level": 1,
+    "title": "Short-horizon kinetic-friction slide",
+    "canonical_blend": "v1/C/baselinev1_C_ball_slide_friction.blend",
+    "hidden_parameters": [
+      {
+        "default": 0.11,
+        "name": "kinetic_friction_mu",
+        "unit": "1",
+        "valid_range": [
+          0.06,
+          1.0
+        ]
+      }
+    ],
+    "known_parameters": [
+      "gravity_g=9.81 m/s^2",
+      "initial_speed=3.60 m/s"
+    ],
+    "equations": [
+      "v(t)=max(v0-mu*g*t,0)",
+      "x(t)=x0+v0*t_eff-0.5*mu*g*t_eff^2"
+    ],
+    "identifiability": "mu=-a/g from the constant sliding deceleration.",
+    "observation_policy": "At least 24 moving frames before rest."
+  },
+  "conventions": {
+    "matrix_storage": "row_major JSON arrays; transforms multiply column homogeneous vectors",
+    "blender_camera_axes": "+X right, +Y up, camera looks along local -Z",
+    "opencv_camera_axes": "+X right, +Y down, +Z forward",
+    "opencv_axis_conversion_from_blender_camera": "diag(1,-1,-1)",
+    "projection_equation": "s*[u,v,1]^T = K * [R_world_to_camera_opencv | t_world_to_camera_opencv_m] * [X,Y,Z,1]^T",
+    "generated_video_note": "K and P use source_image pixel coordinates. Compose the actual source-to-generated crop/resize transform before lifting generated-video pixels."
+  }
+}

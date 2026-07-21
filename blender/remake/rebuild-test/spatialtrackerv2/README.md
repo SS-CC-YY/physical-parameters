@@ -1,4 +1,6 @@
-# SpatialTrackerV2：V1A 三视角轨迹重建可行性测试
+# SpatialTrackerV2：动态相机下的标准球 3D 轨迹适配器
+
+> 当前适配器已兼容冻结的全部 13 个实验校准 sidecar。下面保留的 V1A 27 条说明是最初的可行性测试；正式 Seedance 978 调度、生成有效性 gate、Side 主评估和 Main/Top 鲁棒性评估请以 `code/docs/seedance978_physics_evaluation.md` 为准。
 
 这个目录用于测试 **模型生成视频本身** 的三维物体轨迹，不与 6 条 Blender 真值视频比较。首轮固定为：
 

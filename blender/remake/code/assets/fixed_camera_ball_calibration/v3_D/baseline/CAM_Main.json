@@ -1,0 +1,467 @@
+{
+  "schema_version": "1.0.0",
+  "exporter_version": "1.0.0",
+  "experiment_id": "v3_D",
+  "scene_id": "baseline",
+  "camera_name": "CAM_Main",
+  "frame": 1,
+  "source": {
+    "blend_path": "v3/D/baselinev3_D_ball_em_damping_pendulum.blend",
+    "blend_filename": "baselinev3_D_ball_em_damping_pendulum.blend",
+    "blend_resolution_origin": "registry_canonical_blend",
+    "blend_sha256": "0f6b12a8c4129f563b66f41fc8710749b4a4a03f68dbeefea28bd92d39d04306",
+    "opened_read_only": true,
+    "save_operator_invoked": false
+  },
+  "source_image": {
+    "width_px": 1280,
+    "height_px": 720,
+    "origin": "top_left",
+    "u_axis": "right",
+    "v_axis": "down",
+    "pixel_coordinate_convention": "OpenCV continuous pixel coordinates",
+    "blender_stored_render_settings": {
+      "resolution_x_px": 1920,
+      "resolution_y_px": 1080,
+      "resolution_percentage": 100.0,
+      "effective_width_px": 1920.0,
+      "effective_height_px": 1080.0,
+      "pixel_aspect_x": 1.0,
+      "pixel_aspect_y": 1.0
+    }
+  },
+  "camera": {
+    "model": "pinhole",
+    "blender_type": "PERSP",
+    "lens_mm": 36.0,
+    "sensor_width_mm": 36.0,
+    "sensor_height_mm": 24.0,
+    "sensor_fit": "AUTO",
+    "shift_x": 0.0,
+    "shift_y": 0.0,
+    "clip_start_m": 0.10000000149011612,
+    "clip_end_m": 200.0,
+    "K": [
+      [
+        1280.0,
+        0.0,
+        640.0
+      ],
+      [
+        0.0,
+        1280.0,
+        360.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "intrinsic_parameters": {
+      "fx_px": 1280.0,
+      "fy_px": 1280.0,
+      "cx_px": 640.0,
+      "cy_px": 360.0,
+      "resolved_sensor_fit": "HORIZONTAL",
+      "pixel_aspect_y_over_x": 1.0
+    },
+    "matrix_world_blender": [
+      [
+        0.9108530879020691,
+        -0.07088752835988998,
+        0.4065975844860077,
+        5.800000190734863
+      ],
+      [
+        0.41273069381713867,
+        0.15644130110740662,
+        -0.8973179459571838,
+        -12.800000190734863
+      ],
+      [
+        0.0,
+        0.9851401448249817,
+        0.17175249755382538,
+        4.800000190734863
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "T_world_from_camera_blender": [
+      [
+        0.9108530879020691,
+        -0.07088752835988998,
+        0.4065975844860077,
+        5.800000190734863
+      ],
+      [
+        0.41273069381713867,
+        0.15644130110740662,
+        -0.8973179459571838,
+        -12.800000190734863
+      ],
+      [
+        0.0,
+        0.9851401448249817,
+        0.17175249755382538,
+        4.800000190734863
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "T_camera_from_world_blender": [
+      [
+        0.9108531475067139,
+        0.41273075342178345,
+        0.0,
+        4.831625119550154e-06
+      ],
+      [
+        -0.07088753581047058,
+        0.15644130110740662,
+        0.9851401448249817,
+        -2.315077066421509
+      ],
+      [
+        0.4065976142883301,
+        -0.8973180055618286,
+        0.17175251245498657,
+        -14.668349266052246
+      ],
+      [
+        -0.0,
+        0.0,
+        -0.0,
+        1.0
+      ]
+    ],
+    "R_world_to_camera_opencv": [
+      [
+        0.9108530879020691,
+        0.41273069381713867,
+        0.0
+      ],
+      [
+        0.07088752835988998,
+        -0.15644130110740662,
+        -0.9851401448249817
+      ],
+      [
+        -0.4065975844860077,
+        0.8973179459571838,
+        -0.17175249755382538
+      ]
+    ],
+    "t_world_to_camera_opencv_m": [
+      4.76837158203125e-06,
+      2.3150765895843506,
+      14.66834831237793
+    ],
+    "T_world_to_camera_opencv": [
+      [
+        0.9108530879020691,
+        0.41273069381713867,
+        0.0,
+        4.76837158203125e-06
+      ],
+      [
+        0.07088752835988998,
+        -0.15644130110740662,
+        -0.9851401448249817,
+        2.3150765895843506
+      ],
+      [
+        -0.4065975844860077,
+        0.8973179459571838,
+        -0.17175249755382538,
+        14.66834831237793
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "P_world_to_image_opencv": [
+      [
+        905.6694984436035,
+        1102.5787734985352,
+        -109.92159843444824,
+        9387.7490234375
+      ],
+      [
+        -55.63909411430359,
+        122.78959512710571,
+        -1322.8102844953537,
+        8243.903427124023
+      ],
+      [
+        -0.4065975844860077,
+        0.8973179459571838,
+        -0.17175249755382538,
+        14.66834831237793
+      ]
+    ],
+    "custom_properties": {}
+  },
+  "standard_ball": {
+    "object_id": "standard_ball",
+    "selected_mesh_object": "D_Magnetic_Object_standard_ball",
+    "standard_ball_ancestor": "D_Magnetic_Object_standard_ball",
+    "ancestor_chain": [
+      "D_Magnetic_Object_standard_ball",
+      "D_Magnetic_Option_standard_ball_ROOT",
+      "D3_PENDULUM_MOTION_ROOT",
+      "D3_MAGNETIC_PENDULUM_APPARATUS_ROOT"
+    ],
+    "mesh_object_origin_world_m": [
+      1.1058553457260132,
+      0.0,
+      3.27567195892334
+    ],
+    "center_world_m": [
+      1.1058553457260132,
+      -3.725290298461914e-08,
+      3.27567195892334
+    ],
+    "radius_m": 0.2399999547679866,
+    "diameter_m": 0.4799999095359732,
+    "mesh_world_bbox_min_m": [
+      0.8659124970436096,
+      -0.2399999052286148,
+      3.035729169845581
+    ],
+    "mesh_world_bbox_max_m": [
+      1.3457982540130615,
+      0.23999983072280884,
+      3.5156147480010986
+    ],
+    "mesh_world_dimensions_m": [
+      0.4798857569694519,
+      0.47999972105026245,
+      0.4798855781555176
+    ],
+    "radial_distance_min_m": 0.2399997263027657,
+    "radial_distance_max_m": 0.2400001240552393,
+    "radial_distance_median_m": 0.2399999547679866,
+    "pendulum_ancestor_pivot": {
+      "ancestor_object": "D3_PENDULUM_MOTION_ROOT",
+      "pivot_world_m": [
+        0.0,
+        0.0,
+        4.050000190734863
+      ],
+      "matrix_world_blender": [
+        [
+          0.5735764503479004,
+          0.0,
+          -0.8191520571708679,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.8191520571708679,
+          0.0,
+          0.5735764503479004,
+          4.050000190734863
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "custom_properties": {
+        "D3_known_pendulum_length_m": 1.35,
+        "D3_known_standardized_inertia_kg_m2": 1.8225000000000002,
+        "D3_known_standardized_payload_mass_kg": 1.0,
+        "D3_visual_payload_does_not_change_dynamics": true
+      }
+    },
+    "selection_policy": {
+      "requires_name_or_ancestor_containing": "standard_ball",
+      "minimum_near_sphere_axis_ratio": 0.75,
+      "ranking": "largest_world_axis_aligned_bounding_box_volume_then_name",
+      "eligible_candidates": [
+        {
+          "mesh_object": "D_Magnetic_Object_standard_ball",
+          "matching_name_or_ancestors": [
+            "D_Magnetic_Object_standard_ball",
+            "D_Magnetic_Option_standard_ball_ROOT"
+          ],
+          "world_dimensions_m": [
+            0.4799998104572296,
+            0.47999972105026245,
+            0.47999998927116394
+          ],
+          "min_to_max_axis_ratio": 0.9999994412064427,
+          "bounding_box_volume_m3": 0.11059188958743013,
+          "near_spherical": true
+        }
+      ]
+    }
+  },
+  "frame1_projection": {
+    "center_uv_px": [
+      734.4130043844032,
+      281.87261191759353
+    ],
+    "center_camera_depth_m": 13.65610532647498,
+    "mesh_vertex_bbox_xyxy_px": [
+      711.8881782372911,
+      259.3265548074175,
+      756.9906923910179,
+      304.36488182386347
+    ],
+    "mesh_vertex_bbox_width_px": 45.102514153726815,
+    "mesh_vertex_bbox_height_px": 45.038327016445976,
+    "mesh_vertex_projected_radius_px": 22.535210292543198,
+    "all_mesh_vertices_in_front_of_camera": true,
+    "minimum_mesh_vertex_camera_depth_m": 13.416301873261876,
+    "maximum_mesh_vertex_camera_depth_m": 13.895908793059164
+  },
+  "projection_validation": {
+    "center_uv_from_blender": [
+      734.4129943847656,
+      281.872615814209
+    ],
+    "center_uv_from_opencv_P": [
+      734.4130043844032,
+      281.87261191759353
+    ],
+    "center_max_abs_error_px": 9.99963754111377e-06,
+    "mesh_bbox_from_blender_xyxy_px": [
+      711.8881988525391,
+      259.3265676498413,
+      756.9906616210938,
+      304.3648910522461
+    ],
+    "mesh_bbox_from_opencv_P_xyxy_px": [
+      711.8881782372911,
+      259.3265548074175,
+      756.9906923910179,
+      304.36488182386347
+    ],
+    "mesh_bbox_max_abs_error_px": 3.0769924137530325e-05
+  },
+  "scene": {
+    "frame_current": 1,
+    "frame_start": 1,
+    "frame_end": 240,
+    "fps": 24.0,
+    "fps_base": 1.0,
+    "effective_fps": 24.0,
+    "gravity_world_mps2": [
+      0.0,
+      0.0,
+      -9.800000190734863
+    ],
+    "unit_system": "METRIC",
+    "unit_scale_length": 1.0,
+    "metric_assumption": "benchmark contract treats one Blender unit as one meter",
+    "custom_properties": {
+      "D3_angle_trajectory_json": "[-0.959931089, -0.954778802, -0.939385088, -0.913901701, -0.878559409, -0.833673386, -0.779650024, -0.716994246, -0.646316184, -0.56833592, -0.483884847, -0.393902116, -0.299424565, -0.201568611, -0.101503481, -0.000417817, 0.10051342, 0.200150315, 0.297388036, 0.391137864, 0.480307043, 0.563800135, 0.640551393, 0.709576625, 0.770021798, 0.821191156, 0.862551399, 0.893718946, 0.914440243, 0.92457276, 0.924070926, 0.912978709, 0.89142927, 0.859651558, 0.817983112, 0.766887066, 0.706968933, 0.638985757, 0.563838636, 0.482543007, 0.396180915, 0.305851373, 0.212638844, 0.117609718, 0.021828737, -0.07362384, -0.167650075, -0.259150444, -0.347051123, -0.43033283, -0.508054737, -0.579371026, -0.643540343, -0.69992941, -0.748012299, -0.78736677, -0.817668954, -0.838687491, -0.85027804, -0.852378881, -0.845008086, -0.828262506, -0.802318603, -0.767434905, -0.723955672, -0.672315124, -0.613041445, -0.546759571, -0.474191712, -0.39615443, -0.313551091, -0.227358592, -0.138607759, -0.048358209, 0.042328882, 0.13241365, 0.220888669, 0.306775065, 0.389108908, 0.466930733, 0.539290745, 0.605273229, 0.664032456, 0.714827021, 0.757042467, 0.790199301, 0.813949516, 0.828067266, 0.83243879, 0.827055018, 0.812008617, 0.787495875, 0.753822752, 0.711413106, 0.660815581, 0.602704242, 0.537867983, 0.467186442, 0.391595851, 0.312054438, 0.229518898, 0.144938346, 0.059262447, -0.026547023, -0.111512151, -0.194647327, -0.274977943, -0.351563486, -0.423519432, -0.490034688, -0.550383615, -0.603932982, -0.650144832, -0.688576298, -0.718877428, -0.74078793, -0.754133653, -0.758823414, -0.754846664, -0.742272249, -0.721248347, -0.692003486, -0.654848334, -0.610177814, -0.558472921, -0.500301515, -0.43631727, -0.367255893, -0.293927749, -0.217206152, -0.13801103, -0.057288673, 0.024010064, 0.104948953, 0.184618236, 0.262136377, 0.336643676, 0.407294499, 0.473256428, 0.533721267, 0.587926605, 0.63518161, 0.674889728, 0.706563584, 0.72983131, 0.744436392, 0.750234256, 0.747188491, 0.735368578, 0.71494988, 0.686215437, 0.64955802, 0.605479936, 0.554587567, 0.497578332, 0.435219935, 0.368325151, 0.29772828, 0.22426964, 0.148791095, 0.072140244, -0.004823136, -0.081225194, -0.156184259, -0.228824664, -0.298294777, -0.363785364, -0.42454549, -0.479894648, -0.529230942, -0.572035793, -0.607875906, -0.636403246, -0.657353788, -0.670545657, -0.675877205, -0.673325415, -0.662944864, -0.644867359, -0.619302166, -0.586536616, -0.546936764, -0.500947597, -0.449092271, -0.391969707, -0.330249942, -0.26466658, -0.196005942, -0.125092874, -0.052773947, 0.020100115, 0.092689997, 0.164178296, 0.23377325, 0.30070665, 0.364229726, 0.423612088, 0.478147453, 0.527166701, 0.570055549, 0.606272619, 0.635364207, 0.656974005, 0.670847911, 0.676835361, 0.674888869, 0.665063131, 0.64751432, 0.622499347, 0.590374124, 0.551589312, 0.50668207, 0.456263026, 0.400999264, 0.341595898, 0.278780012, 0.21329033, 0.145873771, 0.077287094, 0.008299691, -0.060306584, -0.127742948, -0.193224519, -0.255984555, -0.315289549, -0.370453092, -0.42084722, -0.465910848, -0.505155397, -0.538168077, -0.564613329, -0.584233014, -0.596845829, -0.602346375, -0.60070421, -0.591963085, -0.576240445, -0.553727177, -0.524687437, -0.489458291]",
+      "D3_camera_system_reference": "standard_three_camera_benchmark_system",
+      "D3_current_object_option": "standard_ball",
+      "D3_design_note": "State-dependent magnetic force uses a known profile; only constant scalar strength kappa is hidden.",
+      "D3_hidden_gravity_mps2": 9.8,
+      "D3_hidden_linear_damping_beta": 0.045,
+      "D3_hidden_magnetic_kappa": 0.55,
+      "D3_hidden_parameter_count": 3,
+      "D3_hidden_parameter_switches": 0,
+      "D3_hidden_parameters": "gravity_g,linear_damping_beta,magnetic_strength_kappa",
+      "D3_known_initial_angle_deg": -55.0,
+      "D3_known_initial_angular_velocity_rad_s": 0.0,
+      "D3_known_magnet_center_angle_deg": 38.0,
+      "D3_known_magnet_width_deg": 18.0,
+      "D3_known_magnetic_force_profile": "-u*exp(-0.5*u^2), u=(theta-theta_m)/sigma",
+      "D3_known_pendulum_length_m": 1.35,
+      "D3_motion_method": "rk4_keyframes_constant_g_linear_damping_and_known_profile_single_magnet_no_rigidbody",
+      "D3_no_rigidbody_simulation": true,
+      "D3_no_speed_reset": true,
+      "D3_no_trajectory_visualization": true,
+      "D3_object_options": "standard_ball,standard_cube,volleyball,cardboard_box",
+      "D3_parameter_active_frame_range": [
+        1,
+        240
+      ],
+      "D3_parameter_recovery_validation_json": "{\"expected\": {\"gravity_g_mps2\": 9.8, \"linear_damping_beta_s_inverse\": 0.045, \"magnetic_kappa_rad_s2\": 0.55}, \"noiseless_reconstruction\": {\"gravity_g_mps2\": 9.790717565488542, \"linear_damping_beta_s_inverse\": 0.04495012398059342, \"magnetic_kappa_rad_s2\": 0.5494494920987014, \"matrix_rank\": 3, \"normalized_condition_number\": 7.872705045514818, \"integral_fit_rmse_rad\": 3.0368456229948166e-05, \"singular_values\": [173.2053209972781, 7.573127406551441, 1.003741823039582], \"angular_noise_std_rad\": 0.0, \"method\": \"theta_only_double_integral_linear_regression\", \"relative_errors\": {\"gravity_g_mps2\": 0.0009471871950467963, \"linear_damping_beta_s_inverse\": 0.0011083559868128405, \"magnetic_kappa_rad_s2\": 0.0010009234569065904}}, \"noisy_reconstruction\": {\"gravity_g_mps2\": 9.787777618493191, \"linear_damping_beta_s_inverse\": 0.04416634364053078, \"magnetic_kappa_rad_s2\": 0.548775740611, \"matrix_rank\": 3, \"normalized_condition_number\": 7.8438854709489725, \"integral_fit_rmse_rad\": 0.0008941508462663152, \"singular_values\": [173.2098759893496, 7.5804934054380455, 1.003987323437624], \"angular_noise_std_rad\": 0.0006981317007977319, \"method\": \"theta_only_double_integral_linear_regression\", \"relative_errors\": {\"gravity_g_mps2\": 0.0012471817864091483, \"linear_damping_beta_s_inverse\": 0.018525696877093788, \"magnetic_kappa_rad_s2\": 0.00222592616181829}}, \"all_parameters_constant\": true, \"hidden_parameter_switches\": 0, \"trajectory_observable\": \"pendulum_angle_theta_per_frame\"}",
+      "D3_parameters_act_simultaneously": true,
+      "D3_parameters_constant_all_frames": true,
+      "benchmark_experiment": "v3_D_constant_gravity_damping_and_asymmetric_magnetic_strength",
+      "benchmark_narrative": "three_constant_hidden_physical_parameters_act_simultaneously_and_are_reconstructed_from_one_long_angle_trajectory"
+    }
+  },
+  "registry_experiment": {
+    "id": "v3_D",
+    "level": 3,
+    "title": "Reconstructible magnetic damped pendulum",
+    "canonical_blend": "v3/D/baselinev3_D_ball_em_damping_pendulum.blend",
+    "hidden_parameters": [
+      {
+        "default": 9.8,
+        "name": "gravity_g",
+        "unit": "m/s^2",
+        "valid_range": [
+          8.0,
+          11.5
+        ]
+      },
+      {
+        "default": 0.045,
+        "name": "linear_damping_beta",
+        "unit": "1/s",
+        "valid_range": [
+          0.02,
+          0.12
+        ]
+      },
+      {
+        "default": 0.55,
+        "name": "magnetic_kappa",
+        "unit": "rad/s^2",
+        "valid_range": [
+          0.15,
+          0.9
+        ]
+      }
+    ],
+    "known_parameters": [
+      "pendulum_length=1.35 m",
+      "initial_angle=-55 deg",
+      "magnet_center_angle=38 deg",
+      "magnet_width=18 deg"
+    ],
+    "equations": [
+      "theta_ddot=-(g/L)*sin(theta)-2*beta*theta_dot+kappa*h(theta)",
+      "h(theta)=-u*exp(-0.5*u^2)",
+      "u=(theta-theta_m)/sigma"
+    ],
+    "identifiability": "Trajectory regression uses three non-collinear basis functions: -sin(theta)/L, -2*theta_dot, and h(theta).",
+    "observation_policy": "Include at least two magnet-zone passages and two same-direction extrema; verify regression rank=3 and normalized condition number<25."
+  },
+  "conventions": {
+    "matrix_storage": "row_major JSON arrays; transforms multiply column homogeneous vectors",
+    "blender_camera_axes": "+X right, +Y up, camera looks along local -Z",
+    "opencv_camera_axes": "+X right, +Y down, +Z forward",
+    "opencv_axis_conversion_from_blender_camera": "diag(1,-1,-1)",
+    "projection_equation": "s*[u,v,1]^T = K * [R_world_to_camera_opencv | t_world_to_camera_opencv_m] * [X,Y,Z,1]^T",
+    "generated_video_note": "K and P use source_image pixel coordinates. Compose the actual source-to-generated crop/resize transform before lifting generated-video pixels."
+  }
+}
