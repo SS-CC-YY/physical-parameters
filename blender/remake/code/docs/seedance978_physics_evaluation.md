@@ -15,6 +15,7 @@
 code/assets/seedance978_evaluation/
   manifest.jsonl          # 978 行
   camera_motion.jsonl     # 978 行
+  experiment_registry.json # 13 个实验、69 个冻结参数组合和评分范围
 ```
 
 ## 1. 每条视频的严格顺序

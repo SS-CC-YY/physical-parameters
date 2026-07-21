@@ -1,0 +1,192 @@
+{
+  "schema_version": "1.0.0",
+  "release_id": "ppb-remake-1.0.0-seedance978-evaluation",
+  "frozen_experiment_count": 13,
+  "canonical_parameter_anchor_count": 69,
+  "experiments": [
+    {
+      "id": "v1_A",
+      "hidden_parameters": [
+        {"name": "gravity_g", "unit": "m/s^2", "valid_range": [2.0, 14.7]}
+      ],
+      "anchor_tuples": [
+        {"id": "g2p00", "gravity_g": 2.0},
+        {"id": "g4p90", "gravity_g": 4.9},
+        {"id": "g9p81", "gravity_g": 9.81},
+        {"id": "g14p70", "gravity_g": 14.7}
+      ]
+    },
+    {
+      "id": "v1_B",
+      "hidden_parameters": [
+        {"name": "restitution_e", "unit": "1", "valid_range": [0.0, 1.0]}
+      ],
+      "anchor_tuples": [
+        {"id": "e0p35", "restitution_e": 0.35},
+        {"id": "e0p55", "restitution_e": 0.55},
+        {"id": "e0p75", "restitution_e": 0.75},
+        {"id": "e0p90", "restitution_e": 0.9}
+      ]
+    },
+    {
+      "id": "v1_C",
+      "hidden_parameters": [
+        {"name": "kinetic_friction_mu", "unit": "1", "valid_range": [0.06, 1.0]}
+      ],
+      "anchor_tuples": [
+        {"id": "mu0p06", "kinetic_friction_mu": 0.06},
+        {"id": "mu0p10", "kinetic_friction_mu": 0.1},
+        {"id": "mu0p18", "kinetic_friction_mu": 0.18},
+        {"id": "mu0p30", "kinetic_friction_mu": 0.3}
+      ]
+    },
+    {
+      "id": "v1_D",
+      "hidden_parameters": [
+        {"name": "amplitude_decay_beta", "unit": "1/s", "valid_range": [0.0, 1.0]}
+      ],
+      "anchor_tuples": [
+        {"id": "beta0p04", "amplitude_decay_beta": 0.04},
+        {"id": "beta0p10", "amplitude_decay_beta": 0.1},
+        {"id": "beta0p18", "amplitude_decay_beta": 0.18},
+        {"id": "beta0p30", "amplitude_decay_beta": 0.3}
+      ]
+    },
+    {
+      "id": "v2_A",
+      "hidden_parameters": [
+        {"name": "gravity_g", "unit": "m/s^2", "valid_range": [2.0, 14.7]}
+      ],
+      "anchor_tuples": [
+        {"id": "g4p90", "gravity_g": 4.9},
+        {"id": "g7p50", "gravity_g": 7.5},
+        {"id": "g9p81", "gravity_g": 9.81},
+        {"id": "g14p70", "gravity_g": 14.7}
+      ]
+    },
+    {
+      "id": "v2_B",
+      "hidden_parameters": [
+        {"name": "restitution_e", "unit": "1", "valid_range": [0.0, 1.0]}
+      ],
+      "anchor_tuples": [
+        {"id": "e0p35", "restitution_e": 0.35},
+        {"id": "e0p55", "restitution_e": 0.55},
+        {"id": "e0p72", "restitution_e": 0.72},
+        {"id": "e0p88", "restitution_e": 0.88}
+      ]
+    },
+    {
+      "id": "v2_C",
+      "hidden_parameters": [
+        {"name": "kinetic_friction_mu_A", "unit": "1", "valid_range": [0.05, 0.1]},
+        {"name": "kinetic_friction_mu_B", "unit": "1", "valid_range": [0.1, 0.18]}
+      ],
+      "anchor_tuples": [
+        {"id": "muA0p05_muB0p18", "kinetic_friction_mu_A": 0.05, "kinetic_friction_mu_B": 0.18},
+        {"id": "muA0p06_muB0p10", "kinetic_friction_mu_A": 0.06, "kinetic_friction_mu_B": 0.1},
+        {"id": "muA0p08_muB0p14", "kinetic_friction_mu_A": 0.08, "kinetic_friction_mu_B": 0.14},
+        {"id": "muA0p08_muB0p18", "kinetic_friction_mu_A": 0.08, "kinetic_friction_mu_B": 0.18}
+      ]
+    },
+    {
+      "id": "v2_D",
+      "hidden_parameters": [
+        {"name": "gravity_g", "unit": "m/s^2", "valid_range": [6.5, 11.5]},
+        {"name": "linear_damping_beta", "unit": "1/s", "valid_range": [0.04, 0.22]}
+      ],
+      "anchor_tuples": [
+        {"id": "g9p80_beta0p12", "gravity_g": 9.8, "linear_damping_beta": 0.12},
+        {"id": "g6p50_beta0p12", "gravity_g": 6.5, "linear_damping_beta": 0.12},
+        {"id": "g11p50_beta0p12", "gravity_g": 11.5, "linear_damping_beta": 0.12},
+        {"id": "g9p80_beta0p04", "gravity_g": 9.8, "linear_damping_beta": 0.04},
+        {"id": "g9p80_beta0p22", "gravity_g": 9.8, "linear_damping_beta": 0.22},
+        {"id": "g6p50_beta0p22", "gravity_g": 6.5, "linear_damping_beta": 0.22},
+        {"id": "g11p50_beta0p04", "gravity_g": 11.5, "linear_damping_beta": 0.04}
+      ]
+    },
+    {
+      "id": "v2_E",
+      "hidden_parameters": [
+        {"name": "gravity_g", "unit": "m/s^2", "valid_range": [8.0, 11.5]},
+        {"name": "restitution_e", "unit": "1", "valid_range": [0.5, 0.8]}
+      ],
+      "anchor_tuples": [
+        {"id": "g8p00_e0p76", "gravity_g": 8.0, "restitution_e": 0.76},
+        {"id": "g9p80_e0p76", "gravity_g": 9.8, "restitution_e": 0.76},
+        {"id": "g11p20_e0p76", "gravity_g": 11.2, "restitution_e": 0.76},
+        {"id": "g9p80_e0p58", "gravity_g": 9.8, "restitution_e": 0.58},
+        {"id": "g9p80_e0p68", "gravity_g": 9.8, "restitution_e": 0.68},
+        {"id": "g9p80_e0p80", "gravity_g": 9.8, "restitution_e": 0.8}
+      ]
+    },
+    {
+      "id": "v3_A",
+      "hidden_parameters": [
+        {"name": "gravity_g", "unit": "m/s^2", "valid_range": [8.0, 11.5]},
+        {"name": "linear_drag_beta", "unit": "1/s", "valid_range": [0.1, 0.24]},
+        {"name": "restitution_e", "unit": "1", "valid_range": [0.72, 0.92]}
+      ],
+      "anchor_tuples": [
+        {"id": "default", "gravity_g": 9.8, "linear_drag_beta": 0.14, "restitution_e": 0.88},
+        {"id": "g_low", "gravity_g": 8.0, "linear_drag_beta": 0.14, "restitution_e": 0.88},
+        {"id": "g_high", "gravity_g": 11.2, "linear_drag_beta": 0.14, "restitution_e": 0.88},
+        {"id": "drag_low", "gravity_g": 9.8, "linear_drag_beta": 0.1, "restitution_e": 0.88},
+        {"id": "drag_high", "gravity_g": 9.8, "linear_drag_beta": 0.24, "restitution_e": 0.88},
+        {"id": "e_low", "gravity_g": 9.8, "linear_drag_beta": 0.14, "restitution_e": 0.72},
+        {"id": "e_high", "gravity_g": 9.8, "linear_drag_beta": 0.14, "restitution_e": 0.92}
+      ]
+    },
+    {
+      "id": "v3_B",
+      "hidden_parameters": [
+        {"name": "kinetic_friction_mu_k", "unit": "1", "valid_range": [0.0, 0.05]},
+        {"name": "left_restitution_e_L", "unit": "1", "valid_range": [0.0, 1.0]},
+        {"name": "right_restitution_e_R", "unit": "1", "valid_range": [0.0, 1.0]}
+      ],
+      "anchor_tuples": [
+        {"id": "default", "kinetic_friction_mu_k": 0.008, "left_restitution_e_L": 0.88, "right_restitution_e_R": 0.8},
+        {"id": "mu_low", "kinetic_friction_mu_k": 0.0, "left_restitution_e_L": 0.88, "right_restitution_e_R": 0.8},
+        {"id": "mu_high", "kinetic_friction_mu_k": 0.016, "left_restitution_e_L": 0.88, "right_restitution_e_R": 0.8},
+        {"id": "eL_low", "kinetic_friction_mu_k": 0.008, "left_restitution_e_L": 0.68, "right_restitution_e_R": 0.8},
+        {"id": "eL_high", "kinetic_friction_mu_k": 0.008, "left_restitution_e_L": 0.95, "right_restitution_e_R": 0.8},
+        {"id": "eR_low", "kinetic_friction_mu_k": 0.008, "left_restitution_e_L": 0.88, "right_restitution_e_R": 0.62},
+        {"id": "eR_high", "kinetic_friction_mu_k": 0.008, "left_restitution_e_L": 0.88, "right_restitution_e_R": 0.92}
+      ]
+    },
+    {
+      "id": "v3_C",
+      "hidden_parameters": [
+        {"name": "gravity_g", "unit": "m/s^2", "valid_range": [8.0, 11.5]},
+        {"name": "kinetic_friction_mu", "unit": "1", "valid_range": [0.025, 0.052]},
+        {"name": "restitution_e", "unit": "1", "valid_range": [0.45, 0.9]}
+      ],
+      "anchor_tuples": [
+        {"id": "default", "gravity_g": 9.8, "kinetic_friction_mu": 0.035, "restitution_e": 0.8},
+        {"id": "g_low", "gravity_g": 8.0, "kinetic_friction_mu": 0.035, "restitution_e": 0.8},
+        {"id": "g_high", "gravity_g": 11.2, "kinetic_friction_mu": 0.035, "restitution_e": 0.8},
+        {"id": "mu_low", "gravity_g": 9.8, "kinetic_friction_mu": 0.025, "restitution_e": 0.8},
+        {"id": "mu_high", "gravity_g": 9.8, "kinetic_friction_mu": 0.052, "restitution_e": 0.8},
+        {"id": "e_low", "gravity_g": 9.8, "kinetic_friction_mu": 0.035, "restitution_e": 0.45},
+        {"id": "e_high", "gravity_g": 9.8, "kinetic_friction_mu": 0.035, "restitution_e": 0.9}
+      ]
+    },
+    {
+      "id": "v3_D",
+      "hidden_parameters": [
+        {"name": "gravity_g", "unit": "m/s^2", "valid_range": [8.0, 11.5]},
+        {"name": "linear_damping_beta", "unit": "1/s", "valid_range": [0.02, 0.12]},
+        {"name": "magnetic_kappa", "unit": "rad/s^2", "valid_range": [0.15, 0.9]}
+      ],
+      "anchor_tuples": [
+        {"id": "default", "gravity_g": 9.8, "linear_damping_beta": 0.045, "magnetic_kappa": 0.55},
+        {"id": "g_low", "gravity_g": 8.0, "linear_damping_beta": 0.045, "magnetic_kappa": 0.55},
+        {"id": "g_high", "gravity_g": 11.2, "linear_damping_beta": 0.045, "magnetic_kappa": 0.55},
+        {"id": "beta_low", "gravity_g": 9.8, "linear_damping_beta": 0.02, "magnetic_kappa": 0.55},
+        {"id": "beta_high", "gravity_g": 9.8, "linear_damping_beta": 0.12, "magnetic_kappa": 0.55},
+        {"id": "kappa_low", "gravity_g": 9.8, "linear_damping_beta": 0.045, "magnetic_kappa": 0.15},
+        {"id": "kappa_high", "gravity_g": 9.8, "linear_damping_beta": 0.045, "magnetic_kappa": 0.9}
+      ]
+    }
+  ]
+}

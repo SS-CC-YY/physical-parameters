@@ -38,7 +38,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--registry",
         type=Path,
-        default=REMAKE_ROOT / "benchmark_release_v1_0" / "experiment_registry.json",
+        default=CODE_ROOT / "assets" / "seedance978_evaluation" / "experiment_registry.json",
     )
     parser.add_argument(
         "--output",
