@@ -39,15 +39,21 @@ DEFAULT_THRESHOLDS: dict[str, Any] = {
         "min_reliable_fraction": 0.60,
         "min_reliable_frames": 8,
         "min_confidence": 0.30,
-        "ambiguous_candidate_count": 4,
+        "ambiguous_candidate_count": 2,
         "persistent_frames": 3,
+        "max_consecutive_unresolved_frames": 12,
     },
     "object_shape_2d": {
         "max_axis_ratio": 1.55,
         "severe_axis_ratio": 1.85,
         "max_circularity_with_elongation": 0.72,
         "severe_min_circularity": 0.28,
+        "min_edge_support_fraction": 0.55,
+        "max_edge_radial_residual_ratio": 0.18,
         "persistent_frames": 3,
+        "min_evaluable_frames": 8,
+        "min_evaluable_fraction": 0.20,
+        "max_consecutive_unresolved_frames": 12,
     },
     "object_scale_2d": {
         "max_relative_expected_radius_error": 0.50,
@@ -376,18 +382,44 @@ def evaluate_generation_validity(
     found_rows: list[tuple[int, Mapping[str, Any]]] = []
     reliable_rows: list[tuple[int, Mapping[str, Any]]] = []
     missing_frames: list[int] = []
+    unverified_frames: list[int] = []
+    unreliable_frames: list[int] = []
     ambiguous_frames: list[int] = []
     for fallback, row in rows:
         frame = _frame_index(row, fallback)
-        if row.get("found") is not True:
+        observation_status = str(
+            row.get(
+                "observation_status",
+                "measured" if row.get("found") is True else "missing",
+            )
+        ).lower()
+        identity_verified = row.get("identity_verified") is not False
+        measurement_valid = row.get("measurement_valid") is not False
+        is_measured = (
+            row.get("found") is True
+            and observation_status == "measured"
+            and measurement_valid
+        )
+        if not is_measured:
             missing_frames.append(frame)
             continue
         found_rows.append((fallback, row))
+        if not identity_verified:
+            unverified_frames.append(frame)
+            continue
         confidence = _finite_float(row.get("track_confidence"))
         boundary = row.get("touches_frame_boundary") is True
         if (confidence is None or confidence >= float(tracking_config["min_confidence"])) and not boundary:
             reliable_rows.append((fallback, row))
-        count = _finite_float(row.get("candidate_count"))
+        else:
+            unreliable_frames.append(frame)
+        # ``candidate_count`` historically counted every colour blob in the
+        # full image.  Indoor backgrounds can contain dozens of irrelevant
+        # blobs, so only locally plausible identity candidates are meaningful
+        # when the tracker supplies that diagnostic.
+        count = _finite_float(
+            row.get("plausible_candidate_count", row.get("candidate_count"))
+        )
         if count is not None and count >= float(tracking_config["ambiguous_candidate_count"]):
             ambiguous_frames.append(frame)
 
@@ -397,30 +429,65 @@ def evaluate_generation_validity(
         int(tracking_config["min_reliable_frames"]),
         max(1, math.ceil(total * float(tracking_config["min_reliable_fraction"]))) if total else 1,
     )
+    tracking_unresolved = sorted(
+        set(missing_frames + unverified_frames + unreliable_frames)
+    )
+    unresolved_tracking_runs = _runs(
+        tracking_unresolved,
+        int(tracking_config["max_consecutive_unresolved_frames"]) + 1,
+    )
     tracking_ok = (
         total > 0
         and tracked_fraction >= float(tracking_config["min_tracked_fraction"])
         and reliable_fraction >= float(tracking_config["min_reliable_fraction"])
         and len(reliable_rows) >= required_reliable_frames
+        and not unresolved_tracking_runs
     )
     if not tracking_ok:
         _append_unique(warnings, "insufficient_reliable_object_tracking")
         _append_unique(blocking_indeterminate, "insufficient_reliable_object_tracking")
-        offending["object_identity_unresolved"] = missing_frames
+        offending["object_identity_unresolved"] = tracking_unresolved
     ambiguous_runs = _runs(ambiguous_frames, int(tracking_config["persistent_frames"]))
     if ambiguous_runs:
         _append_unique(warnings, "persistent_object_identity_ambiguity")
+        _append_unique(blocking_indeterminate, "persistent_object_identity_ambiguity")
         offending["object_identity_ambiguity"] = _flatten(ambiguous_runs)
 
     shape_config = config["object_shape_2d"]
     shape_bad: list[int] = []
+    shape_unresolved: list[int] = []
     shape_metrics: list[dict[str, Any]] = []
     for fallback, row in reliable_rows:
+        # A centre/radius recovered from a circle detector can be a useful
+        # trajectory measurement, but it is not an observed silhouette and
+        # must not be used to accuse the generated object of deformation.
+        if row.get("shape_evidence_available") is False:
+            shape_unresolved.append(_frame_index(row, fallback))
+            continue
         frame = _frame_index(row, fallback)
         ratio = _axis_ratio(row)
         circularity = _finite_float(row.get("circularity"))
+        edge_support = _finite_float(row.get("edge_support_fraction"))
+        edge_radial_residual = _finite_float(row.get("edge_radial_residual_ratio"))
+        evidence_source = str(row.get("shape_evidence_source", "segmentation_contour"))
+        if evidence_source == "hough_edge_ring" and (
+            edge_support is None
+            or edge_support < float(shape_config["min_edge_support_fraction"])
+            or edge_radial_residual is None
+            or edge_radial_residual
+            > float(shape_config["max_edge_radial_residual_ratio"])
+        ):
+            shape_unresolved.append(frame)
+            continue
         shape_metrics.append(
-            {"frame_index": frame, "axis_ratio": ratio, "circularity": circularity}
+            {
+                "frame_index": frame,
+                "evidence_source": evidence_source,
+                "axis_ratio": ratio,
+                "circularity": circularity,
+                "edge_support_fraction": edge_support,
+                "edge_radial_residual_ratio": edge_radial_residual,
+            }
         )
         elongated_and_noncircular = (
             ratio is not None
@@ -433,15 +500,33 @@ def evaluate_generation_validity(
             circularity is not None
             and circularity < float(shape_config["severe_min_circularity"])
         )
-        if elongated_and_noncircular or severe_elongation or severe_noncircularity:
+        if (
+            elongated_and_noncircular
+            or severe_elongation
+            or severe_noncircularity
+        ):
             shape_bad.append(frame)
     shape_runs = _runs(shape_bad, int(shape_config["persistent_frames"]))
+    shape_evaluable_fraction = len(shape_metrics) / max(len(reliable_rows), 1)
+    unresolved_shape_runs = _runs(
+        shape_unresolved,
+        int(shape_config["max_consecutive_unresolved_frames"]) + 1,
+    )
+    shape_evidence_sufficient = bool(
+        len(shape_metrics) >= int(shape_config["min_evaluable_frames"])
+        and shape_evaluable_fraction >= float(shape_config["min_evaluable_fraction"])
+        and not unresolved_shape_runs
+    )
     if shape_runs:
         _append_unique(failures, "persistent_experiment_object_deformation_2d")
         offending["object_shape_2d"] = _flatten(shape_runs)
     elif shape_bad:
         _append_unique(warnings, "transient_object_shape_outlier")
         offending["transient_object_shape_2d"] = sorted(set(shape_bad))
+    if not shape_runs and not shape_evidence_sufficient:
+        _append_unique(warnings, "insufficient_object_shape_evidence")
+        _append_unique(blocking_indeterminate, "insufficient_object_shape_evidence")
+        offending["object_shape_evidence_unresolved"] = sorted(set(shape_unresolved))
 
     # Join optional projected-radius evidence by frame without mutating inputs.
     trajectory_by_frame = {
@@ -604,7 +689,7 @@ def evaluate_generation_validity(
                 "scene_cut_frames": cut_frames,
             },
             "object_identity": {
-                "status": "pass" if tracking_ok else "indeterminate",
+                "status": "pass" if tracking_ok and not ambiguous_runs else "indeterminate",
                 "frame_count": total,
                 "found_count": len(found_rows),
                 "reliable_count": len(reliable_rows),
@@ -612,10 +697,24 @@ def evaluate_generation_validity(
                 "reliable_fraction": reliable_fraction,
                 "required_reliable_frames": required_reliable_frames,
                 "missing_frames": missing_frames,
+                "unverified_frames": unverified_frames,
+                "unreliable_frames": unreliable_frames,
+                "unresolved_runs_exceeding_limit": unresolved_tracking_runs,
                 "ambiguous_frames": _flatten(ambiguous_runs),
             },
             "object_shape_2d": {
-                "status": "fail" if shape_runs else "pass",
+                "status": (
+                    "fail"
+                    if shape_runs
+                    else "pass"
+                    if shape_evidence_sufficient
+                    else "indeterminate"
+                ),
+                "evaluable_frame_count": len(shape_metrics),
+                "evaluable_fraction": shape_evaluable_fraction,
+                "evidence_sufficient": shape_evidence_sufficient,
+                "unresolved_frames": sorted(set(shape_unresolved)),
+                "unresolved_runs_exceeding_limit": unresolved_shape_runs,
                 "offending_frames": _flatten(shape_runs),
                 "transient_outlier_frames": [] if shape_runs else sorted(set(shape_bad)),
                 "per_frame_metrics": shape_metrics,

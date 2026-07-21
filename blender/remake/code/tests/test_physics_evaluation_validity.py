@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest import mock
 
 from remake_benchmark.reconstruction.physics_evaluation import (
+    _is_trusted_measurement,
     aggregate_results,
     benchmark_split,
     run_physics_job,
@@ -45,6 +46,20 @@ def _tracks(deformed: bool) -> list[dict]:
 
 
 class PhysicsEvaluationValidityTests(unittest.TestCase):
+    def test_overlay_and_fit_history_reject_unverified_or_predicted_points(self) -> None:
+        base = {
+            "found": True,
+            "observation_status": "measured",
+            "measurement_valid": True,
+            "identity_verified": True,
+        }
+        self.assertTrue(_is_trusted_measurement(base))
+        self.assertFalse(
+            _is_trusted_measurement({**base, "observation_status": "predicted"})
+        )
+        self.assertFalse(_is_trusted_measurement({**base, "identity_verified": False}))
+        self.assertFalse(_is_trusted_measurement({**base, "measurement_valid": False}))
+
     def test_split_labels_keep_extra_seeds_out_of_headline(self) -> None:
         base = {
             "camera_name": "CAM_Side",

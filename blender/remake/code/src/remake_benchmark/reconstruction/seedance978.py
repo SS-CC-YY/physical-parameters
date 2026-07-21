@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import math
 import subprocess
@@ -454,6 +455,7 @@ def run_seedance978_evaluation(
     output_root: Path,
     spatialtracker_script: Path,
     phase: str = "all",
+    job_ids: Sequence[str] | None = None,
     max_jobs: int | None = None,
     overwrite: bool = False,
     assess_background_rigidity: bool = True,
@@ -480,15 +482,41 @@ def run_seedance978_evaluation(
     runtime_manifest_path = output_root / "runtime_spatialtracker_manifest.jsonl"
     _write_jsonl(runtime_manifest_path, runtime_manifest)
     selected = _phase_rows(manifest_rows, phase)
+    requested_job_ids = list(dict.fromkeys(str(value) for value in (job_ids or [])))
+    if requested_job_ids:
+        all_job_ids = {str(row["job_id"]) for row in manifest_rows}
+        unknown = sorted(set(requested_job_ids) - all_job_ids)
+        if unknown:
+            raise ValueError(f"unknown manifest job_id(s): {', '.join(unknown)}")
+        phase_job_ids = {str(row["job_id"]) for row in selected}
+        outside_phase = sorted(set(requested_job_ids) - phase_job_ids)
+        if outside_phase:
+            raise ValueError(
+                f"requested job_id(s) are outside phase={phase}: {', '.join(outside_phase)}"
+            )
+        requested = set(requested_job_ids)
+        selected = [row for row in selected if str(row["job_id"]) in requested]
     if max_jobs is not None:
         selected = selected[: max(0, int(max_jobs))]
+
+    if requested_job_ids:
+        selection_digest = hashlib.sha256(
+            "\n".join(requested_job_ids).encode("utf-8")
+        ).hexdigest()[:10]
+        artifact_suffix = f"targeted_{phase}_{selection_digest}"
+        routing_path = output_root / f"routing_{artifact_suffix}.jsonl"
+        metadata_path = output_root / f"run_metadata_{artifact_suffix}.json"
+    else:
+        artifact_suffix = phase
+        routing_path = output_root / f"routing_{phase}.jsonl"
+        metadata_path = output_root / "run_metadata.json"
 
     routes: list[dict[str, Any]] = []
     for row in selected:
         filename = f"{row['job_id']}.mp4"
         decision = choose_reconstruction_route(audit[filename], filename)
         routes.append({"job_id": row["job_id"], **decision})
-    _write_jsonl(output_root / f"routing_{phase}.jsonl", routes)
+    _write_jsonl(routing_path, routes)
     route_by_id = {row["job_id"]: row for row in routes}
 
     overlay_remaining = max(0, int(overlay_count))
@@ -572,10 +600,12 @@ def run_seedance978_evaluation(
 
     aggregate = write_seedance978_reports(output_root, manifest_rows, registry)
     _write_json(
-        output_root / "run_metadata.json",
+        metadata_path,
         {
             "schema_version": "1.0.0",
             "phase": phase,
+            "requested_job_ids": requested_job_ids,
+            "artifact_suffix": artifact_suffix,
             "selected_jobs": len(selected),
             "coverage": coverage,
             "dynamic_candidate_count": len(dynamic_candidates),
@@ -587,6 +617,7 @@ def run_seedance978_evaluation(
                 "calibration_root": str(calibration_root),
                 "registry": str(registry_path),
                 "output": str(output_root),
+                "routing": str(routing_path),
             },
         },
     )

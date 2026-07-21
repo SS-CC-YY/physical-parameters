@@ -52,6 +52,12 @@ def _parser() -> argparse.ArgumentParser:
         help="all executes three resumable phases in the required Side -> Main -> Top order.",
     )
     parser.add_argument("--max-jobs", type=int, default=None)
+    parser.add_argument(
+        "--job-id",
+        action="append",
+        default=None,
+        help="Evaluate only this exact manifest job; repeat for multiple videos.",
+    )
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument(
         "--run-dynamic",
@@ -71,7 +77,13 @@ def _parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = _parser().parse_args()
-    phases = ["side", "main", "top"] if args.phase == "all" else [args.phase]
+    phases = (
+        ["all"]
+        if args.phase == "all" and args.job_id
+        else ["side", "main", "top"]
+        if args.phase == "all"
+        else [args.phase]
+    )
     result = None
     for phase in phases:
         print(f"=== Seedance 978 evaluation phase: {phase} ===", flush=True)
@@ -87,6 +99,7 @@ def main() -> None:
                 REMAKE_ROOT / "rebuild-test" / "spatialtrackerv2" / "scripts" / "run_batch.py"
             ).resolve(),
             phase=phase,
+            job_ids=args.job_id,
             max_jobs=args.max_jobs,
             overwrite=args.overwrite,
             assess_background_rigidity=not args.skip_background_rigidity,

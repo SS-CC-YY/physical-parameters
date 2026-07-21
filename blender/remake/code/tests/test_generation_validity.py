@@ -65,6 +65,118 @@ class GenerationValidityTest(unittest.TestCase):
         self.assertTrue(result["fit_eligible"])
         self.assertIn("transient_object_shape_outlier", result["warning_codes"])
 
+    def test_unverified_background_blob_cannot_be_shape_failure(self) -> None:
+        rows = _tracks()
+        for frame in (4, 5, 6, 7):
+            rows[frame].update(
+                {
+                    "identity_verified": False,
+                    "ellipse_axis_ratio": 3.0,
+                    "circularity": 0.05,
+                }
+            )
+        result = evaluate_generation_validity(
+            rows,
+            camera_motion_evidence={"final_category": "no_significant_camera_change"},
+        )
+        self.assertNotIn(
+            "persistent_experiment_object_deformation_2d",
+            result["failure_codes"],
+        )
+        self.assertEqual(
+            result["checks"]["object_identity"]["unverified_frames"],
+            [4, 5, 6, 7],
+        )
+
+    def test_hough_measurement_is_not_silhouette_evidence(self) -> None:
+        rows = _tracks(
+            shape_evidence_available=False,
+            ellipse_axis_ratio=3.0,
+            circularity=0.05,
+        )
+        result = evaluate_generation_validity(
+            rows,
+            camera_motion_evidence={"final_category": "no_significant_camera_change"},
+        )
+        self.assertEqual(result["status"], "indeterminate")
+        self.assertFalse(result["fit_eligible"])
+        self.assertIn("insufficient_object_shape_evidence", result["warning_codes"])
+        self.assertEqual(
+            result["checks"]["object_shape_2d"]["evaluable_frame_count"],
+            0,
+        )
+
+    def test_long_late_hough_run_blocks_shape_clearance(self) -> None:
+        rows = _tracks(count=30)
+        for row in rows[17:]:
+            row["shape_evidence_available"] = False
+        result = evaluate_generation_validity(
+            rows,
+            camera_motion_evidence={"final_category": "no_significant_camera_change"},
+        )
+        self.assertEqual(result["status"], "indeterminate")
+        self.assertEqual(
+            result["checks"]["object_shape_2d"]["unresolved_runs_exceeding_limit"],
+            [list(range(17, 30))],
+        )
+
+    def test_independently_verified_hough_edge_ring_is_shape_evidence(self) -> None:
+        rows = _tracks(
+            shape_evidence_available=True,
+            shape_evidence_source="hough_edge_ring",
+            circularity=None,
+            ellipse_axis_ratio=None,
+            edge_support_fraction=0.88,
+            edge_radial_residual_ratio=0.04,
+        )
+        result = evaluate_generation_validity(
+            rows,
+            camera_motion_evidence={"final_category": "no_significant_camera_change"},
+        )
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(
+            result["checks"]["object_shape_2d"]["evaluable_frame_count"],
+            len(rows),
+        )
+
+    def test_persistently_incomplete_hough_edge_ring_is_indeterminate(self) -> None:
+        rows = _tracks(
+            shape_evidence_available=True,
+            shape_evidence_source="hough_edge_ring",
+            circularity=None,
+            ellipse_axis_ratio=None,
+            edge_support_fraction=0.30,
+            edge_radial_residual_ratio=0.04,
+        )
+        result = evaluate_generation_validity(
+            rows,
+            camera_motion_evidence={"final_category": "no_significant_camera_change"},
+        )
+        self.assertEqual(result["status"], "indeterminate")
+        self.assertNotIn("persistent_experiment_object_deformation_2d", result["failure_codes"])
+        self.assertEqual(
+            result["checks"]["object_shape_2d"]["evaluable_frame_count"],
+            0,
+        )
+
+    def test_only_locally_plausible_candidates_count_as_ambiguous(self) -> None:
+        rows = _tracks(candidate_count=20, plausible_candidate_count=1)
+        result = evaluate_generation_validity(
+            rows,
+            camera_motion_evidence={"final_category": "no_significant_camera_change"},
+        )
+        self.assertNotIn("persistent_object_identity_ambiguity", result["warning_codes"])
+
+    def test_two_persistent_local_identities_block_fitting(self) -> None:
+        rows = _tracks(candidate_count=20, plausible_candidate_count=2)
+        result = evaluate_generation_validity(
+            rows,
+            camera_motion_evidence={"final_category": "no_significant_camera_change"},
+        )
+        self.assertEqual(result["status"], "indeterminate")
+        self.assertFalse(result["fit_eligible"])
+        self.assertIn("persistent_object_identity_ambiguity", result["warning_codes"])
+
     def test_scene_cut_is_a_hard_failure(self) -> None:
         result = evaluate_generation_validity(
             _tracks(),
@@ -91,6 +203,23 @@ class GenerationValidityTest(unittest.TestCase):
         self.assertFalse(result["fit_eligible"])
         self.assertEqual(result["failure_codes"], [])
         self.assertIn("insufficient_reliable_object_tracking", result["warning_codes"])
+
+    def test_long_tracking_gap_blocks_even_with_high_total_coverage(self) -> None:
+        rows = _tracks(count=100)
+        for row in rows[45:58]:
+            row["found"] = False
+            row["observation_status"] = "missing"
+            row["measurement_valid"] = False
+        result = evaluate_generation_validity(
+            rows,
+            camera_motion_evidence={"final_category": "no_significant_camera_change"},
+        )
+        self.assertEqual(result["status"], "indeterminate")
+        self.assertGreater(result["checks"]["object_identity"]["tracked_fraction"], 0.80)
+        self.assertEqual(
+            result["checks"]["object_identity"]["unresolved_runs_exceeding_limit"],
+            [list(range(45, 58))],
+        )
 
     def test_changed_camera_without_3d_evidence_is_indeterminate(self) -> None:
         result = evaluate_generation_validity(

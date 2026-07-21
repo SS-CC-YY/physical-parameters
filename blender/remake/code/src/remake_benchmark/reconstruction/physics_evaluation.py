@@ -144,22 +144,45 @@ def _dynamic_payload(dynamic_result_dir: Path | None) -> tuple[list[dict[str, An
 def _draw_track_frame(
     frame: np.ndarray,
     row: Mapping[str, Any] | None,
-    history: Sequence[tuple[int, int]],
+    history_segments: Sequence[Sequence[tuple[int, int]]],
     status: str,
     failure_codes: Sequence[str],
 ) -> np.ndarray:
     output = frame.copy()
     colour = (0, 190, 0) if status == "pass" else (0, 0, 230) if status == "fail" else (0, 190, 255)
-    for start, end in zip(history[:-1], history[1:]):
-        cv2.line(output, start, end, colour, 2, cv2.LINE_AA)
-    if row and row.get("found"):
+    for history in history_segments:
+        for start, end in zip(history[:-1], history[1:]):
+            cv2.line(output, start, end, colour, 2, cv2.LINE_AA)
+    trusted_measurement = _is_trusted_measurement(row)
+    if trusted_measurement and row is not None:
         center = (int(round(float(row["center_u_px"]))), int(round(float(row["center_v_px"]))))
-        radius = max(3, int(round(float(row["measurement_radius_px"]))))
+        raw_radius = max(3, int(round(float(row["measurement_radius_px"]))))
+        radius_value = row.get("display_radius_px", row.get("measurement_radius_px"))
+        radius = max(3, int(round(float(radius_value))))
+        # Solid: temporally stable display/physical-size prior.  Dashed cyan:
+        # the raw radius that metric reconstruction actually consumes.  Both
+        # are shown so the overlay remains an honest audit artifact.
         cv2.circle(output, center, radius, colour, 2, cv2.LINE_AA)
+        for start_angle in range(0, 360, 30):
+            cv2.ellipse(
+                output,
+                center,
+                (raw_radius, raw_radius),
+                0.0,
+                float(start_angle),
+                float(start_angle + 15),
+                (255, 190, 0),
+                1,
+                cv2.LINE_AA,
+            )
         major = row.get("ellipse_major_axis_px")
         minor = row.get("ellipse_minor_axis_px")
         angle = row.get("ellipse_angle_deg")
-        if major is not None and minor is not None:
+        if (
+            row.get("shape_evidence_available") is not False
+            and major is not None
+            and minor is not None
+        ):
             cv2.ellipse(
                 output,
                 center,
@@ -177,7 +200,64 @@ def _draw_track_frame(
         label += " | " + ",".join(str(value) for value in failure_codes[:2])
     cv2.putText(output, label, (12, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.58, (0, 0, 0), 4, cv2.LINE_AA)
     cv2.putText(output, label, (12, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.58, (255, 255, 255), 1, cv2.LINE_AA)
+    if row is not None:
+        observation = str(
+            row.get(
+                "observation_status",
+                "measured" if row.get("found") is True else "missing",
+            )
+        )
+        identity = "verified" if trusted_measurement else "unverified"
+        confidence = row.get("track_confidence")
+        confidence_text = "n/a" if confidence is None else f"{float(confidence):.3f}"
+        raw_text = row.get("measurement_radius_px")
+        display_text = row.get("display_radius_px", raw_text)
+        radius_text = (
+            "n/a"
+            if raw_text is None or display_text is None
+            else f"{float(raw_text):.1f}/{float(display_text):.1f}px"
+        )
+        source = str(row.get("measurement_source") or "none")
+        shape_source = str(row.get("shape_evidence_source") or "unresolved")
+        tracking_label = (
+            f"track={identity}/{observation} | source={source} | shape={shape_source}"
+        )
+        measurement_label = (
+            f"confidence={confidence_text} | radius raw/reference={radius_text}"
+        )
+        for text, y in ((tracking_label, 51), (measurement_label, 73)):
+            cv2.putText(
+                output,
+                text,
+                (12, y),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.48,
+                (0, 0, 0),
+                4,
+                cv2.LINE_AA,
+            )
+            cv2.putText(
+                output,
+                text,
+                (12, y),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.48,
+                (255, 255, 255),
+                1,
+                cv2.LINE_AA,
+            )
     return output
+
+
+def _is_trusted_measurement(row: Mapping[str, Any] | None) -> bool:
+    if not row or row.get("found") is not True:
+        return False
+    observation = str(row.get("observation_status", "measured")).lower()
+    return (
+        observation == "measured"
+        and row.get("measurement_valid") is not False
+        and row.get("identity_verified") is not False
+    )
 
 
 def write_validity_visuals(
@@ -200,18 +280,32 @@ def write_validity_visuals(
         max(1.0, float(fps)),
         (width, height),
     )
-    history: list[tuple[int, int]] = []
+    history_segments: list[list[tuple[int, int]]] = []
+    active_history: list[tuple[int, int]] | None = None
     rendered: list[np.ndarray] = []
     for index, frame in enumerate(frames):
         row = track_rows[index] if index < len(track_rows) else None
-        if row and row.get("found"):
-            history.append(
+        if _is_trusted_measurement(row) and row is not None:
+            if active_history is None:
+                active_history = []
+                history_segments.append(active_history)
+            active_history.append(
                 (
                     int(round(float(row["center_u_px"]))),
                     int(round(float(row["center_v_px"]))),
                 )
             )
-        rendered_frame = _draw_track_frame(frame, row, history, status, failures)
+        else:
+            # Keep prior verified segments visible, but never draw a line over
+            # an unresolved gap: that line would look like measured motion.
+            active_history = None
+        rendered_frame = _draw_track_frame(
+            frame,
+            row,
+            history_segments,
+            status,
+            failures,
+        )
         if writer.isOpened():
             writer.write(rendered_frame)
         rendered.append(rendered_frame)
@@ -244,7 +338,12 @@ def write_validity_visuals(
     )
     if not offending:
         offending = [int(round(value)) for value in np.linspace(0, len(frames) - 1, min(6, len(frames)))]
-    selected = sorted(set(max(0, min(len(frames) - 1, value)) for value in offending))[:6]
+    bounded = sorted(set(max(0, min(len(frames) - 1, value)) for value in offending))
+    if len(bounded) > 6:
+        positions = np.linspace(0, len(bounded) - 1, 6).round().astype(int)
+        selected = [bounded[int(position)] for position in positions]
+    else:
+        selected = bounded
     thumbs: list[np.ndarray] = []
     thumb_width = 432
     for index in selected:

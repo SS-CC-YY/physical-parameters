@@ -145,6 +145,20 @@ find "$EVAL_OUT/jobs" -name result.json | wc -l
 find "$EVAL_OUT/jobs" -name 'validity_*' -type f
 ```
 
+如果只想复测某条已知问题视频，可以重复使用 `--job-id` 精确选择任务。例如室内落地背景干扰回归：
+
+```bash
+EVAL_OUT="$REMAKE_ROOT/outputs/seedance978_physics_detector_v2"
+python code/scripts/run_seedance978_physics_evaluation.py \
+  --videos "$VIDEOS" \
+  --output "$EVAL_OUT" \
+  --phase side \
+  --job-id v1_A__g14p70__indoor2__standard_ball__CAM_Side__seed-341867882 \
+  --overlay-count 1
+```
+
+检测器或有效性规则更新后，建议使用一个新的 `--output` 目录。旧目录中的 `result.json` 会被断点续跑机制复用；只有明确需要重算旧结果时才使用 `--overwrite`。
+
 ## 6. 正式运行并断点续跑
 
 先完成 Side：
@@ -205,5 +219,7 @@ jobs/<job_id>/trajectory_plot.png             # x-z 轨迹与 x/y/z-time 曲线
 jobs/<job_id>/validity_object_track_overlay.mp4
 jobs/<job_id>/validity_evidence_contact_sheet.jpg
 ```
+
+`validity_object_track_overlay.mp4` 中，实线圆是冻结首帧标定得到的参考尺寸（不会因后续背景粘连而扩大），青色虚线圆是实际送入几何重建的原始测量半径，紫色椭圆只在分割轮廓可用时绘制。画面同时显示 confidence、measurement source 和身份确认状态。Hough 的圆形提议本身不算形变证据；只有实际 Canny 圆周边缘的角覆盖率、径向残差和球内颜色支持同时通过时，才记为 `hough_edge_ring` 形状证据。若连续较长时间仍无可靠轮廓/边缘证据，validity 会标成 `indeterminate` 并跳过参数拟合。
 
 动态候选另外保存在 `dynamic/<job_id>/`，包含 SpaTrackerV2 原始轨迹、3D 轨迹图、查询点 overlay、刚性证据和 `generation_validity.json`。
