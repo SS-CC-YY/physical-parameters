@@ -17,11 +17,20 @@ fi
 
 eval "$(conda shell.bash hook)"
 conda activate "$ENV_PREFIX"
+export PIP_DEFAULT_TIMEOUT="${PIP_DEFAULT_TIMEOUT:-120}"
 python -m pip install --upgrade pip setuptools wheel
 python -m pip install \
   torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 \
   --index-url https://download.pytorch.org/whl/cu124
-python -m pip install -r "$UPSTREAM/requirements.txt"
+python -m pip install -r "$ROOT/requirements-inference.txt"
+python -m pip install --no-deps "$ROOT/third_party/utils3d"
+
+PYTHONPATH="$UPSTREAM" python - <<'PY'
+from models.SpaTrackV2.models.predictor import Predictor
+from models.SpaTrackV2.models.vggt4track.models.vggt_moe import VGGT4Track
+
+print("SpatialTrackerV2 core imports OK")
+PY
 
 export HF_HOME="$ROOT/models/huggingface"
 export HUGGINGFACE_HUB_CACHE="$HF_HOME/hub"

@@ -22,6 +22,8 @@ spatialtrackerv2/
 
 上游源码固定于提交 `7e12274c52077860cebfe007a6290777db43b63c`。模型权重体积较大，不进入 Git；`setup_server.sh` 会把 Hugging Face 缓存放到本目录的 `models/huggingface`。
 
+服务器安装使用 `requirements-inference.txt`，只包含 RGB 推理、轨迹对齐和可视化依赖。上游完整依赖中的 Gradio、SAM 和 Ray 不参与本实验，因此不会安装。上游锁定的 `utils3d` 已按原提交放入 `third_party/utils3d`，安装过程不再需要从 GitHub 克隆依赖。
+
 ## 重建方法
 
 每条视频使用两类查询点：
@@ -43,6 +45,8 @@ conda activate "$PWD/env"
 python scripts/build_manifest.py --strict
 python scripts/preflight.py
 ```
+
+安装脚本可以安全重复执行：若此前在下载依赖时中断，它会复用 `env/` 中已经成功安装的 PyTorch，仅补齐剩余推理依赖和模型文件。
 
 如果服务器上的 Seedance 视频不在默认的 `remake/seedanceVideos.tar/videos`，构建清单时显式指定现有输出目录：
 

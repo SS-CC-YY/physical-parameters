@@ -17,7 +17,19 @@ MANIFEST = PACKAGE_ROOT / "manifests" / "v1a_seedance27.jsonl"
 
 
 def main() -> None:
-    modules = ["torch", "torchvision", "cv2", "decord", "numpy", "matplotlib", "huggingface_hub"]
+    modules = [
+        "torch",
+        "torchvision",
+        "cv2",
+        "decord",
+        "numpy",
+        "scipy",
+        "matplotlib",
+        "huggingface_hub",
+        "utils3d",
+        "pycolmap",
+        "pyceres",
+    ]
     failures = []
     versions = {}
     for name in modules:

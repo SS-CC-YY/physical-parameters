@@ -22,3 +22,5 @@ Model weights remain unmodified and are downloaded from:
 - `Yuxihenry/SpatialTrackerV2-Offline`
 
 They are cached under `models/huggingface` and excluded from Git.
+
+The inference environment does not use the upstream Gradio, Segment Anything, or Ray interfaces. `EasternJournalist/utils3d` is vendored at commit `d3a577acf0a9ad7e513a1416449a07b6f47d967f` under `third_party/utils3d` because it is a required core geometry dependency and a Git URL dependency is unreliable on the target server.
