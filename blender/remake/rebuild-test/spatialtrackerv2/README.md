@@ -20,7 +20,7 @@ spatialtrackerv2/
 └── work/                    # 中间查询文件（Git 忽略）
 ```
 
-上游源码固定于提交 `7e12274c52077860cebfe007a6290777db43b63c`。模型权重体积较大，不进入 Git；`setup_server.sh` 会把 Hugging Face 缓存放到本目录的 `models/huggingface`。
+上游源码固定于官方 `main` 当前提交 `7e12274c52077860cebfe007a6290777db43b63c`，并保持原文件不修改。模型权重体积较大，不进入 Git；`setup_server.sh` 会把 Hugging Face 缓存放到本目录的 `models/huggingface`。本 benchmark 的显式球体查询、批处理和米制对齐全部位于外层 `scripts/` 中。
 
 服务器安装使用 `requirements-inference.txt`，只包含 RGB 推理、轨迹对齐和可视化依赖。上游完整依赖中的 Gradio、SAM 和 Ray 不参与本实验，因此不会安装。上游锁定的 `utils3d` 已按原提交放入 `third_party/utils3d`，安装过程不再需要从 GitHub 克隆依赖。
 

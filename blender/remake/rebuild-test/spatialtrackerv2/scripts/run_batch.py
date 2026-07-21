@@ -8,7 +8,6 @@ import contextlib
 import csv
 import json
 import os
-import shutil
 import subprocess
 import sys
 import time
@@ -197,24 +196,21 @@ def main() -> None:
             if args.isolated_process:
                 command = [
                     sys.executable,
-                    str(UPSTREAM / "inference.py"),
-                    "--data_type",
-                    "RGB",
-                    "--track_mode",
-                    args.track_mode,
-                    "--video_path",
+                    str(HERE / "run_single_inference.py"),
+                    "--video",
                     str(video),
-                    "--queries_path",
+                    "--queries",
                     str(queries_path),
-                    "--output_dir",
-                    str(output_dir),
-                    "--source_fps",
+                    "--output",
+                    str(raw_path),
+                    "--source-fps",
                     str(job["source_fps"]),
-                    "--fps",
+                    "--frame-stride",
                     str(args.frame_stride),
-                    "--vo_points",
+                    "--track-mode",
+                    args.track_mode,
+                    "--vo-points",
                     str(max(256, args.object_points + args.anchor_points)),
-                    "--no_viz",
                 ]
                 with log_path.open("w", encoding="utf-8") as log:
                     process = subprocess.run(
@@ -227,10 +223,8 @@ def main() -> None:
                     )
                 if process.returncode != 0:
                     raise RuntimeError(f"SpatialTrackerV2 exited with code {process.returncode}; see {log_path}")
-                upstream_raw = output_dir / "result.npz"
-                if not upstream_raw.is_file():
-                    raise FileNotFoundError(f"Missing upstream result: {upstream_raw}")
-                shutil.move(str(upstream_raw), str(raw_path))
+                if not raw_path.is_file():
+                    raise FileNotFoundError(f"Missing isolated inference result: {raw_path}")
             else:
                 if session is None:
                     from spatialtracker_session import SpatialTrackerSession

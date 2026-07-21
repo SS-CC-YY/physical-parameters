@@ -5,16 +5,13 @@
 - License: see `upstream/SpaTrackerV2/LICENSE.txt`
 - Snapshot date: 2026-07-20
 
-The `examples` Git submodule is intentionally not included because the V1A Seedance videos are the test inputs.
+The `examples` Git submodule is intentionally not included because the V1A Seedance videos are the test inputs. All tracked files under `upstream/SpaTrackerV2` otherwise remain byte-for-byte identical to the official commit.
 
-Local changes to `upstream/SpaTrackerV2/inference.py` are limited to benchmark integration:
+Benchmark-specific integration lives outside the upstream tree:
 
-- accept explicit MP4, query NPZ and output paths;
-- convert query pixels through the upstream 518-pixel preprocessing;
-- preserve full-resolution 2D tracks, confidence, frame indices and query metadata;
-- allow disabling the upstream visualization for faster batch execution.
-
-The benchmark's default runner uses `scripts/spatialtracker_session.py`, an RGB-only extraction of the same official inference path, so the two networks are loaded once for all 27 videos. The patched upstream CLI remains available through `--isolated-process` for failure isolation.
+- `scripts/spatialtracker_session.py` follows the official RGB inference path but accepts explicit query pixels, preserves full-resolution 2D tracks and keeps both networks resident across the 27 videos;
+- `scripts/run_single_inference.py` provides the same adapter in a fresh process for failure isolation;
+- query construction, Blender-metric alignment and visualisation remain separate post-processing stages.
 
 Model weights remain unmodified and are downloaded from:
 
