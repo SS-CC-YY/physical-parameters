@@ -9,6 +9,7 @@ import math
 import subprocess
 import sys
 from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -38,6 +39,14 @@ EXPECTED_COUNTS = {
     "seed_stability_groups": 26,
 }
 CAMERA_ORDER = {"CAM_Side": 0, "CAM_Main": 1, "CAM_Top": 2}
+
+
+def _run_physics_job_process(payload: Mapping[str, Any]) -> tuple[str, dict[str, Any]]:
+    """Pickle-safe worker for CPU-parallel per-video evaluation."""
+
+    values = dict(payload)
+    job_id = str(values.pop("job_id"))
+    return job_id, run_physics_job(**values)
 
 
 def _json_safe(value: Any) -> Any:
@@ -444,6 +453,24 @@ def _phase_rows(rows: Sequence[Mapping[str, Any]], phase: str) -> list[dict[str,
     raise ValueError(f"unknown phase: {phase}")
 
 
+def _route_adjusted_camera_evidence(
+    evidence: Mapping[str, Any],
+    route: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Keep the frozen audit intact while exposing the route's effective category."""
+
+    adjusted = dict(evidence)
+    adjusted["raw_final_category"] = evidence.get("final_category")
+    adjusted["effective_camera_motion_category"] = route.get(
+        "effective_camera_motion_category"
+    )
+    adjusted["reconstruction_route"] = route.get("route")
+    adjusted["reconstruction_route_reason"] = route.get("reason")
+    if route.get("side_3d_evidence") is not None:
+        adjusted["side_3d_evidence"] = route["side_3d_evidence"]
+    return adjusted
+
+
 def run_seedance978_evaluation(
     *,
     workspace_root: Path,
@@ -463,6 +490,7 @@ def run_seedance978_evaluation(
     run_dynamic: bool = False,
     dynamic_frame_stride: int = 1,
     isolated_process: bool = False,
+    workers: int = 1,
 ) -> dict[str, Any]:
     manifest_rows = _ordered_manifest(_read_jsonl(manifest_path))
     coverage = validate_978_inputs(videos_dir, manifest_rows)
@@ -512,48 +540,100 @@ def run_seedance978_evaluation(
         metadata_path = output_root / "run_metadata.json"
 
     routes: list[dict[str, Any]] = []
+    evaluation_evidence_by_id: dict[str, dict[str, Any]] = {}
     for row in selected:
-        filename = f"{row['job_id']}.mp4"
-        decision = choose_reconstruction_route(audit[filename], filename)
-        routes.append({"job_id": row["job_id"], **decision})
+        job_id = str(row["job_id"])
+        filename = f"{job_id}.mp4"
+        camera = str(row.get("factors", {}).get("camera") or "")
+        decision = choose_reconstruction_route(
+            audit[filename],
+            filename,
+            camera_name=camera,
+        )
+        routes.append({"job_id": job_id, **decision})
+        evaluation_evidence_by_id[job_id] = _route_adjusted_camera_evidence(
+            audit[filename], decision
+        )
     _write_jsonl(routing_path, routes)
     route_by_id = {row["job_id"]: row for row in routes}
 
+    worker_count = max(1, int(workers))
     overlay_remaining = max(0, int(overlay_count))
     dynamic_candidates: list[str] = []
+    payloads: list[dict[str, Any]] = []
+    route_and_dynamic_dir: dict[str, tuple[str, Path]] = {}
     for ordinal, row in enumerate(selected, 1):
         job_id = str(row["job_id"])
         filename = f"{job_id}.mp4"
         route = str(route_by_id[job_id]["route"])
         dynamic_dir = output_root / "dynamic" / job_id
-        result = run_physics_job(
-            videos_dir / filename,
-            calibration_root=calibration_root,
-            registry=registry,
-            output_root=output_root / "jobs",
-            overwrite=overwrite,
-            camera_motion_evidence=audit[filename],
-            reconstruction_route=route,
-            dynamic_result_dir=dynamic_dir,
-            assess_background_rigidity=assess_background_rigidity,
-            make_overlay=overlay_remaining > 0,
+        route_and_dynamic_dir[job_id] = (route, dynamic_dir)
+        payloads.append(
+            {
+                "job_id": job_id,
+                "video_path": videos_dir / filename,
+                "calibration_root": calibration_root,
+                "registry": registry,
+                "output_root": output_root / "jobs",
+                "overwrite": overwrite,
+                "camera_motion_evidence": evaluation_evidence_by_id[job_id],
+                "reconstruction_route": route,
+                "dynamic_result_dir": dynamic_dir,
+                "assess_background_rigidity": assess_background_rigidity,
+                # Parallel runs choose overlays deterministically by manifest
+                # order.  Invalid examples are useful diagnostics too.
+                "make_overlay": ordinal <= max(0, int(overlay_count)),
+            }
         )
-        if result.get("video_generation_validity", {}).get("status") == "pass" and overlay_remaining > 0:
-            overlay_remaining -= 1
-        if (
-            route == "spatialtrackerv2_dynamic"
-            and result.get("video_generation_validity", {}).get("status") != "fail"
-            and not (dynamic_dir / "result.json").is_file()
-        ):
-            dynamic_candidates.append(job_id)
-        print(
-            f"[{ordinal}/{len(selected)}] {job_id} route={route} "
-            f"validity={result.get('video_generation_validity', {}).get('status')} "
-            f"fit={result.get('fit', {}).get('status')}",
-            flush=True,
-        )
-        if ordinal % 25 == 0:
-            write_seedance978_reports(output_root, manifest_rows, registry)
+
+    completed_results: dict[str, dict[str, Any]] = {}
+    if worker_count == 1:
+        for ordinal, payload in enumerate(payloads, 1):
+            job_id, result = _run_physics_job_process(payload)
+            completed_results[job_id] = result
+            if result.get("video_generation_validity", {}).get("status") == "pass" and overlay_remaining > 0:
+                overlay_remaining -= 1
+            route, dynamic_dir = route_and_dynamic_dir[job_id]
+            if (
+                route == "spatialtrackerv2_dynamic"
+                and result.get("video_generation_validity", {}).get("status") != "fail"
+                and not (dynamic_dir / "result.json").is_file()
+            ):
+                dynamic_candidates.append(job_id)
+            print(
+                f"[{ordinal}/{len(selected)}] {job_id} route={route} "
+                f"validity={result.get('video_generation_validity', {}).get('status')} "
+                f"fit={result.get('fit', {}).get('status')}",
+                flush=True,
+            )
+            if ordinal % 25 == 0:
+                write_seedance978_reports(output_root, manifest_rows, registry)
+    else:
+        overlay_remaining = 0
+        with ProcessPoolExecutor(max_workers=worker_count) as executor:
+            future_to_job = {
+                executor.submit(_run_physics_job_process, payload): str(payload["job_id"])
+                for payload in payloads
+            }
+            for completed, future in enumerate(as_completed(future_to_job), 1):
+                job_id, result = future.result()
+                completed_results[job_id] = result
+                route, dynamic_dir = route_and_dynamic_dir[job_id]
+                if (
+                    route == "spatialtrackerv2_dynamic"
+                    and result.get("video_generation_validity", {}).get("status") != "fail"
+                    and not (dynamic_dir / "result.json").is_file()
+                ):
+                    dynamic_candidates.append(job_id)
+                print(
+                    f"[{completed}/{len(selected)}] {job_id} route={route} "
+                    f"validity={result.get('video_generation_validity', {}).get('status')} "
+                    f"fit={result.get('fit', {}).get('status')}",
+                    flush=True,
+                )
+
+        selected_order = {str(row["job_id"]): index for index, row in enumerate(selected)}
+        dynamic_candidates.sort(key=lambda value: selected_order[value])
 
     if run_dynamic and dynamic_candidates:
         command = [
@@ -583,7 +663,7 @@ def run_seedance978_evaluation(
                 registry=registry,
                 output_root=output_root / "jobs",
                 overwrite=True,
-                camera_motion_evidence=audit[filename],
+                camera_motion_evidence=evaluation_evidence_by_id[job_id],
                 reconstruction_route="spatialtrackerv2_dynamic",
                 dynamic_result_dir=output_root / "dynamic" / job_id,
                 assess_background_rigidity=False,
@@ -610,6 +690,11 @@ def run_seedance978_evaluation(
             "coverage": coverage,
             "dynamic_candidate_count": len(dynamic_candidates),
             "dynamic_executed": bool(run_dynamic),
+            "workers": worker_count,
+            "route_counts": {
+                route_name: sum(1 for item in routes if item.get("route") == route_name)
+                for route_name in sorted({str(item.get("route")) for item in routes})
+            },
             "paths": {
                 "videos": str(videos_dir),
                 "manifest": str(manifest_path),

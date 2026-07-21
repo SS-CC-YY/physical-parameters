@@ -22,13 +22,21 @@ import numpy as np
 from .v1a_geometry import crop_resize_homography, project_points
 
 
-STATIC_CAMERA_CATEGORIES = {"fixed", "no_significant_camera_change"}
+STATIC_CAMERA_CATEGORIES = {
+    "fixed",
+    "no_significant_camera_change",
+    "side_2d_motion_within_tolerance",
+}
 
 
 def _camera_category(evidence: Mapping[str, Any] | None) -> str | None:
     if not evidence:
         return None
-    value = evidence.get("final_category") or evidence.get("decision")
+    value = (
+        evidence.get("effective_camera_motion_category")
+        or evidence.get("final_category")
+        or evidence.get("decision")
+    )
     return None if value is None else str(value)
 
 

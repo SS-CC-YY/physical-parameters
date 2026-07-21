@@ -68,6 +68,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--isolated-process", action="store_true")
     parser.add_argument("--overlay-count", type=int, default=12)
     parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Independent CPU worker processes for per-video tracking/evaluation.",
+    )
+    parser.add_argument(
         "--skip-background-rigidity",
         action="store_true",
         help="Faster diagnostic mode; not recommended for final validity labels.",
@@ -107,6 +113,7 @@ def main() -> None:
             run_dynamic=args.run_dynamic,
             dynamic_frame_stride=args.dynamic_frame_stride,
             isolated_process=args.isolated_process,
+            workers=args.workers,
         )
     print(json.dumps(result, indent=2, ensure_ascii=False))
 

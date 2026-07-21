@@ -1,4 +1,4 @@
-# Seedance 978：生成有效性 → 3D 轨迹 → 物理参数
+# Seedance 978：Side 2D 主评估 → 条件 3D 重建 → 物理参数
 
 这条流程覆盖冻结的全部 `978` 条标准球视频，并固定采用以下执行和汇报顺序：
 
@@ -24,17 +24,22 @@ code/assets/seedance978_evaluation/
 相机审计
   → 标准球追踪
   → 视频生成有效性 gate
-  → 选择静态标定或动态 3D/4D 重建
+  → Side 默认使用标定约束 2D；只有足够明显的相机平移才进入动态 3D/4D
   → 再次做球尺寸/3D 刚性 gate
   → 仅 pass 样本拟合轨迹公式和物理参数
   → 最后读取给定物理参数并评分
 ```
 
-相机漂移不是视频生成失败。它只决定重建路线：
+相机漂移不是视频生成失败。它只决定重建路线。`CAM_Side` 接近正交侧视，物理辨识的默认观测量是图像平面 2D 轨迹；不能为了“看起来更高级”而在视差不足时强行做单目 3D：
 
 - `no_significant_camera_change`：使用冻结首帧的相机 `K/R/t`、标准球真实半径和实验运动流形；
-- `camera_changed`、`borderline_below_threshold`、审计不确定：使用 SpaTrackerV2；
+- Side 的轻微/边界级变化仍走 2D，并在结果中保留原始审计类别和 `side_2d_motion_within_tolerance` 有效类别；
+- Side 只有同时满足下列条件才使用 SpaTrackerV2：最大直接平移/图像对角线 `>=1%`、持续运动簇 `>=5`、有效配对率 `>=0.80`、中位内点率 `>=0.70`、没有 scene cut 且审计状态正常；
+- 旋转或缩放本身不触发 Side 3D，因为它们不能提供可靠的平移视差；
+- Main/Top 继续采用保守策略：`camera_changed`、`borderline_below_threshold` 或审计不确定时进入动态分支；
 - 缺失相机审计证据不会擅自套用静态相机参数。
+
+冻结的 510 条 Side 审计按上述规则得到 `508` 条 2D 和 `2` 条 3D 候选。路由证据、归一化位移、质量门和阈值完整写入 `routing_side.jsonl`，不是人工挑选。
 
 ## 2. 视频生成有效性 gate
 
@@ -53,13 +58,15 @@ code/assets/seedance978_evaluation/
 
 单帧运动模糊、落地接触、遮挡、全局平移/旋转/缩放不会单独触发明确失败。摆锤实验会从背景特征中排除球轨迹和 pivot-to-ball 装置扫掠区域。
 
-固定相机分支还使用已知球大小作为逐帧米制重建硬约束：
+检测关联先使用较宽但仍受首帧约束的原始候选门 `0.65–1.40`，用于容忍边缘软化和接触帧 Hough 误差；它只决定是否保留候选，不代表该帧可以进入参数拟合。固定相机分支随后使用更严格的已知球大小作为逐帧米制重建硬约束：
 
 ```text
-0.65 <= observed_projected_radius / expected_projected_radius <= 1.35
+0.65 <= normalized_observed_radius / expected_projected_radius <= 1.35
 ```
 
 超出范围的帧不能进入物理拟合；只有更严重且持续的尺度异常才上升为视频生成失败。
+
+固定相机跟踪还会在球已经离开首帧位置后计算候选相对首帧的前景变化率。真实移动小球获得前景证据，静止的同色圆形墙面装置受到抑制；多个候选只有在最优与次优关联代价确实接近时才算身份歧义。圆框显示尺寸始终锁定首帧标定值。
 
 SpaTrackerV2 动态分支在没有 Blender 背景 3D anchor 时使用：
 
@@ -129,12 +136,12 @@ find "$VIDEOS" -maxdepth 1 -type f -name '*.mp4' | wc -l
 
 ```bash
 cd "$REMAKE_ROOT"
-CUDA_VISIBLE_DEVICES=7 python code/scripts/run_seedance978_physics_evaluation.py \
+python code/scripts/run_seedance978_physics_evaluation.py \
   --videos "$VIDEOS" \
   --output "$EVAL_OUT" \
   --phase side \
   --max-jobs 1 \
-  --run-dynamic \
+  --workers 1 \
   --overlay-count 1
 ```
 
@@ -161,17 +168,27 @@ python code/scripts/run_seedance978_physics_evaluation.py \
 
 ## 6. 正式运行并断点续跑
 
-先完成 Side：
+先完成 Side 的全部 2D 跟踪、有效性 gate 和拟合。`--workers 4` 表示 4 个相互独立的 CPU 进程；不要同时启动另一个写入同一 `EVAL_OUT` 的命令：
 
 ```bash
 cd "$REMAKE_ROOT"
-CUDA_VISIBLE_DEVICES=7 nohup python code/scripts/run_seedance978_physics_evaluation.py \
+nohup python code/scripts/run_seedance978_physics_evaluation.py \
   --videos "$VIDEOS" \
   --output "$EVAL_OUT" \
   --phase side \
-  --run-dynamic \
+  --workers 4 \
   --overlay-count 24 \
   > "$EVAL_OUT.side.log" 2>&1 &
+echo $!
+```
+
+这一步会完整检查 510 条视频，但 2 个满足阈值的移动相机样本先保持 `indeterminate/requires_3d_evidence`。GPU 空闲后，用同一输出目录补跑这 2 条动态候选；已有 508 条结果会直接复用：
+
+```bash
+CUDA_VISIBLE_DEVICES=7 nohup python code/scripts/run_seedance978_physics_evaluation.py \
+  --videos "$VIDEOS" --output "$EVAL_OUT" --phase side \
+  --workers 4 --run-dynamic \
+  > "$EVAL_OUT.side_dynamic.log" 2>&1 &
 echo $!
 ```
 
@@ -179,11 +196,11 @@ Side 完成后依次运行 Main、Top：
 
 ```bash
 CUDA_VISIBLE_DEVICES=7 nohup python code/scripts/run_seedance978_physics_evaluation.py \
-  --videos "$VIDEOS" --output "$EVAL_OUT" --phase main --run-dynamic --overlay-count 12 \
+  --videos "$VIDEOS" --output "$EVAL_OUT" --phase main --workers 4 --run-dynamic --overlay-count 12 \
   > "$EVAL_OUT.main.log" 2>&1 &
 
 CUDA_VISIBLE_DEVICES=7 nohup python code/scripts/run_seedance978_physics_evaluation.py \
-  --videos "$VIDEOS" --output "$EVAL_OUT" --phase top --run-dynamic --overlay-count 12 \
+  --videos "$VIDEOS" --output "$EVAL_OUT" --phase top --workers 4 --run-dynamic --overlay-count 12 \
   > "$EVAL_OUT.top.log" 2>&1 &
 ```
 
@@ -193,7 +210,7 @@ CUDA_VISIBLE_DEVICES=7 nohup python code/scripts/run_seedance978_physics_evaluat
 
 ```bash
 CUDA_VISIBLE_DEVICES=7 python code/scripts/run_seedance978_physics_evaluation.py \
-  --videos "$VIDEOS" --output "$EVAL_OUT" --phase all --run-dynamic
+  --videos "$VIDEOS" --output "$EVAL_OUT" --phase all --workers 4 --run-dynamic
 ```
 
 ## 7. 输出

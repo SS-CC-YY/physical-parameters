@@ -13,8 +13,12 @@ try:
     import numpy as np
 
     from remake_benchmark.reconstruction.fixed_camera_ball import (
+        SphereCandidate,
+        _choose_candidate,
         _edge_ring_evidence,
         _hough_candidates,
+        _reference_change_mask,
+        _with_reference_change,
         parse_video_job,
         reconstruct_metric_trajectory,
         track_standard_ball,
@@ -356,6 +360,54 @@ class FixedCameraBallTests(unittest.TestCase):
         cv2.ellipse(arc, center, (30, 30), 0.0, 0.0, 100.0, 255, 1, cv2.LINE_AA)
         arc_support, _ = _edge_ring_evidence(arc, center, proposed_radius)
         self.assertLess(arc_support, 0.55)
+
+    def test_frame0_change_prefers_moving_ball_over_nearer_static_orange_prop(self) -> None:
+        radius = 14.0
+        reference = np.full((180, 180, 3), 170, dtype=np.uint8)
+        current = reference.copy()
+        self._draw_synthetic_sphere(reference, (50, 50), int(radius))
+        self._draw_synthetic_sphere(reference, (100, 100), int(radius))
+        # The prop remains unchanged while the benchmark ball moves far enough
+        # that a pure nearest-neighbour association would prefer the prop.
+        self._draw_synthetic_sphere(current, (50, 50), int(radius))
+        self._draw_synthetic_sphere(current, (100, 100), int(radius))
+        cv2.circle(current, (50, 50), int(radius) + 2, (170, 170, 170), -1, cv2.LINE_AA)
+        self._draw_synthetic_sphere(current, (50, 130), int(radius))
+
+        def candidate(center: tuple[float, float]) -> SphereCandidate:
+            return SphereCandidate(
+                center_u_px=center[0],
+                center_v_px=center[1],
+                radius_px=radius,
+                area_px=float(np.pi * radius**2),
+                circularity=0.92,
+                ellipse_major_axis_px=2.0 * radius,
+                ellipse_minor_axis_px=2.0 * radius,
+                ellipse_angle_deg=0.0,
+                ellipse_axis_ratio=1.0,
+                radial_residual_ratio=0.02,
+                hue_distance=0.0,
+                boundary=False,
+                measurement_source="segmentation_contour",
+            )
+
+        annotated = _with_reference_change(
+            [candidate((50.0, 130.0)), candidate((100.0, 100.0))],
+            _reference_change_mask(reference, current),
+        )
+        moving, static = annotated
+        self.assertGreater(float(moving.reference_change_fraction), 0.85)
+        self.assertLess(float(static.reference_change_fraction), 0.10)
+        selected, _ = _choose_candidate(
+            annotated,
+            np.asarray([80.0, 110.0]),
+            radius,
+            radius,
+            gap=1,
+        )
+        self.assertIsNotNone(selected)
+        self.assertLess(abs(float(selected.center_u_px) - 50.0), 1e-6)
+        self.assertLess(abs(float(selected.center_v_px) - 130.0), 1e-6)
 
 
 if __name__ == "__main__":

@@ -78,6 +78,7 @@ _STATIC_CAMERA_CATEGORIES = {
     "fixed",
     "static",
     "no_significant_camera_change",
+    "side_2d_motion_within_tolerance",
     "unchanged",
 }
 _CHANGED_CAMERA_CATEGORIES = {
@@ -175,7 +176,13 @@ def _append_unique(items: list[str], value: str) -> None:
 def _camera_category(evidence: Mapping[str, Any] | None) -> str | None:
     if not evidence:
         return None
-    for name in ("final_category", "camera_motion_category", "category", "decision"):
+    for name in (
+        "effective_camera_motion_category",
+        "final_category",
+        "camera_motion_category",
+        "category",
+        "decision",
+    ):
         value = evidence.get(name)
         if isinstance(value, str) and value.strip():
             return value.strip().lower()
@@ -417,10 +424,23 @@ def evaluate_generation_validity(
         # full image.  Indoor backgrounds can contain dozens of irrelevant
         # blobs, so only locally plausible identity candidates are meaningful
         # when the tracker supplies that diagnostic.
-        count = _finite_float(
-            row.get("plausible_candidate_count", row.get("candidate_count"))
+        explicit_ambiguity = row.get("identity_ambiguous")
+        count = _finite_float(row.get("plausible_candidate_count", row.get("candidate_count")))
+        margin = _finite_float(row.get("association_margin"))
+        ambiguous = (
+            explicit_ambiguity is True
+            or (
+                explicit_ambiguity is None
+                and count is not None
+                and count >= float(tracking_config["ambiguous_candidate_count"])
+                # When the tracker reports an association margin, multiple
+                # candidates are only ambiguous if the top two are close.  A
+                # frozen first-frame identity with a clear winner must not be
+                # blocked merely because an indoor scene contains orange props.
+                and (margin is None or margin < 0.30)
+            )
         )
-        if count is not None and count >= float(tracking_config["ambiguous_candidate_count"]):
+        if ambiguous:
             ambiguous_frames.append(frame)
 
     tracked_fraction = len(found_rows) / total if total else 0.0
@@ -443,10 +463,21 @@ def evaluate_generation_validity(
         and len(reliable_rows) >= required_reliable_frames
         and not unresolved_tracking_runs
     )
+    trusted_first_frame = any(
+        _frame_index(row, fallback) == 0
+        for fallback, row in reliable_rows
+    )
     if not tracking_ok:
         _append_unique(warnings, "insufficient_reliable_object_tracking")
         _append_unique(blocking_indeterminate, "insufficient_reliable_object_tracking")
         offending["object_identity_unresolved"] = tracking_unresolved
+    if not trusted_first_frame:
+        # Metric sphere-size calibration is defined relative to the generated
+        # frame-zero observation.  Later good detections cannot reconstruct
+        # that missing scale anchor, so stop before geometry instead of
+        # surfacing an internal pipeline exception.
+        _append_unique(warnings, "missing_trusted_first_frame_observation")
+        _append_unique(blocking_indeterminate, "missing_trusted_first_frame_observation")
     ambiguous_runs = _runs(ambiguous_frames, int(tracking_config["persistent_frames"]))
     if ambiguous_runs:
         _append_unique(warnings, "persistent_object_identity_ambiguity")
@@ -689,13 +720,18 @@ def evaluate_generation_validity(
                 "scene_cut_frames": cut_frames,
             },
             "object_identity": {
-                "status": "pass" if tracking_ok and not ambiguous_runs else "indeterminate",
+                "status": (
+                    "pass"
+                    if tracking_ok and trusted_first_frame and not ambiguous_runs
+                    else "indeterminate"
+                ),
                 "frame_count": total,
                 "found_count": len(found_rows),
                 "reliable_count": len(reliable_rows),
                 "tracked_fraction": tracked_fraction,
                 "reliable_fraction": reliable_fraction,
                 "required_reliable_frames": required_reliable_frames,
+                "trusted_first_frame": trusted_first_frame,
                 "missing_frames": missing_frames,
                 "unverified_frames": unverified_frames,
                 "unreliable_frames": unreliable_frames,

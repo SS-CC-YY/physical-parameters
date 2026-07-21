@@ -16,7 +16,7 @@ from __future__ import annotations
 import csv
 import json
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -52,6 +52,10 @@ class SphereCandidate:
     shape_evidence_source: str | None = "segmentation_contour"
     edge_support_fraction: float | None = None
     edge_radial_residual_ratio: float | None = None
+    # Fraction of pixels inside the candidate disk that differ materially from
+    # frame zero.  For a fixed camera this separates a moving generated ball
+    # from same-colour circular props that remain baked into the background.
+    reference_change_fraction: float | None = None
 
 
 _MAX_TRUSTED_ASSOCIATION_COST = 1.20
@@ -61,6 +65,9 @@ _MAX_COLLISION_CONTINUITY_INNOVATION_RADII = 2.25
 _HOUGH_SHAPE_MIN_COLOUR_SUPPORT = 0.45
 _HOUGH_SHAPE_MIN_EDGE_SUPPORT = 0.55
 _HOUGH_SHAPE_MAX_RADIAL_RESIDUAL = 0.10
+_REFERENCE_CHANGE_PIXEL_THRESHOLD = 18
+_REFERENCE_CHANGE_LOW_SUPPORT = 0.20
+_REFERENCE_CHANGE_HIGH_SUPPORT = 0.55
 
 
 LINE_MANIFOLDS = {
@@ -147,6 +154,41 @@ def load_calibration(path: Path) -> dict[str, Any]:
 def _hue_distance(values: np.ndarray, center: float) -> np.ndarray:
     delta = np.abs(values.astype(np.float32) - float(center))
     return np.minimum(delta, 180.0 - delta)
+
+
+def _reference_change_mask(reference_frame: np.ndarray, frame: np.ndarray) -> np.ndarray:
+    """Return compression-tolerant foreground change relative to frame zero."""
+
+    reference = cv2.GaussianBlur(reference_frame, (3, 3), 0.0)
+    current = cv2.GaussianBlur(frame, (3, 3), 0.0)
+    delta = cv2.absdiff(reference, current)
+    return np.max(delta, axis=2) >= _REFERENCE_CHANGE_PIXEL_THRESHOLD
+
+
+def _with_reference_change(
+    candidates: Sequence[SphereCandidate],
+    change_mask: np.ndarray,
+) -> list[SphereCandidate]:
+    height, width = change_mask.shape[:2]
+    output: list[SphereCandidate] = []
+    for candidate in candidates:
+        # The inner disk is less sensitive to Hough radius over-estimation and
+        # floor/prop edges than a full bounding box.
+        radius = max(2.0, 0.78 * float(candidate.radius_px))
+        x0 = max(0, int(math.floor(float(candidate.center_u_px) - radius)))
+        y0 = max(0, int(math.floor(float(candidate.center_v_px) - radius)))
+        x1 = min(width, int(math.ceil(float(candidate.center_u_px) + radius)) + 1)
+        y1 = min(height, int(math.ceil(float(candidate.center_v_px) + radius)) + 1)
+        yy, xx = np.ogrid[y0:y1, x0:x1]
+        disk = (
+            (xx - float(candidate.center_u_px)) ** 2
+            + (yy - float(candidate.center_v_px)) ** 2
+            <= radius**2
+        )
+        crop = change_mask[y0:y1, x0:x1]
+        support = float(np.mean(crop[disk])) if np.any(disk) else 0.0
+        output.append(replace(candidate, reference_change_fraction=support))
+    return output
 
 
 def _enumerate_candidates(
@@ -404,7 +446,11 @@ def _association_terms(
     gap_growth = min(1.5, 0.75 * math.sqrt(max(0, int(gap) - 1)))
     max_distance = (2.75 + gap_growth) * reference_radius
     position_pass = distance <= max_distance
-    radius_pass = 0.45 <= radius_ratio <= 1.75
+    # The benchmark sphere is rigid and its first-frame projected size is
+    # frozen.  This is deliberately tighter than Hough's proposal range: a
+    # large circular wall prop must not become the ball merely because the
+    # motion prediction temporarily lags an accelerating trajectory.
+    radius_pass = 0.65 <= radius_ratio <= 1.40
 
     circularity = item.circularity if item.shape_evidence_available else None
     axis_ratio = item.ellipse_axis_ratio if item.shape_evidence_available else None
@@ -419,6 +465,30 @@ def _association_terms(
         if item.colour_support_fraction is None
         else max(0.0, 0.55 - item.colour_support_fraction)
     )
+    reference_change_term = 0.0
+    if item.reference_change_fraction is not None:
+        support = float(item.reference_change_fraction)
+        if support < _REFERENCE_CHANGE_LOW_SUPPORT:
+            # A candidate that looks unchanged from frame zero is likely a
+            # static prop.  Keep the penalty small at a precise motion
+            # prediction so pendulums/bounces may legitimately revisit their
+            # initial image location.
+            innovation_scale = min(
+                1.0,
+                distance / max(0.45 * reference_radius, 1.0),
+            )
+            deficit = (_REFERENCE_CHANGE_LOW_SUPPORT - support) / _REFERENCE_CHANGE_LOW_SUPPORT
+            reference_change_term = 1.20 * deficit * innovation_scale
+        elif support >= _REFERENCE_CHANGE_HIGH_SUPPORT:
+            # Strong frame-zero foreground change is independent evidence for
+            # the generated moving object.  It lets an accelerating ball beat
+            # a nearer but static same-colour background circle.
+            strength = min(
+                1.0,
+                (support - _REFERENCE_CHANGE_HIGH_SUPPORT)
+                / max(1.0 - _REFERENCE_CHANGE_HIGH_SUPPORT, 1e-6),
+            )
+            reference_change_term = -0.20 - 0.40 * strength
     cost = (
         distance / max(2.0 * reference_radius, 1.0)
         + 1.15 * radius_change
@@ -429,6 +499,7 @@ def _association_terms(
         + boundary_penalty
         + source_penalty
         + 0.40 * colour_support_penalty
+        + reference_change_term
     )
     return {
         "cost": float(cost),
@@ -436,6 +507,8 @@ def _association_terms(
         "max_prediction_distance_px": float(max_distance),
         "position_pass": position_pass,
         "radius_pass": radius_pass,
+        "reference_change_fraction": item.reference_change_fraction,
+        "reference_change_term": float(reference_change_term),
     }
 
 
@@ -735,6 +808,13 @@ def track_standard_ball(
             collision_prediction = np.asarray(centers[-1], dtype=np.float64)
         previous_radius = _robust_recent_radius(trusted_radii, float(expected_radius_px))
         candidates = _enumerate_candidates(frame, colour, expected_radius_px)
+        reference_change = None
+        if frame_index > 0:
+            reference_change = _reference_change_mask(frames[0], frame)
+            candidates = _with_reference_change(
+                candidates,
+                reference_change,
+            )
         candidate, cost = _choose_candidate(
             candidates,
             predicted,
@@ -773,6 +853,11 @@ def track_standard_ball(
                         expected_radius_px,
                         collision_prediction,
                     )
+                )
+            if reference_change is not None:
+                hough = _with_reference_change(
+                    hough,
+                    reference_change,
                 )
             candidates.extend(hough)
             candidate, cost = _choose_candidate(
@@ -861,12 +946,12 @@ def track_standard_ball(
         rejection_reason = None
         if candidate is None:
             rejection_reason = "no_candidate_within_gate"
+        elif persistent_distractor:
+            rejection_reason = "persistent_background_candidate"
         elif not math.isfinite(cost) or cost > _MAX_TRUSTED_ASSOCIATION_COST:
             rejection_reason = "association_cost_exceeds_gate"
         elif candidate.boundary:
             rejection_reason = "candidate_touches_frame_boundary"
-        elif persistent_distractor:
-            rejection_reason = "persistent_background_candidate"
         elif locally_ambiguous:
             rejection_reason = "ambiguous_local_candidates"
         elif high_innovation:
@@ -907,6 +992,7 @@ def track_standard_ball(
                     "candidate_count": len(candidates),
                     "plausible_candidate_count": plausible_count,
                     "association_margin": association_margin,
+                    "identity_ambiguous": locally_ambiguous,
                     "identity_rejection_reason": rejection_reason,
                     "innovation_motion_supported": innovation_motion_supported,
                     "association_cost": (
@@ -928,6 +1014,11 @@ def track_standard_ball(
                     "shape_evidence_source": None,
                     "edge_support_fraction": None,
                     "edge_radial_residual_ratio": None,
+                    "reference_change_fraction": (
+                        None
+                        if candidate is None
+                        else candidate.reference_change_fraction
+                    ),
                     "measurement_source": None,
                     "ellipse_major_axis_px": None,
                     "ellipse_minor_axis_px": None,
@@ -972,6 +1063,7 @@ def track_standard_ball(
                 "candidate_count": len(candidates),
                 "plausible_candidate_count": plausible_count,
                 "association_margin": association_margin,
+                "identity_ambiguous": locally_ambiguous,
                 "identity_rejection_reason": None,
                 "innovation_motion_supported": innovation_motion_supported,
                 "association_cost": float(cost),
@@ -986,6 +1078,7 @@ def track_standard_ball(
                 "shape_evidence_source": candidate.shape_evidence_source,
                 "edge_support_fraction": candidate.edge_support_fraction,
                 "edge_radial_residual_ratio": candidate.edge_radial_residual_ratio,
+                "reference_change_fraction": candidate.reference_change_fraction,
                 "contour_area_px": (
                     candidate.area_px
                     if shape_evidence and candidate.measurement_source == "segmentation_contour"
@@ -1364,7 +1457,11 @@ def run_ball_tracking(
 
     frames, video = read_video_frames(video_path)
     reference = _reference_circle(calibration, (int(video["width"]), int(video["height"])))
-    track, tracking_summary = track_standard_ball(frames, reference["center_uv_px"], reference["radius_px"])
+    track, tracking_summary = track_standard_ball(
+        frames,
+        reference["center_uv_px"],
+        reference["radius_px"],
+    )
     return frames, track, {"video": video, "tracking": tracking_summary}
 
 

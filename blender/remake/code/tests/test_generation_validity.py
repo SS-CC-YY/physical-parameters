@@ -177,6 +177,15 @@ class GenerationValidityTest(unittest.TestCase):
         self.assertFalse(result["fit_eligible"])
         self.assertIn("persistent_object_identity_ambiguity", result["warning_codes"])
 
+    def test_multiple_candidates_with_clear_association_margin_are_not_ambiguous(self) -> None:
+        rows = _tracks(plausible_candidate_count=2, association_margin=0.65)
+        result = evaluate_generation_validity(
+            rows,
+            camera_motion_evidence={"final_category": "no_significant_camera_change"},
+        )
+        self.assertEqual(result["status"], "pass")
+        self.assertNotIn("persistent_object_identity_ambiguity", result["warning_codes"])
+
     def test_scene_cut_is_a_hard_failure(self) -> None:
         result = evaluate_generation_validity(
             _tracks(),
@@ -204,6 +213,25 @@ class GenerationValidityTest(unittest.TestCase):
         self.assertEqual(result["failure_codes"], [])
         self.assertIn("insufficient_reliable_object_tracking", result["warning_codes"])
 
+    def test_missing_trusted_frame_zero_is_indeterminate_before_geometry(self) -> None:
+        rows = _tracks()
+        rows[0].update(
+            {
+                "found": False,
+                "observation_status": "missing",
+                "identity_verified": False,
+                "measurement_valid": False,
+            }
+        )
+        result = evaluate_generation_validity(
+            rows,
+            camera_motion_evidence={"final_category": "no_significant_camera_change"},
+        )
+        self.assertEqual(result["status"], "indeterminate")
+        self.assertFalse(result["fit_eligible"])
+        self.assertFalse(result["checks"]["object_identity"]["trusted_first_frame"])
+        self.assertIn("missing_trusted_first_frame_observation", result["warning_codes"])
+
     def test_long_tracking_gap_blocks_even_with_high_total_coverage(self) -> None:
         rows = _tracks(count=100)
         for row in rows[45:58]:
@@ -229,6 +257,22 @@ class GenerationValidityTest(unittest.TestCase):
         self.assertEqual(result["status"], "indeterminate")
         self.assertEqual(result["failure_codes"], [])
         self.assertIn("moving_camera_scene_rigidity_unresolved", result["warning_codes"])
+
+    def test_side_2d_effective_category_overrides_raw_borderline_label(self) -> None:
+        result = evaluate_generation_validity(
+            _tracks(),
+            camera_motion_evidence={
+                "final_category": "borderline_below_threshold",
+                "raw_final_category": "borderline_below_threshold",
+                "effective_camera_motion_category": "side_2d_motion_within_tolerance",
+            },
+        )
+        self.assertEqual(result["status"], "pass")
+        self.assertTrue(result["fit_eligible"])
+        self.assertEqual(
+            result["checks"]["camera_motion"]["category"],
+            "side_2d_motion_within_tolerance",
+        )
 
     def test_changed_camera_with_rigid_3d_evidence_passes(self) -> None:
         result = evaluate_generation_validity(

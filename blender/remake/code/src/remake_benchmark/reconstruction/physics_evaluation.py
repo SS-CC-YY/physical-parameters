@@ -31,7 +31,11 @@ from .physics_parameters import (
 
 
 DEFAULT_BENCHMARK_SEED = 341867882
-STATIC_CAMERA_CATEGORIES = {"fixed", "no_significant_camera_change"}
+STATIC_CAMERA_CATEGORIES = {
+    "fixed",
+    "no_significant_camera_change",
+    "side_2d_motion_within_tolerance",
+}
 
 
 def load_experiment_registry(path: Path) -> dict[str, Any]:
@@ -104,7 +108,11 @@ def benchmark_split(job: Mapping[str, Any]) -> str:
 def _camera_category(evidence: Mapping[str, Any] | None) -> str | None:
     if not evidence:
         return None
-    value = evidence.get("final_category") or evidence.get("decision")
+    value = (
+        evidence.get("effective_camera_motion_category")
+        or evidence.get("final_category")
+        or evidence.get("decision")
+    )
     return None if value is None else str(value)
 
 
