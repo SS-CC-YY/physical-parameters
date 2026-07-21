@@ -1,0 +1,76 @@
+version: 0.3.0
+
+runtime:
+  opencv_rng_seed: 20260720
+
+# Preferred path: lift Blender-derived static background anchors to world xyz,
+# track their video pixels, and recover the camera with solvePnPRansac.  A
+# projective image warp remains an explicitly labelled fallback.
+camera_pose:
+  use_pnp_anchors: true
+  min_registration_features: 24
+  min_registration_inlier_ratio: 0.30
+  max_registration_reprojection_p95_px: 3.0
+  min_registration_image_coverage_fraction: 0.20
+  min_registration_area_ratio: 0.75
+  max_registration_area_ratio: 1.30
+  max_registration_corner_shift_fraction: 0.18
+  min_anchor_tracks: 16
+  min_anchor_singular_value_ratio: 0.02
+  min_anchor_world_extent_m: 1.0
+  min_inlier_ratio: 0.60
+  max_reprojection_median_px: 3.0
+  max_all_reprojection_median_px: 4.0
+  min_primary_pnp_fraction: 0.95
+  max_primary_pnp_failure_run: 1
+  lk_forward_backward_px: 1.75
+
+tracking:
+  hue_tolerance: 18.0
+  min_circularity: 0.50
+  min_radius_ratio: 0.55
+  max_radius_ratio: 1.50
+  max_curve_distance_diameters: 0.75
+  max_prediction_distance_diameters: 1.25
+  prediction_reset_gap_frames: 3
+  min_detection_fraction: 0.70
+  max_line_residual_object_diameters: 1.35
+
+static_camera:
+  # Used only after the whole-video motion audit has positively classified the
+  # view as fixed.  Violating frames are excluded from metric fitting.
+  hard_sphere_radius_constraint: true
+  min_observed_expected_radius_ratio: 0.65
+  max_observed_expected_radius_ratio: 1.35
+  min_sphere_size_valid_fraction: 0.70
+
+physics:
+  min_fit_points: 10
+  min_fit_duration_s: 0.30
+  release_drop_m: 0.035
+  contact_margin_m: 0.10
+  contact_confirmation_frames: 3
+  robust_iterations: 6
+  huber_k: 1.5
+  min_r2: 0.90
+  similarity_pass: 0.75
+
+validity:
+  min_valid_fraction: 0.60
+  min_airborne_coverage_fraction: 0.80
+  max_airborne_gap_frames: 3
+  min_primary_duration_s: 0.45
+  min_primary_vertical_span_m: 1.0
+  max_initial_height_error_m: 0.30
+  max_initial_center_error_diameters: 0.75
+  min_background_success_fraction: 0.80
+  min_background_inlier_ratio_p10: 0.60
+  max_background_failure_run: 3
+  # Warning-only in the hash-pinned legacy clean-GT validator. Generated
+  # videos continue to use background tracking as a hard quality gate.
+  max_verified_static_corner_motion_p95_px: 2.0
+  max_line_residual_p95_px: 28.0
+  max_background_reprojection_p95_px: 4.0
+  max_metric_sigma_p95_m: 0.20
+  max_pnp_vs_projective_curve_p95_px: 8.0
+  max_radius_based_lateral_offset_p95_m: 0.75
