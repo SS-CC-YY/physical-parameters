@@ -16,6 +16,8 @@ import numpy as np
 import torch
 import torchvision.transforms as T
 
+from cuda_bootstrap import initialize_cuda_before_xformers
+
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 UPSTREAM = Path(
@@ -25,6 +27,17 @@ UPSTREAM = Path(
     )
 ).expanduser().resolve()
 sys.path.insert(0, str(UPSTREAM))
+
+# Do not let xformers perform the process's first CUDA lazy-init from inside
+# its own import graph.  That import-order path has produced a native-loader
+# SIGSEGV on an otherwise healthy H20 CUDA context.
+CUDA_BOOTSTRAP = initialize_cuda_before_xformers(torch)
+print(
+    "CUDA ready before xformers import: "
+    f"logical_device={CUDA_BOOTSTRAP['logical_device_index']} "
+    f"name={CUDA_BOOTSTRAP['device_name']}",
+    flush=True,
+)
 
 from models.SpaTrackV2.models.predictor import Predictor  # noqa: E402
 from models.SpaTrackV2.models.vggt4track.models.vggt_moe import VGGT4Track  # noqa: E402

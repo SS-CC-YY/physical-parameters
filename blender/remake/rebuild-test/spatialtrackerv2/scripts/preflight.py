@@ -12,6 +12,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from cuda_bootstrap import initialize_cuda_before_xformers
+
 
 HERE = Path(__file__).resolve().parent
 PACKAGE_ROOT = HERE.parent
@@ -69,8 +71,7 @@ def main() -> None:
 
     import torch
 
-    if not torch.cuda.is_available():
-        raise RuntimeError("CUDA is not available; SpatialTrackerV2 full inference requires an NVIDIA GPU")
+    cuda_bootstrap = initialize_cuda_before_xformers(torch)
     upstream = Path(
         os.environ.get(
             "SPATIALTRACKERV2_ROOT",
@@ -187,6 +188,7 @@ def main() -> None:
         "cuda_device_count": torch.cuda.device_count(),
         "cuda_devices": [torch.cuda.get_device_name(index) for index in range(torch.cuda.device_count())],
         "visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
+        "cuda_bootstrap_before_xformers": cuda_bootstrap,
         "manifest_jobs": len(jobs),
         "manifest": str(manifest),
         "spatialtrackerv2_root": str(upstream),

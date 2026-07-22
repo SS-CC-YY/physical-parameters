@@ -6,8 +6,6 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from spatialtracker_session import SpatialTrackerSession
-
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
@@ -23,6 +21,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    # Delay CUDA/xformers initialisation until after argument parsing so even
+    # ``--help`` and malformed invocations do not create a GPU context.
+    from spatialtracker_session import SpatialTrackerSession
+
     session = SpatialTrackerSession(args.track_mode, args.vo_points)
     session.run(
         args.video,
