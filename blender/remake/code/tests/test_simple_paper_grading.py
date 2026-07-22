@@ -1,0 +1,103 @@
+from __future__ import annotations
+
+import sys
+import unittest
+from pathlib import Path
+
+
+CODE_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(CODE_ROOT / "src"))
+
+from remake_benchmark.reconstruction.simple_paper_grading import (  # noqa: E402
+    grade_simple_paper_benchmark,
+)
+
+
+def _experiment(experiment_id: str, estimates: list[float]) -> tuple[dict, list[dict]]:
+    anchors = []
+    rows = []
+    for index, (target, estimate) in enumerate(zip((0.0, 0.5, 1.0), estimates)):
+        tuple_id = f"p{index}"
+        anchors.append({"id": tuple_id, "p": target})
+        rows.append(
+            {
+                "video_name": f"{experiment_id}__{tuple_id}.mp4",
+                "experiment_id": experiment_id,
+                "parameter_tuple_id": tuple_id,
+                "scene_id": "baseline",
+                "camera_name": "CAM_Side",
+                "seed": "341867882",
+                "manual_generation_validity_status": "pass",
+                "generation_validity_status": "pass",
+                "fit_complete": "True",
+                "trajectory_fit_eligible": "True",
+                "fit_status": "ok",
+                "p__estimate": str(estimate),
+            }
+        )
+    return (
+        {
+            "id": experiment_id,
+            "hidden_parameters": [{"name": "p", "unit": "1", "valid_range": [0.0, 1.0]}],
+            "anchor_tuples": anchors,
+        },
+        rows,
+    )
+
+
+class SimplePaperGradingTests(unittest.TestCase):
+    def test_response_grades_are_lenient_and_do_not_require_fit_diagnostics(self) -> None:
+        specs_and_rows = [
+            _experiment("l2", [0.8, 0.5, 0.2]),
+            _experiment("l3", [0.50, 0.80, 1.30]),
+            _experiment("l4", [0.05, 0.55, 0.95]),
+        ]
+        registry = {"experiments": [item[0] for item in specs_and_rows]}
+        rows = [row for item in specs_and_rows for row in item[1]]
+
+        result = grade_simple_paper_benchmark(rows, registry)
+        grades = {row["experiment_id"]: row["grade"] for row in result["per_scan_rows"]}
+
+        self.assertEqual(grades, {"l2": "L2", "l3": "L3", "l4": "L4"})
+        self.assertEqual(result["summary"]["grade_counts"]["L2"], 1)
+        self.assertEqual(result["summary"]["grade_counts"]["L3"], 1)
+        self.assertEqual(result["summary"]["grade_counts"]["L4"], 1)
+
+    def test_unconfirmed_automatic_failure_is_x_not_model_failure(self) -> None:
+        spec, rows = _experiment("auto", [0.0, 0.5, 1.0])
+        rows[0].pop("manual_generation_validity_status")
+        rows[0]["generation_validity_status"] = "fail"
+        result = grade_simple_paper_benchmark(rows, {"experiments": [spec]})
+
+        video = next(row for row in result["per_video_rows"] if row["row_id"].endswith("p0.mp4"))
+        self.assertEqual(video["grade"], "X")
+        self.assertIn("automatic_failure_pending_manual_confirmation", video["reason_codes"])
+        # The two remaining levels still support a response scan.
+        self.assertEqual(result["per_scan_rows"][0]["grade"], "L4")
+
+    def test_manual_failure_is_l1_but_is_not_mixed_into_scan_grade_counts(self) -> None:
+        spec, rows = _experiment("manual", [0.0, 0.5, 1.0])
+        rows[0]["manual_generation_validity_status"] = "fail"
+        result = grade_simple_paper_benchmark(rows, {"experiments": [spec]})
+
+        video = next(row for row in result["per_video_rows"] if row["row_id"].endswith("p0.mp4"))
+        self.assertEqual(video["grade"], "L1")
+        self.assertEqual(result["summary"]["video_grade_counts"]["L1"], 1)
+        self.assertNotIn("L1", result["summary"]["grade_counts"])
+        self.assertEqual(result["per_scan_rows"][0]["grade"], "L4")
+
+    def test_only_frozen_baseline_side_primary_seed_is_selected(self) -> None:
+        spec, rows = _experiment("scope", [0.0, 0.5, 1.0])
+        rows.extend(
+            [
+                {**rows[0], "video_name": "indoor.mp4", "scene_id": "indoor1"},
+                {**rows[0], "video_name": "main.mp4", "camera_name": "CAM_Main"},
+                {**rows[0], "video_name": "seed.mp4", "seed": "7"},
+            ]
+        )
+        result = grade_simple_paper_benchmark(rows, {"experiments": [spec]})
+        self.assertEqual(result["summary"]["selected_primary_slice_row_count"], 3)
+
+
+if __name__ == "__main__":
+    unittest.main()

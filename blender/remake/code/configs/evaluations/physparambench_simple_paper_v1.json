@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0.0",
+  "policy_id": "physparambench_simple_paper_v1",
+  "purpose": "A deliberately compact paper-facing evaluation. The stricter hierarchical audit remains available as supplementary evidence.",
+  "primary_scope": {
+    "scene_id": "baseline",
+    "camera_name": "CAM_Side",
+    "seed": 341867882
+  },
+  "response_grading": {
+    "minimum_usable_levels": 2,
+    "minimum_pairwise_direction_concordance_exclusive": 0.5,
+    "minimum_slope_exclusive": 0.0,
+    "l4_min_slope_inclusive": 0.2,
+    "l4_max_median_valid_range_nae_inclusive": 0.25
+  },
+  "measurement_policy": {
+    "tracking_or_reconstruction_failure_grade": "X",
+    "automatic_generation_failure_without_manual_confirmation_grade": "X",
+    "ignore_small_track_jitter_for_grade": true,
+    "do_not_require_strict_nrmse_or_r2_gate": true
+  },
+  "auxiliary_scopes": {
+    "indoor_outdoor": "visual_and_motion_robustness_only",
+    "main_top": "motion_law_robustness_only",
+    "extra_seeds": "same_condition_stability_only",
+    "dynamic_3d": "exploratory_only"
+  },
+  "grade_labels": {
+    "L1": "clear_motion_generation_failure",
+    "L2": "motion_generated_but_parameter_response_failed",
+    "L3": "positive_parameter_response_but_numeric_inaccurate",
+    "L4": "positive_parameter_response_and_numeric_accurate_within_benchmark_tolerance",
+    "X": "measurement_unavailable_not_a_model_failure"
+  },
+  "status": "paper_facing_working_policy"
+}
