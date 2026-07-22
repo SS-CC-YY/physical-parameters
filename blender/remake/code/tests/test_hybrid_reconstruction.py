@@ -91,16 +91,16 @@ class HybridRoutingTests(unittest.TestCase):
         )
         self.assertTrue(route["calibrated_2d_approximation"])
 
-    def test_side_requires_persistent_one_percent_translation_for_3d(self) -> None:
+    def test_side_requires_persistent_two_percent_translation_for_3d(self) -> None:
         route = choose_reconstruction_route(
-            self._side_motion_evidence(translation_px=12.2, cluster=8),
+            self._side_motion_evidence(translation_px=24.0, cluster=8),
             "sample__CAM_Side__seed-1.mp4",
         )
         self.assertEqual(route["route"], "spatialtrackerv2_dynamic")
         self.assertEqual(route["reason"], "side_persistent_translation_supports_3d")
         self.assertGreaterEqual(
             route["side_3d_evidence"]["translation_diagonal_fraction"],
-            0.01,
+            0.02,
         )
 
     def test_side_large_but_nonpersistent_audit_does_not_trigger_3d(self) -> None:
@@ -122,7 +122,7 @@ class HybridRoutingTests(unittest.TestCase):
         )
         self.assertEqual(route["route"], "spatialtrackerv2_dynamic")
 
-    def test_frozen_seedance_side_audit_routes_508_to_2d_and_2_to_3d(self) -> None:
+    def test_frozen_seedance_side_audit_routes_509_to_2d_and_1_to_3d(self) -> None:
         audit_path = CODE_ROOT / "assets" / "seedance978_evaluation" / "camera_motion.jsonl"
         audit_rows = [
             json.loads(line)
@@ -136,14 +136,22 @@ class HybridRoutingTests(unittest.TestCase):
         calibrated = [item for item in decisions if item[1]["route"] == "calibrated_static_sphere"]
         dynamic = [item for item in decisions if item[1]["route"] == "spatialtrackerv2_dynamic"]
         self.assertEqual(len(audit_rows), 510)
-        self.assertEqual(len(calibrated), 508)
+        self.assertEqual(len(calibrated), 509)
         self.assertEqual(
             [row["filename"] for row, _ in dynamic],
             [
                 "v1_C__mu0p18__indoor1__standard_ball__CAM_Side__seed-341867882.mp4",
-                "v3_A__default__baseline__standard_ball__CAM_Side__seed-265635392.mp4",
             ],
         )
+
+        reviewed = next(
+            decision
+            for row, decision in decisions
+            if row["filename"]
+            == "v3_A__default__baseline__standard_ball__CAM_Side__seed-265635392.mp4"
+        )
+        self.assertEqual(reviewed["route"], "calibrated_static_sphere")
+        self.assertEqual(reviewed["reason"], "side_motion_below_reliable_3d_threshold")
 
 
 if __name__ == "__main__":

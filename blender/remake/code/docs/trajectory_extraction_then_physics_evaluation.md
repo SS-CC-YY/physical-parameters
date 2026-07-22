@@ -16,12 +16,12 @@
 
 | 视角 | 标定约束 2D/米制回投影 | SpaTrackerV2 动态 3D | 总数 |
 |---|---:|---:|---:|
-| CAM_Side | 508 | 2 | 510 |
+| CAM_Side | 509 | 1 | 510 |
 | CAM_Main | 233 | 1 | 234 |
 | CAM_Top | 232 | 2 | 234 |
-| 合计 | 973 | 5 | 978 |
+| 合计 | 974 | 4 | 978 |
 
-只有相机位移证据达到冻结阈值的 5 条视频才使用重模型。SpaTrackerV2 正式提取固定使用 `frame_stride=1`；这里的 stride 是抽帧步长，不是视频 FPS。
+只有相机位移证据达到冻结阈值的 4 条视频才使用重模型。SpaTrackerV2 正式提取固定使用 `frame_stride=1`；这里的 stride 是抽帧步长，不是视频 FPS。
 
 ## 1. 每条视频的统一轨迹契约
 
@@ -132,7 +132,7 @@ python rebuild-test/spatialtrackerv2/scripts/preflight.py \
 cat "$TRACK_ROOT/run_metadata_all.json"
 ```
 
-预期 `route_counts` 为 `973` 条 `calibrated_static_sphere` 和 `5` 条 `spatialtrackerv2_dynamic`。若 preflight 只报告缺少适配器依赖，可在当前已跑通 example0 的环境中补装：
+预期 `route_counts` 为 `974` 条 `calibrated_static_sphere` 和 `4` 条 `spatialtrackerv2_dynamic`。若 preflight 只报告缺少适配器依赖，可在当前已跑通 example0 的环境中补装：
 
 ```bash
 python -m pip install -r rebuild-test/spatialtrackerv2/requirements-inference.txt

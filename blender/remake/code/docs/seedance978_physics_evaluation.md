@@ -36,12 +36,12 @@ code/assets/seedance978_evaluation/
 
 - `no_significant_camera_change`：使用冻结首帧的相机 `K/R/t`、标准球真实半径和实验运动流形；
 - Side 的轻微/边界级变化仍走 2D，并在结果中保留原始审计类别和 `side_2d_motion_within_tolerance` 有效类别；
-- Side 只有同时满足下列条件才使用 SpaTrackerV2：最大直接平移/图像对角线 `>=1%`、持续运动簇 `>=5`、有效配对率 `>=0.80`、中位内点率 `>=0.70`、没有 scene cut 且审计状态正常；
+- Side 只有同时满足下列条件才使用 SpaTrackerV2：最大直接平移/图像对角线 `>=2%`、持续运动簇 `>=5`、有效配对率 `>=0.80`、中位内点率 `>=0.70`、没有 scene cut 且审计状态正常；
 - 旋转或缩放本身不触发 Side 3D，因为它们不能提供可靠的平移视差；
 - Main/Top 继续采用保守策略：`camera_changed`、`borderline_below_threshold` 或审计不确定时进入动态分支；
 - 缺失相机审计证据不会擅自套用静态相机参数。
 
-冻结的 510 条 Side 审计按上述规则得到 `508` 条 2D 和 `2` 条 3D 候选。路由证据、归一化位移、质量门和阈值完整写入 `routing_side.jsonl`，不是人工挑选。
+冻结的 510 条 Side 审计按上述规则得到 `509` 条 2D 和 `1` 条 3D 候选。路由证据、归一化位移、质量门和阈值完整写入 `routing_side.jsonl`；2% 门槛是在复核直接配准误报后统一冻结的规则，不是运行时人工挑选。
 
 ## 2. 视频生成有效性 gate
 
@@ -184,7 +184,7 @@ nohup python code/scripts/run_seedance978_physics_evaluation.py \
 echo $!
 ```
 
-这一步会完整检查 510 条视频，但 2 个满足阈值的移动相机样本先保持 `indeterminate/requires_3d_evidence`。GPU 空闲后，用同一输出目录补跑这 2 条动态候选；已有 508 条结果会直接复用：
+这一步会完整检查 510 条视频，但 1 个满足阈值的移动相机样本先保持 `indeterminate/requires_3d_evidence`。GPU 空闲后，用同一输出目录补跑这 1 条动态候选；已有 509 条结果会直接复用：
 
 ```bash
 CUDA_VISIBLE_DEVICES=7 nohup python code/scripts/run_seedance978_physics_evaluation.py \

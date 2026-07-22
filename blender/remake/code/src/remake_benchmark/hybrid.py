@@ -27,7 +27,11 @@ DYNAMIC_CATEGORIES = {
 # threshold is normalized by the image diagonal so the rule also applies to
 # other resolutions.  A persistent cluster prevents a single bad audit pair
 # from sending an otherwise fixed Side video to 3D.
-SIDE_3D_MIN_TRANSLATION_DIAGONAL_FRACTION = 0.01
+# A one-percent threshold admitted a reviewed false positive whose direct
+# frame-0 registration jumped by 12 px even though adjacent-frame motion and
+# the visible Side view remained stable.  Require a clearer displacement
+# before paying the accuracy cost of under-constrained monocular 3-D.
+SIDE_3D_MIN_TRANSLATION_DIAGONAL_FRACTION = 0.02
 SIDE_3D_MIN_DIRECT_MOTION_CLUSTER = 5
 SIDE_3D_MIN_VALID_PAIR_FRACTION = 0.80
 SIDE_3D_MIN_MEDIAN_INLIER_RATIO = 0.70
