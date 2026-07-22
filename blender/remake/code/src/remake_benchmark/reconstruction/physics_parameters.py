@@ -102,18 +102,48 @@ def _robust_lstsq(
     return coefficients, weights
 
 
-def _fit_diagnostics(observed: np.ndarray, predicted: np.ndarray, parameter_count: int) -> dict[str, Any]:
-    residual = np.asarray(observed) - np.asarray(predicted)
+def _fit_diagnostics(
+    observed: np.ndarray,
+    predicted: np.ndarray,
+    parameter_count: int,
+    *,
+    time_s: np.ndarray | None = None,
+    series_name: str = "q",
+) -> dict[str, Any]:
+    observed = np.asarray(observed, dtype=np.float64).reshape(-1)
+    predicted = np.asarray(predicted, dtype=np.float64).reshape(-1)
+    residual = observed - predicted
     rmse = float(np.sqrt(np.mean(residual**2))) if len(residual) else None
     centered = np.asarray(observed) - float(np.mean(observed)) if len(observed) else np.empty(0)
     denominator = float(np.sum(centered**2))
     r2 = None if denominator <= 1e-12 else float(1.0 - np.sum(residual**2) / denominator)
-    return {
+    output: dict[str, Any] = {
         "fit_points": int(len(observed)),
         "fit_parameter_count": int(parameter_count),
         "fit_rmse": rmse,
         "fit_r2": r2,
+        "observed_range": float(np.ptp(observed)) if len(observed) else None,
+        "fit_nrmse": (
+            None
+            if rmse is None or not len(observed) or float(np.ptp(observed)) <= 1e-12
+            else float(rmse / float(np.ptp(observed)))
+        ),
     }
+    if time_s is not None:
+        sample_time = np.asarray(time_s, dtype=np.float64).reshape(-1)
+        if len(sample_time) != len(observed):
+            raise ValueError("fit diagnostic time and observation lengths do not match")
+    else:
+        sample_time = np.arange(len(observed), dtype=np.float64)
+    output["fit_series"] = {
+        "series_name": str(series_name),
+        "time_s": [float(value) for value in sample_time],
+        "observed": [float(value) for value in observed],
+        "predicted": [float(value) for value in predicted],
+        "residual": [float(value) for value in residual],
+        "time_basis": "video_time_s" if time_s is not None else "fit_sample_index",
+    }
+    return output
 
 
 def _smooth(values: np.ndarray, window: int = 7) -> np.ndarray:
@@ -213,11 +243,22 @@ def _result(
     }
 
 
-def _fit_quadratic(times: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, dict[str, Any]]:
+def _fit_quadratic(
+    times: np.ndarray,
+    values: np.ndarray,
+    *,
+    series_name: str = "q",
+) -> tuple[np.ndarray, dict[str, Any]]:
     tau = times - times[0]
     design = np.column_stack((np.ones(len(tau)), tau, tau**2))
     coefficients, _ = _robust_lstsq(design, values)
-    return coefficients, _fit_diagnostics(values, design @ coefficients, 3)
+    return coefficients, _fit_diagnostics(
+        values,
+        design @ coefficients,
+        3,
+        time_s=times,
+        series_name=series_name,
+    )
 
 
 def _fit_v1a(t: np.ndarray, _x: np.ndarray, z: np.ndarray) -> dict[str, Any]:
@@ -242,7 +283,7 @@ def _fit_v1a(t: np.ndarray, _x: np.ndarray, z: np.ndarray) -> dict[str, Any]:
             "fewer_than_8_points_in_first_contiguous_airborne_run",
             ["gravity_g"],
         )
-    coefficients, diagnostics = _fit_quadratic(t[indices], z[indices])
+    coefficients, diagnostics = _fit_quadratic(t[indices], z[indices], series_name="z_m")
     diagnostics.update({"airborne_start_index": int(indices[0]), "airborne_end_index": int(indices[-1])})
     return _result(
         "v1_A",
@@ -271,6 +312,9 @@ def _best_piecewise_linear_impact(
             continue
         pred_left = np.polyval(left_coef, t[left])
         pred_right = np.polyval(right_coef, t[right])
+        predicted = np.empty_like(q, dtype=np.float64)
+        predicted[left] = pred_left
+        predicted[right] = pred_right
         loss = float(np.mean((q[left] - pred_left) ** 2) + np.mean((q[right] - pred_right) ** 2))
         impact_position = 0.5 * (float(np.polyval(left_coef, t[split])) + float(np.polyval(right_coef, t[split])))
         if expected_position is not None:
@@ -283,6 +327,7 @@ def _best_piecewise_linear_impact(
             "v_post": v_post,
             "loss": loss,
             "rmse": math.sqrt(max(loss, 0.0) / 2.0),
+            **_fit_diagnostics(q, predicted, 4, time_s=t, series_name="x_m"),
         }
         if best is None or candidate["loss"] < best["loss"]:
             best = candidate
@@ -358,7 +403,7 @@ def _fit_v1c(t: np.ndarray, x: np.ndarray, _z: np.ndarray) -> dict[str, Any]:
         indices = np.arange(0, moving[-1] + 1)
     else:
         indices = np.arange(len(t))
-    coefficients, diagnostics = _fit_quadratic(t[indices], x[indices])
+    coefficients, diagnostics = _fit_quadratic(t[indices], x[indices], series_name="x_m")
     acceleration = 2.0 * float(coefficients[2])
     diagnostics.update({"estimated_acceleration_m_s2": acceleration, "moving_fit_points": int(len(indices))})
     return _result(
@@ -389,7 +434,13 @@ def _fit_fixed_frequency_decay(
         loss = float(np.mean((theta - predicted) ** 2))
         if loss < best_loss:
             best_loss, best_beta, best_pred = loss, float(beta), predicted
-    diagnostics = _fit_diagnostics(theta, best_pred, 3)
+    diagnostics = _fit_diagnostics(
+        theta,
+        best_pred,
+        3,
+        time_s=t,
+        series_name="theta_rad",
+    )
     turns = _turning_indices(theta)
     diagnostics.update({"turning_point_indices": turns, "turning_point_count": len(turns), "fixed_period_s": period})
     return best_beta, diagnostics
@@ -429,7 +480,13 @@ def _fit_periodic_frequency(
         loss = float(np.mean((q - predicted) ** 2))
         if loss < best_loss:
             best_loss, best_omega, best_pred = loss, float(omega), predicted
-    return best_omega, best_pred, _fit_diagnostics(q, best_pred, 8)
+    return best_omega, best_pred, _fit_diagnostics(
+        q,
+        best_pred,
+        8,
+        time_s=t,
+        series_name="x_m",
+    )
 
 
 def _fit_v2a(t: np.ndarray, x: np.ndarray, _z: np.ndarray) -> dict[str, Any]:
@@ -462,6 +519,13 @@ def _linear_segment_velocities(t: np.ndarray, q: np.ndarray, turns: Sequence[int
             "end": int(indices[-1]),
             "velocity": float(coefficients[0]),
             "rmse": float(np.sqrt(np.mean((q[indices] - predicted) ** 2))),
+            **_fit_diagnostics(
+                q[indices],
+                predicted,
+                2,
+                time_s=t[indices],
+                series_name="x_m",
+            ),
         })
     return output
 
@@ -488,14 +552,14 @@ def _fit_v2c(t: np.ndarray, x: np.ndarray, _z: np.ndarray) -> dict[str, Any]:
     right = np.flatnonzero(x > transition + 0.03)
     if len(left) < 6 or len(right) < 6:
         return _failure("v2_C", "both_friction_surfaces_not_observed", ["kinetic_friction_mu_A", "kinetic_friction_mu_B"])
-    coef_a, diag_a = _fit_quadratic(t[left], x[left])
+    coef_a, diag_a = _fit_quadratic(t[left], x[left], series_name="surface_A_x_m")
     # Exclude a static tail on B using positive velocity support.
     right_values = _smooth(x[right])
     right_velocity = np.gradient(right_values, t[right])
     moving_right = right[right_velocity > 0.02]
     if len(moving_right) >= 6:
         right = moving_right
-    coef_b, diag_b = _fit_quadratic(t[right], x[right])
+    coef_b, diag_b = _fit_quadratic(t[right], x[right], series_name="surface_B_x_m")
     normal_over_mass = float(EXPERIMENT_CONSTANTS["v2_C"]["normal_over_mass"])
     estimates = {
         "kinetic_friction_mu_A": -2.0 * coef_a[2] / normal_over_mass,
@@ -543,7 +607,13 @@ def _fit_pendulum_integral(
     normalized = design[keep] / np.maximum(np.linalg.norm(design[keep], axis=0), 1e-12)
     singular = np.linalg.svd(normalized, compute_uv=False)
     condition = float(singular[0] / singular[-1]) if singular[-1] > 1e-12 else float("inf")
-    diagnostics = _fit_diagnostics(target[keep], predicted, len(coefficients))
+    diagnostics = _fit_diagnostics(
+        target[keep],
+        predicted,
+        len(coefficients),
+        time_s=t[keep],
+        series_name="theta_delta_rad",
+    )
     diagnostics.update({
         "design_matrix_rank": int(np.linalg.matrix_rank(design[keep])),
         "normalized_condition_number": condition,
@@ -630,7 +700,13 @@ def _fit_shared_flight_model(
             "initial_velocity": initial_v,
             "final_velocity": final_v,
         })
-    diagnostics = _fit_diagnostics(target, design @ coefficients, len(coefficients))
+    diagnostics = _fit_diagnostics(
+        target,
+        design @ coefficients,
+        len(coefficients),
+        time_s=np.concatenate([t[item["indices"]] for item in segment_meta]),
+        series_name="z_m",
+    )
     diagnostics["flight_segments"] = velocity_models
     return shared, velocity_models, diagnostics
 
@@ -704,10 +780,22 @@ def _fit_v3a(t: np.ndarray, x: np.ndarray, z: np.ndarray) -> dict[str, Any]:
         shared, flights, diagnostics = _fit_shared_flight_model(t, z, impacts, drag_beta=best_beta)
         gravity = -best_beta * shared
     except ValueError:
-        flights, diagnostics, gravity = [], _fit_diagnostics(x, best_pred, 3), None
+        flights, diagnostics, gravity = [], _fit_diagnostics(
+            x,
+            best_pred,
+            3,
+            time_s=t,
+            series_name="x_m",
+        ), None
     restitution, ratios = _restitution_from_flights(flights)
     diagnostics.update({
-        "horizontal_fit": _fit_diagnostics(x, best_pred, 3),
+        "horizontal_fit": _fit_diagnostics(
+            x,
+            best_pred,
+            3,
+            time_s=t,
+            series_name="x_m",
+        ),
         "impact_indices": impacts,
         "per_impact_e": ratios,
     })
@@ -769,7 +857,13 @@ def _fit_v3b(t: np.ndarray, x: np.ndarray, _z: np.ndarray) -> dict[str, Any]:
             right_ratios.append(ratio)
     e_left = float(np.median(left_ratios)) if left_ratios else None
     e_right = float(np.median(right_ratios)) if right_ratios else None
-    diagnostics = _fit_diagnostics(target, design @ coefficients, len(coefficients))
+    diagnostics = _fit_diagnostics(
+        target,
+        design @ coefficients,
+        len(coefficients),
+        time_s=np.concatenate([t[item["indices"]] for item in meta]),
+        series_name="x_m",
+    )
     diagnostics.update({"impact_indices": turns, "left_impact_e": left_ratios, "right_impact_e": right_ratios, "segments": velocities})
     return _result(
         "v3_B",
@@ -790,13 +884,13 @@ def _fit_v3c(t: np.ndarray, x: np.ndarray, z: np.ndarray) -> dict[str, Any]:
     if len(ramp) < 6 or len(floor) < 6:
         return _failure("v3_C", "ramp_and_floor_not_both_observed", ["gravity_g", "kinetic_friction_mu", "restitution_e"])
     s = (x - x[0]) * math.cos(alpha) - (z - z[0]) * math.sin(alpha)
-    coef_ramp, diag_ramp = _fit_quadratic(t[ramp], s[ramp])
+    coef_ramp, diag_ramp = _fit_quadratic(t[ramp], s[ramp], series_name="ramp_s_m")
     # Keep the positive pre-wall floor branch only.
     floor_velocity = np.gradient(_smooth(x[floor]), t[floor])
     positive_floor = floor[floor_velocity > 0.03]
     if len(positive_floor) >= 6:
         floor = positive_floor
-    coef_floor, diag_floor = _fit_quadratic(t[floor], x[floor])
+    coef_floor, diag_floor = _fit_quadratic(t[floor], x[floor], series_name="floor_x_m")
     a_ramp = float(2.0 * coef_ramp[2])
     a_floor = float(-2.0 * coef_floor[2])
     gravity = (a_ramp + a_floor * math.cos(alpha)) / math.sin(alpha)

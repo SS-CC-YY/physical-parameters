@@ -26,6 +26,16 @@ def _rows(t: np.ndarray, x: np.ndarray, z: np.ndarray) -> list[dict[str, float]]
     ]
 
 
+def _fit_series_count(value) -> int:
+    if isinstance(value, dict):
+        return int(isinstance(value.get("fit_series"), dict)) + sum(
+            _fit_series_count(item) for key, item in value.items() if key != "fit_series"
+        )
+    if isinstance(value, (list, tuple)):
+        return sum(_fit_series_count(item) for item in value)
+    return 0
+
+
 def _rk4_pendulum(
     t: np.ndarray,
     theta0: float,
@@ -52,6 +62,9 @@ def _rk4_pendulum(
 
 
 class PhysicsParameterTests(unittest.TestCase):
+    def assertFitEvidence(self, fit) -> None:  # noqa: N802 - unittest naming convention
+        self.assertGreater(_fit_series_count(fit.get("diagnostics", {})), 0, fit)
+
     def test_v1_models(self) -> None:
         t = np.arange(0.0, 5.0 + 1e-9, 1.0 / 16.0)
 
@@ -59,6 +72,7 @@ class PhysicsParameterTests(unittest.TestCase):
         z = np.maximum(0.44, 4.2 - 0.5 * gravity * t**2)
         fit = fit_physics_parameters("v1_A", _rows(t, np.zeros_like(t), z))
         self.assertAlmostEqual(fit["parameter_estimates"]["gravity_g"], gravity, delta=0.08)
+        self.assertFitEvidence(fit)
 
         # Later bounce samples can make the total airborne count exceed eight,
         # but a four-point first fall is not an identifiable robust quadratic.
@@ -80,6 +94,7 @@ class PhysicsParameterTests(unittest.TestCase):
         x = np.where(t <= impact_time, -2.44 + incoming * t, 2.96 - restitution * incoming * (t - impact_time))
         fit = fit_physics_parameters("v1_B", _rows(t, x, np.full_like(t, 0.44)))
         self.assertAlmostEqual(fit["parameter_estimates"]["restitution_e"], restitution, delta=0.04)
+        self.assertFitEvidence(fit)
 
         mu = 0.18
         stop = 3.6 / (mu * 9.81)
@@ -87,6 +102,7 @@ class PhysicsParameterTests(unittest.TestCase):
         x = -4.35 + 3.6 * effective - 0.5 * mu * 9.81 * effective**2
         fit = fit_physics_parameters("v1_C", _rows(t, x, np.full_like(t, 0.44)))
         self.assertAlmostEqual(fit["parameter_estimates"]["kinetic_friction_mu"], mu, delta=0.02)
+        self.assertFitEvidence(fit)
 
         beta = 0.18
         theta = math.radians(24.0) * np.exp(-beta * t) * np.cos(2.0 * math.pi * t / 3.0)
@@ -94,6 +110,7 @@ class PhysicsParameterTests(unittest.TestCase):
         z = 3.8 - 2.3 * np.cos(theta)
         fit = fit_physics_parameters("v1_D", _rows(t, x, z))
         self.assertAlmostEqual(fit["parameter_estimates"]["amplitude_decay_beta"], beta, delta=0.01)
+        self.assertFitEvidence(fit)
 
     def test_v2_models(self) -> None:
         t = np.arange(0.0, 10.0 + 1e-9, 1.0 / 32.0)
@@ -103,6 +120,7 @@ class PhysicsParameterTests(unittest.TestCase):
         x = 1.7 * np.cos(omega * t) + 0.12 * np.cos(2.0 * omega * t)
         fit = fit_physics_parameters("v2_A", _rows(t, x, np.ones_like(t)))
         self.assertAlmostEqual(fit["parameter_estimates"]["gravity_g"], gravity, delta=0.12)
+        self.assertFitEvidence(fit)
 
         restitution = 0.72
         x_values = []
@@ -118,6 +136,7 @@ class PhysicsParameterTests(unittest.TestCase):
                 velocity = restitution * abs(velocity)
         fit = fit_physics_parameters("v2_B", _rows(t, np.asarray(x_values), np.full_like(t, 0.75)))
         self.assertAlmostEqual(fit["parameter_estimates"]["restitution_e"], restitution, delta=0.08)
+        self.assertFitEvidence(fit)
 
         mu_a, mu_b = 0.08, 0.14
         dt = 1.0 / 32.0
@@ -131,6 +150,7 @@ class PhysicsParameterTests(unittest.TestCase):
         fit = fit_physics_parameters("v2_C", _rows(t, np.asarray(x_values), np.full_like(t, 1.005)))
         self.assertAlmostEqual(fit["parameter_estimates"]["kinetic_friction_mu_A"], mu_a, delta=0.02)
         self.assertAlmostEqual(fit["parameter_estimates"]["kinetic_friction_mu_B"], mu_b, delta=0.025)
+        self.assertFitEvidence(fit)
 
         g, beta, length = 9.8, 0.12, 1.85
         theta = _rk4_pendulum(
@@ -143,6 +163,7 @@ class PhysicsParameterTests(unittest.TestCase):
         fit = fit_physics_parameters("v2_D", _rows(t, x, z))
         self.assertAlmostEqual(fit["parameter_estimates"]["gravity_g"], g, delta=0.2)
         self.assertAlmostEqual(fit["parameter_estimates"]["linear_damping_beta"], beta, delta=0.025)
+        self.assertFitEvidence(fit)
 
         bounce_g, bounce_e = 9.8, 0.68
         z_values, z_value, velocity = [], 3.0, -6.0
@@ -156,6 +177,7 @@ class PhysicsParameterTests(unittest.TestCase):
         fit = fit_physics_parameters("v2_E", _rows(t, np.zeros_like(t), np.asarray(z_values)))
         self.assertAlmostEqual(fit["parameter_estimates"]["gravity_g"], bounce_g, delta=0.7)
         self.assertAlmostEqual(fit["parameter_estimates"]["restitution_e"], bounce_e, delta=0.12)
+        self.assertFitEvidence(fit)
 
     def test_v3d_integral_fit(self) -> None:
         t = np.arange(0.0, 10.0 + 1e-9, 1.0 / 48.0)
@@ -176,6 +198,7 @@ class PhysicsParameterTests(unittest.TestCase):
         self.assertAlmostEqual(fit["parameter_estimates"]["gravity_g"], g, delta=0.25)
         self.assertAlmostEqual(fit["parameter_estimates"]["linear_damping_beta"], beta, delta=0.02)
         self.assertAlmostEqual(fit["parameter_estimates"]["magnetic_kappa"], kappa, delta=0.10)
+        self.assertFitEvidence(fit)
 
     def test_v3_a_b_c_models(self) -> None:
         dt = 1.0 / 64.0
@@ -198,6 +221,7 @@ class PhysicsParameterTests(unittest.TestCase):
         self.assertAlmostEqual(fit["parameter_estimates"]["linear_drag_beta"], drag, delta=0.025)
         self.assertAlmostEqual(fit["parameter_estimates"]["gravity_g"], g, delta=0.9)
         self.assertAlmostEqual(fit["parameter_estimates"]["restitution_e"], restitution, delta=0.14)
+        self.assertFitEvidence(fit)
 
         mu, e_left, e_right = 0.008, 0.88, 0.80
         xs = []
@@ -217,6 +241,7 @@ class PhysicsParameterTests(unittest.TestCase):
         self.assertAlmostEqual(fit["parameter_estimates"]["kinetic_friction_mu_k"], mu, delta=0.006)
         self.assertAlmostEqual(fit["parameter_estimates"]["left_restitution_e_L"], e_left, delta=0.12)
         self.assertAlmostEqual(fit["parameter_estimates"]["right_restitution_e_R"], e_right, delta=0.12)
+        self.assertFitEvidence(fit)
 
         g, mu, restitution = 9.8, 0.035, 0.8
         alpha = math.radians(7.0)
@@ -252,6 +277,7 @@ class PhysicsParameterTests(unittest.TestCase):
         self.assertAlmostEqual(fit["parameter_estimates"]["gravity_g"], g, delta=0.35)
         self.assertAlmostEqual(fit["parameter_estimates"]["kinetic_friction_mu"], mu, delta=0.006)
         self.assertAlmostEqual(fit["parameter_estimates"]["restitution_e"], restitution, delta=0.15)
+        self.assertFitEvidence(fit)
 
     def test_scoring_uses_frozen_range_and_penalizes_missing(self) -> None:
         spec = {

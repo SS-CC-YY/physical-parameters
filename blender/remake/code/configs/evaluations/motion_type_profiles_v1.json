@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0.0",
+  "profile_id": "motion_type_profiles_v1",
+  "global_thresholds": {
+    "derivative_window_s": 0.25,
+    "minimum_direct_points": 12,
+    "minimum_time_span_s": 0.5,
+    "minimum_translation_span_m": 0.25,
+    "minimum_direction_consistency": 0.8,
+    "minimum_significant_speed_m_s": 0.05,
+    "contact_tolerance_m": 0.17,
+    "severe_penetration_m": 0.24,
+    "maximum_pendulum_radius_relative_p95": 0.15
+  },
+  "experiments": {
+    "v1_A": {"type": "free_fall", "contact_z_m": 0.44},
+    "v1_B": {"type": "single_wall_bounce", "wall_x_m": 2.96},
+    "v1_C": {"type": "one_way_friction_slide", "direction": 1},
+    "v1_D": {"type": "damped_pendulum", "pivot_xz_m": [0.0, 3.8], "length_m": 2.3, "minimum_turns": 2},
+    "v2_A": {"type": "bounded_periodic_track", "minimum_turns": 2},
+    "v2_B": {"type": "alternating_wall_bounces", "minimum_turns": 2, "wall_geometry": "trajectory_extrema_only"},
+    "v2_C": {"type": "two_surface_friction_slide", "transition_x_m": 0.0, "direction": 1},
+    "v2_D": {"type": "damped_pendulum", "pivot_xz_m": [0.0, 3.28], "length_m": 1.85, "minimum_turns": 2},
+    "v2_E": {"type": "vertical_bounce", "contact_z_m": 0.82, "minimum_impacts": 1},
+    "v3_A": {"type": "dragged_projectile_bounce", "contact_z_m": 0.82, "horizontal_direction": 1, "minimum_impacts": 1},
+    "v3_B": {"type": "frictional_alternating_wall_bounces", "left_wall_x_m": -1.72, "right_wall_x_m": 1.72, "minimum_turns": 2},
+    "v3_C": {"type": "ramp_floor_wall_bounce", "floor_transition_x_m": -0.5, "wall_x_m": 4.61, "direction": 1},
+    "v3_D": {"type": "magnetic_damped_pendulum", "pivot_xz_m": [0.0, 4.05], "length_m": 1.35, "magnet_center_deg": 38.0, "magnet_width_deg": 18.0, "minimum_turns": 2, "minimum_magnet_zone_transitions": 1}
+  },
+  "provenance_note": "Profiles contain experiment apparatus geometry frozen from the Blender benchmark. V2_B wall positions are not frozen in the current registry, so its first policy uses alternating trajectory extrema and reports that limitation explicitly."
+}

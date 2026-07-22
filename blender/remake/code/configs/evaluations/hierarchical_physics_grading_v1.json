@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0.0",
+  "policy_id": "hierarchical_physics_grading_v1",
+  "scope_contract": {
+    "per_video": ["G0", "G1", "PASS_TO_SCAN", "U"],
+    "per_parameter_scan": ["G2", "G3", "G4", "U"],
+    "note": "G0/G1 are per-video gates. G2/G3/G4 are never assigned to one video; they require a matched parameter scan. U means insufficient evidence, not a model failure."
+  },
+  "video_gate": {
+    "minimum_fit_measurements": 12,
+    "minimum_fit_eligible_fraction": 0.5,
+    "maximum_motion_model_nrmse": 0.2,
+    "minimum_motion_model_r2": 0.25
+  },
+  "parameter_response": {
+    "minimum_planned_levels": 2,
+    "minimum_usable_levels": 2,
+    "minimum_coverage_fraction": 0.6666666667,
+    "minimum_job_coverage_fraction": 0.6666666667,
+    "flat_response_valid_range_fraction": 0.01,
+    "minimum_pairwise_direction_concordance": 0.75,
+    "minimum_spearman_rho_for_three_levels": 0.8,
+    "minimum_positive_slope": 0.05,
+    "g4_median_valid_range_nae": 0.1,
+    "g4_p90_valid_range_nae": 0.2,
+    "g4_max_absolute_slope_error": 0.25,
+    "g4_max_absolute_normalized_bias": 0.1,
+    "g4_max_off_target_drift_nad": 0.1,
+    "g4_requires_full_level_coverage": true
+  },
+  "aggregation": {
+    "multi_parameter_experiment_rule": "worst_required_parameter_grade",
+    "grade_order_best_to_worst": ["G4", "G3", "G2"],
+    "any_required_parameter_u_makes_overall_u": true
+  },
+  "frozen_status": "candidate_thresholds_pending_blender_synthetic_calibration",
+  "threshold_note": "These transparent candidate thresholds make the pipeline executable. Freeze them for paper reporting only after calibration on Blender ground truth and controlled tracking degradations; do not tune them on the tested video model."
+}

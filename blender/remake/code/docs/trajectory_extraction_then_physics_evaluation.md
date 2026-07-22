@@ -275,3 +275,9 @@ python code/scripts/evaluate_seedance978_trajectories.py \
 - 最终是否拟合由阶段 B 综合决定。
 
 人工复核优先打开每条任务的 `object_track_overlay.mp4`。若坐标为空，查看同一帧的 `invalid_reason_codes`；不要把空坐标补成平滑曲线后当作测量证据。
+
+## 9. G0–G4 分级与可视化证据
+
+轨迹与物理拟合结束后，使用独立分级阶段生成 G0/G1 单视频门控、G2–G4 参数扫描结论、U 证据不足状态，以及观测—拟合—残差和参数响应图。完整定义、公式、阈值冻结要求与服务器命令见：
+
+[`hierarchical_physics_grading_v1.md`](hierarchical_physics_grading_v1.md)
