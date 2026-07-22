@@ -41,6 +41,25 @@ EXPECTED_COUNTS = {
 CAMERA_ORDER = {"CAM_Side": 0, "CAM_Main": 1, "CAM_Top": 2}
 
 
+def _generation_valid(result: Mapping[str, Any]) -> bool:
+    """Return the raw video-generation validity decision only."""
+
+    return str(result.get("video_generation_validity", {}).get("status") or "").lower() == "pass"
+
+
+def _measurement_evaluable(result: Mapping[str, Any]) -> bool:
+    """Return whether the recovered trajectory produced a completed fit.
+
+    A qualified moving-camera 3-D reconstruction is measurement evidence; it
+    must not retroactively rename an indeterminate generation-validity result
+    as a generation-valid video.
+    """
+
+    eligibility = result.get("trajectory_fit_eligibility", {})
+    metrics = result.get("metrics", {})
+    return bool(eligibility.get("eligible") is True and metrics.get("fit_complete") is True)
+
+
 def _run_physics_job_process(payload: Mapping[str, Any]) -> tuple[str, dict[str, Any]]:
     """Pickle-safe worker for CPU-parallel per-video evaluation."""
 
@@ -260,8 +279,17 @@ def _viewpoint_rows(
             continue
         side, main, top = views["CAM_Side"], views["CAM_Main"], views["CAM_Top"]
         experiment_id = str(key[0])
-        main_delta, main_parameters = _estimate_difference(side, main, ranges[experiment_id])
-        top_delta, top_parameters = _estimate_difference(side, top, ranges[experiment_id])
+        side_evaluable = _measurement_evaluable(side)
+        main_evaluable = _measurement_evaluable(main)
+        top_evaluable = _measurement_evaluable(top)
+        if side_evaluable and main_evaluable:
+            main_delta, main_parameters = _estimate_difference(side, main, ranges[experiment_id])
+        else:
+            main_delta, main_parameters = None, {}
+        if side_evaluable and top_evaluable:
+            top_delta, top_parameters = _estimate_difference(side, top, ranges[experiment_id])
+        else:
+            top_delta, top_parameters = None, {}
         row = {
             "experiment_id": key[0],
             "parameter_tuple_id": key[1],
@@ -272,9 +300,16 @@ def _viewpoint_rows(
             "main_validity": main.get("video_generation_validity", {}).get("status"),
             "top_validity": top.get("video_generation_validity", {}).get("status"),
             "all_three_generation_valid": all(
-                item.get("video_generation_validity", {}).get("status") == "pass"
+                _generation_valid(item)
                 for item in (side, main, top)
             ),
+            "all_three_measurement_evaluable": all(
+                _measurement_evaluable(item)
+                for item in (side, main, top)
+            ),
+            "side_measurement_route": _summary_row(side).get("measurement_route"),
+            "main_measurement_route": _summary_row(main).get("measurement_route"),
+            "top_measurement_route": _summary_row(top).get("measurement_route"),
             "side_fit_complete": side.get("metrics", {}).get("fit_complete"),
             "main_fit_complete": main.get("metrics", {}).get("fit_complete"),
             "top_fit_complete": top.get("metrics", {}).get("fit_complete"),
@@ -290,10 +325,18 @@ def _viewpoint_rows(
         main_score = row["main_score_0_100"]
         top_score = row["top_score_0_100"]
         row["main_vs_side_score_abs_delta"] = (
-            None if side_score is None or main_score is None else abs(float(main_score) - float(side_score))
+            None
+            if not (side_evaluable and main_evaluable)
+            or side_score is None
+            or main_score is None
+            else abs(float(main_score) - float(side_score))
         )
         row["top_vs_side_score_abs_delta"] = (
-            None if side_score is None or top_score is None else abs(float(top_score) - float(side_score))
+            None
+            if not (side_evaluable and top_evaluable)
+            or side_score is None
+            or top_score is None
+            else abs(float(top_score) - float(side_score))
         )
         rows.append(row)
     return rows
@@ -319,7 +362,7 @@ def _seed_stability_rows(
             estimates = [
                 item.get("fit", {}).get("parameter_estimates", {}).get(name)
                 for item in items
-                if item.get("video_generation_validity", {}).get("status") == "pass"
+                if _measurement_evaluable(item)
             ]
             values = [float(value) for value in estimates if value is not None]
             if len(values) >= 2 and span > 0:
@@ -332,7 +375,11 @@ def _seed_stability_rows(
                 "object_id": key[3],
                 "seed_count": len({int(item["job"]["seed"]) for item in items}),
                 "generation_valid_count": sum(
-                    item.get("video_generation_validity", {}).get("status") == "pass"
+                    _generation_valid(item)
+                    for item in items
+                ),
+                "measurement_evaluable_count": sum(
+                    _measurement_evaluable(item)
                     for item in items
                 ),
                 "complete_fit_count": sum(bool(item.get("metrics", {}).get("fit_complete")) for item in items),
@@ -364,6 +411,17 @@ def write_seedance978_reports(
         for result in results
         if (result.get("benchmark_split") or benchmark_split(result["job"])) == "side_primary"
     ]
+    baseline_side_primary = [
+        result
+        for result in side_primary
+        if str(result.get("job", {}).get("scene_id") or "") == "baseline"
+    ]
+    scheduled_baseline_side_primary = sum(
+        str(row.get("factors", {}).get("camera") or "") == "CAM_Side"
+        and str(row.get("factors", {}).get("scene_id") or "") == "baseline"
+        and int(row.get("seed", DEFAULT_BENCHMARK_SEED)) == DEFAULT_BENCHMARK_SEED
+        for row in manifest_rows
+    )
     main = [
         result
         for result in results
@@ -380,7 +438,14 @@ def write_seedance978_reports(
         if (result.get("benchmark_split") or benchmark_split(result["job"]))
         == "side_seed_stability_extra"
     ]
-    _write_csv(output_root / "side_primary_summary.csv", [_summary_row(item) for item in side_primary])
+    _write_csv(
+        output_root / "side_primary_summary.csv",
+        [_summary_row(item) for item in baseline_side_primary],
+    )
+    _write_csv(
+        output_root / "side_primary_all_scenes_summary.csv",
+        [_summary_row(item) for item in side_primary],
+    )
     ranges = _range_map(registry)
     view_rows = _viewpoint_rows(results, ranges)
     seed_rows = _seed_stability_rows(results, ranges)
@@ -392,16 +457,21 @@ def write_seedance978_reports(
         return float(np.mean(values)) if values else None
 
     aggregate = {
-        "schema_version": "2.0.0",
+        "schema_version": "2.1.0",
         "expected_counts": EXPECTED_COUNTS,
         "result_count": len(results),
         "missing_result_count": len(manifest_rows) - len(results),
         "execution_order": ["CAM_Side", "CAM_Main", "CAM_Top"],
         "headline": {
-            "name": "CAM_Side primary physics identification",
-            "scheduled_count": EXPECTED_COUNTS["side_primary"],
+            "name": "Baseline CAM_Side primary physics identification",
+            "scheduled_count": scheduled_baseline_side_primary,
+            "result_count": len(baseline_side_primary),
+            "metrics": aggregate_results(baseline_side_primary),
+        },
+        "side_primary_all_scenes_auxiliary": {
             "result_count": len(side_primary),
             "metrics": aggregate_results(side_primary),
+            "note": "Auxiliary scene-robustness scope; not the headline parameter-identification result.",
         },
         "main_robustness": {"result_count": len(main), "metrics": aggregate_results(main)},
         "top_robustness": {"result_count": len(top), "metrics": aggregate_results(top)},

@@ -8,6 +8,11 @@ This module intentionally implements a smaller contract than
 * one caller-declared primary seed (341867882 by default); and
 * one canonical, honest one-at-a-time (OAT) scan per experiment parameter.
 
+The preferred measurement route is calibrated 2-D.  A baseline Side sample
+that was routed to dynamic 3-D remains eligible only when the caller attaches
+an ``include`` decision from the target-independent metric motion-manifold
+gate.  The route is retained in every evidence row.
+
 Tracking or inverse-measurement insufficiency is reported as ``X`` and is not
 counted as a model failure.  No trajectory NRMSE or R2 threshold is used here.
 All functions use only the Python standard library and accept already-loaded
@@ -24,7 +29,7 @@ from statistics import median
 from typing import Any, Mapping, Sequence
 
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
 DEFAULT_PRIMARY_SEED = 341867882
 PRIMARY_SCENE_ID = "baseline"
 PRIMARY_CAMERA_NAME = "CAM_Side"
@@ -59,6 +64,7 @@ _INDETERMINATE = {
     "x",
 }
 _FIT_SUCCESS = {"ok", "pass", "passed", "success", "succeeded", "complete", "completed"}
+_DYNAMIC_ROUTE = "spatialtrackerv2_dynamic"
 
 
 def _text(value: Any) -> str:
@@ -116,6 +122,22 @@ def _row_id(row: Mapping[str, Any], ordinal: int) -> str:
     )
 
 
+def _dynamic_3d_decision(row: Mapping[str, Any]) -> tuple[str, list[str]]:
+    if _text(row.get("reconstruction_route")) != _DYNAMIC_ROUTE:
+        return "not_applicable", []
+    decision = _status(
+        row.get("simple_dynamic_3d_decision")
+        or row.get("dynamic_3d_inclusion_decision")
+    )
+    reasons = _codes(
+        row.get("simple_dynamic_3d_reason_codes")
+        or row.get("dynamic_3d_inclusion_reason_codes")
+    )
+    if decision == "include":
+        return "include", reasons
+    return "X", reasons or ["dynamic_3d_evidence_gate_not_passed"]
+
+
 def _generation_status(row: Mapping[str, Any]) -> tuple[str, str]:
     """Return status and evidence source.
 
@@ -127,14 +149,24 @@ def _generation_status(row: Mapping[str, Any]) -> tuple[str, str]:
     """
 
     manual = _status(row.get("manual_generation_validity_status"))
+    if manual in _PASS | _FAIL:
+        return manual, "manual"
+    automatic_values = [
+        (_status(row.get(key)), key)
+        for key in (
+            "generation_validity_status",
+            "automatic_generation_validity_status",
+            "g0_generation_status",
+        )
+    ]
+    for value, _key in automatic_values:
+        if value in _FAIL:
+            return value, "automatic"
+    if _status(row.get("video_stage")) == "g0":
+        return "fail", "automatic_hierarchical_gate"
     if manual:
         return manual, "manual"
-    for key in (
-        "generation_validity_status",
-        "automatic_generation_validity_status",
-        "g0_generation_status",
-    ):
-        value = _status(row.get(key))
+    for value, _key in automatic_values:
         if value:
             return value, "automatic"
     stage = _status(row.get("video_stage"))
@@ -186,6 +218,10 @@ def _classify_row(
     motion, motion_source = _motion_status(row)
     video_stage = _status(row.get("video_stage"))
     generation_codes = _codes(row.get("generation_failure_codes"))
+    dynamic_decision, dynamic_reasons = _dynamic_3d_decision(row)
+    dynamic_measurement_substitute = bool(
+        dynamic_decision == "include" and generation not in _FAIL
+    )
 
     failure_reasons: list[str] = []
     if generation_source == "manual" and generation in _FAIL:
@@ -202,14 +238,17 @@ def _classify_row(
             "motion_status": motion or None,
             "motion_status_source": motion_source,
             "estimate": None,
+            "measurement_route": _text(row.get("simple_measurement_route")) or None,
         }
 
     insufficiency: list[str] = []
+    if dynamic_decision == "X":
+        insufficiency.extend(dynamic_reasons)
     if generation in _FAIL and generation_source != "manual":
         insufficiency.append("automatic_failure_pending_manual_confirmation")
     if motion in _FAIL and motion_source != "manual":
         insufficiency.append("automatic_motion_failure_pending_manual_confirmation")
-    if generation not in _PASS:
+    if generation not in _PASS and not dynamic_measurement_substitute:
         insufficiency.append(
             "generation_validity_evidence_indeterminate"
             if generation in _INDETERMINATE
@@ -243,6 +282,7 @@ def _classify_row(
             "motion_status_source": motion_source,
             "fit_status": fit_status or None,
             "estimate": estimate,
+            "measurement_route": _text(row.get("simple_measurement_route")) or None,
         }
 
     return {
@@ -255,6 +295,7 @@ def _classify_row(
         "motion_status_source": motion_source,
         "fit_status": fit_status or None,
         "estimate": estimate,
+        "measurement_route": _text(row.get("simple_measurement_route")) or "calibrated_2d",
     }
 
 
@@ -263,6 +304,10 @@ def _classify_video_row(row: Mapping[str, Any], *, row_id: str) -> dict[str, Any
 
     generation, generation_source = _generation_status(row)
     motion, motion_source = _motion_status(row)
+    dynamic_decision, dynamic_reasons = _dynamic_3d_decision(row)
+    dynamic_measurement_substitute = bool(
+        dynamic_decision == "include" and generation not in _FAIL
+    )
     reasons: list[str] = []
     if generation_source == "manual" and generation in _FAIL:
         grade = "L1"
@@ -270,13 +315,16 @@ def _classify_video_row(row: Mapping[str, Any], *, row_id: str) -> dict[str, Any
     elif motion_source == "manual" and motion in _FAIL:
         grade = "L1"
         reasons.append("clear_motion_type_failure")
+    elif dynamic_decision == "X":
+        grade = "X"
+        reasons.extend(dynamic_reasons)
     elif generation in _FAIL:
         grade = "X"
         reasons.append("automatic_failure_pending_manual_confirmation")
     elif motion in _FAIL:
         grade = "X"
         reasons.append("automatic_motion_failure_pending_manual_confirmation")
-    elif generation not in _PASS:
+    elif generation not in _PASS and not dynamic_measurement_substitute:
         grade = "X"
         reasons.append("generation_validity_evidence_insufficient")
     else:
@@ -307,6 +355,9 @@ def _classify_video_row(row: Mapping[str, Any], *, row_id: str) -> dict[str, Any
         "generation_status_source": generation_source,
         "motion_status": motion or None,
         "motion_status_source": motion_source,
+        "measurement_route": _text(row.get("simple_measurement_route")) or (
+            "qualified_dynamic_3d" if dynamic_decision == "include" else "calibrated_2d"
+        ),
     }
 
 

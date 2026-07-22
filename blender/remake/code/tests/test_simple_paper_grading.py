@@ -78,6 +78,9 @@ class SimplePaperGradingTests(unittest.TestCase):
     def test_manual_failure_is_l1_but_is_not_mixed_into_scan_grade_counts(self) -> None:
         spec, rows = _experiment("manual", [0.0, 0.5, 1.0])
         rows[0]["manual_generation_validity_status"] = "fail"
+        rows[0]["reconstruction_route"] = "spatialtrackerv2_dynamic"
+        rows[0]["simple_dynamic_3d_decision"] = "include"
+        rows[0]["simple_measurement_route"] = "qualified_dynamic_3d"
         result = grade_simple_paper_benchmark(rows, {"experiments": [spec]})
 
         video = next(row for row in result["per_video_rows"] if row["row_id"].endswith("p0.mp4"))
@@ -97,6 +100,19 @@ class SimplePaperGradingTests(unittest.TestCase):
         )
         result = grade_simple_paper_benchmark(rows, {"experiments": [spec]})
         self.assertEqual(result["summary"]["selected_primary_slice_row_count"], 3)
+
+    def test_dynamic_route_is_fail_closed_without_qualified_3d_gate(self) -> None:
+        spec, rows = _experiment("dynamic", [0.0, 0.5, 1.0])
+        for row in rows:
+            row["reconstruction_route"] = "spatialtrackerv2_dynamic"
+        result = grade_simple_paper_benchmark(rows, {"experiments": [spec]})
+
+        self.assertEqual(result["summary"]["video_grade_counts"]["X"], 3)
+        self.assertEqual(result["per_scan_rows"][0]["grade"], "X")
+        self.assertIn(
+            "dynamic_3d_evidence_gate_not_passed",
+            result["per_scan_rows"][0]["reason_codes"],
+        )
 
 
 if __name__ == "__main__":

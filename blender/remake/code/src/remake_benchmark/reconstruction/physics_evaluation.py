@@ -23,6 +23,10 @@ from .fixed_camera_ball import (
 )
 from .generation_validity import evaluate_generation_validity
 from .scene_rigidity import assess_static_scene_rigidity
+from .trajectory_3d_inclusion import (
+    assess_dynamic_3d_trajectory,
+    finalize_dynamic_3d_inclusion,
+)
 from .physics_parameters import (
     fit_physics_parameters,
     lookup_target_tuple,
@@ -123,15 +127,39 @@ def _load_dynamic_trajectory(path: Path) -> list[dict[str, Any]]:
             values: dict[str, Any] = dict(source)
             frame_index = source.get("source_frame") or source.get("frame_index")
             values["frame_index"] = int(frame_index or len(rows))
-            for name in ("time_s", "x_m", "y_m", "z_m"):
+            for name in (
+                "time_s", "x_m", "y_m", "z_m", "x_raw_m", "y_raw_m", "z_raw_m",
+                "object_visible_queries", "object_inlier_fraction",
+            ):
                 text = source.get(name)
                 values[name] = None if text in {None, ""} else float(text)
-            finite = all(
-                values[name] is not None and math.isfinite(float(values[name]))
-                for name in ("x_m", "y_m", "z_m")
+            direct_finite = all(
+                values.get(name) is not None and math.isfinite(float(values[name]))
+                for name in ("x_raw_m", "y_raw_m", "z_raw_m")
             )
-            values["measurement_valid"] = finite
-            values["physics_fit_used"] = finite
+            visible_queries = values.get("object_visible_queries")
+            inlier_fraction = values.get("object_inlier_fraction")
+            fit_eligible = bool(
+                direct_finite
+                and visible_queries is not None
+                and float(visible_queries) >= 6
+                and inlier_fraction is not None
+                and float(inlier_fraction) >= 0.50
+            )
+            if direct_finite:
+                values["fit_x_m"] = values["x_raw_m"]
+                values["fit_y_m"] = values["y_raw_m"]
+                values["fit_z_m"] = values["z_raw_m"]
+                # The inverse fitter consumes x_m/z_m.  Use the direct native
+                # measurements, not the rolling-median display trajectory.
+                values["x_m"] = values["x_raw_m"]
+                values["y_m"] = values["y_raw_m"]
+                values["z_m"] = values["z_raw_m"]
+            values["coordinate_frame_3d"] = "spatialtrackerv2_frame0_metric_aligned_m"
+            values["fit_eligible"] = fit_eligible
+            values["interpolated"] = False
+            values["measurement_valid"] = fit_eligible
+            values["physics_fit_used"] = fit_eligible
             rows.append(values)
     return rows
 
@@ -666,6 +694,8 @@ def run_physics_job(
     }
     error: dict[str, Any] | None = None
     target_lookup_performed = False
+    fit_attempted = False
+    dynamic_3d_inclusion: dict[str, Any] | None = None
     visuals: dict[str, Any] = {
         "overlay_video": None,
         "evidence_contact_sheet": None,
@@ -752,28 +782,67 @@ def run_physics_job(
                     )
             if trajectory:
                 write_trajectory_csv(trajectory_path, trajectory)
-            trajectory_fit_eligibility = (
-                {
-                    "eligible": True,
-                    "status": "full_generation_validity",
-                    "reason": "dynamic_reconstruction_generation_validity_pass",
-                }
-                if validity.get("fit_eligible") is True
-                else {
-                    "eligible": False,
-                    "status": "blocked",
-                    "reason": f"dynamic_generation_validity_{validity.get('status', 'indeterminate')}",
-                }
+            dynamic_3d_inclusion = assess_dynamic_3d_trajectory(
+                experiment_id,
+                trajectory,
+                reconstruction_metadata=dynamic_result,
             )
+            hard_validity_failure = bool(
+                validity.get("status") == "fail" or validity.get("failure_codes")
+            )
+            dynamic_evidence_usable = dynamic_3d_inclusion.get("decision") == "include"
+            trajectory_fit_eligibility = {
+                "eligible": bool(trajectory and not hard_validity_failure and dynamic_evidence_usable),
+                "status": (
+                    "qualified_dynamic_3d"
+                    if trajectory and not hard_validity_failure and dynamic_evidence_usable
+                    else "blocked"
+                ),
+                "reason": (
+                    "dynamic_3d_motion_manifold_pass"
+                    if trajectory and not hard_validity_failure and dynamic_evidence_usable
+                    else "dynamic_generation_validity_fail"
+                    if hard_validity_failure
+                    else "dynamic_3d_measurement_x"
+                ),
+                "dynamic_3d_inclusion": dynamic_3d_inclusion,
+            }
         else:
             raise ValueError(f"unknown reconstruction route: {reconstruction_route}")
 
         if trajectory_fit_eligibility.get("eligible") and trajectory:
-            fit = fit_physics_parameters(experiment_id, trajectory)
-            # Ground truth is intentionally looked up only after reconstruction + fit.
-            target = lookup_target_tuple(spec, str(job["parameter_tuple_id"]))
-            target_lookup_performed = True
-            metrics = score_parameter_fit(fit, spec, target)
+            fit_attempted = True
+            fit_input = (
+                [row for row in trajectory if row.get("physics_fit_used") is True]
+                if reconstruction_route == "spatialtrackerv2_dynamic"
+                else trajectory
+            )
+            fit = fit_physics_parameters(experiment_id, fit_input)
+            if reconstruction_route == "spatialtrackerv2_dynamic":
+                dynamic_3d_inclusion = finalize_dynamic_3d_inclusion(
+                    dynamic_3d_inclusion or {},
+                    fit,
+                )
+                dynamic_fit_usable = dynamic_3d_inclusion.get("decision") == "include"
+                trajectory_fit_eligibility.update(
+                    {
+                        "eligible": dynamic_fit_usable,
+                        "status": "qualified_dynamic_3d" if dynamic_fit_usable else "blocked",
+                        "reason": (
+                            "dynamic_3d_motion_manifold_and_target_free_fit_pass"
+                            if dynamic_fit_usable
+                            else "dynamic_3d_target_free_fit_x"
+                        ),
+                        "dynamic_3d_inclusion": dynamic_3d_inclusion,
+                    }
+                )
+            if trajectory_fit_eligibility.get("eligible"):
+                # Ground truth is intentionally looked up only after reconstruction + fit.
+                target = lookup_target_tuple(spec, str(job["parameter_tuple_id"]))
+                target_lookup_performed = True
+                metrics = score_parameter_fit(fit, spec, target)
+            else:
+                metrics = _not_scored(str(trajectory_fit_eligibility.get("reason")))
         else:
             reason = (
                 f"video_generation_validity_{validity.get('status', 'indeterminate')}"
@@ -826,12 +895,16 @@ def run_physics_job(
     status = (
         "generation_validity_failed"
         if validity.get("status") == "fail"
+        else "succeeded"
+        if trajectory_fit_eligibility.get("eligible")
+        else "trajectory_not_eligible"
+        if reconstruction_route == "spatialtrackerv2_dynamic"
         else "generation_validity_indeterminate"
         if validity.get("status") == "indeterminate"
         else "succeeded"
     )
     result = {
-        "schema_version": "2.0.0",
+        "schema_version": "2.1.0",
         "status": status,
         "job": job,
         "benchmark_split": benchmark_split(job),
@@ -850,7 +923,8 @@ def run_physics_job(
         "pipeline": pipeline,
         "video_generation_validity": validity,
         "trajectory_fit_eligibility": trajectory_fit_eligibility,
-        "fit_attempted": bool(trajectory_fit_eligibility.get("eligible") and trajectory),
+        "dynamic_3d_inclusion": dynamic_3d_inclusion,
+        "fit_attempted": fit_attempted,
         "fit": fit,
         "metrics": metrics,
         "target_lookup_performed": target_lookup_performed,
@@ -868,7 +942,14 @@ def _summary_row(result: Mapping[str, Any]) -> dict[str, Any]:
     metrics = result["metrics"]
     tracking = result.get("pipeline", {}).get("tracking", {})
     validity = result.get("video_generation_validity", {})
+    dynamic_3d = result.get("dynamic_3d_inclusion")
+    dynamic_decision = (
+        str(dynamic_3d.get("decision"))
+        if isinstance(dynamic_3d, Mapping) and dynamic_3d.get("decision") is not None
+        else None
+    )
     row: dict[str, Any] = {
+        "job_id": Path(str(job["video_name"])).stem,
         "video_name": job["video_name"],
         "experiment_id": job["experiment_id"],
         "parameter_tuple_id": job["parameter_tuple_id"],
@@ -877,6 +958,34 @@ def _summary_row(result: Mapping[str, Any]) -> dict[str, Any]:
         "seed": job["seed"],
         "benchmark_split": result.get("benchmark_split") or benchmark_split(job),
         "reconstruction_route": result.get("reconstruction_route"),
+        "measurement_route": (
+            "qualified_dynamic_3d"
+            if dynamic_decision == "include"
+            else "dynamic_3d_measurement_x"
+            if result.get("reconstruction_route") == "spatialtrackerv2_dynamic"
+            else "calibrated_2d"
+        ),
+        "dynamic_3d_inclusion_decision": dynamic_decision,
+        "dynamic_3d_inclusion_reason_codes": (
+            ";".join(str(value) for value in dynamic_3d.get("reason_codes", []))
+            if isinstance(dynamic_3d, Mapping)
+            else ""
+        ),
+        "dynamic_3d_gate_schema_version": (
+            dynamic_3d.get("schema_version") if isinstance(dynamic_3d, Mapping) else None
+        ),
+        "dynamic_3d_gate_fit_state": (
+            dynamic_3d.get("fit_state") if isinstance(dynamic_3d, Mapping) else None
+        ),
+        "dynamic_3d_gate_thresholds_json": (
+            json.dumps(dynamic_3d.get("thresholds", {}), sort_keys=True, separators=(",", ":"))
+            if isinstance(dynamic_3d, Mapping)
+            else ""
+        ),
+        "dynamic_3d_source_trajectory_sha256": (
+            result.get("source_trajectory_sha256")
+            or result.get("evaluation_lineage", {}).get("trajectory_sha256")
+        ),
         "generation_validity_status": validity.get("status"),
         "generation_failure_codes": ";".join(validity.get("failure_codes", [])),
         "generation_warning_codes": ";".join(validity.get("warning_codes", [])),

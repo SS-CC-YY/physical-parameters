@@ -13,6 +13,7 @@ import hashlib
 import json
 import math
 import os
+import shutil
 import subprocess
 import sys
 import traceback
@@ -42,6 +43,10 @@ from .physics_evaluation import (
 )
 from .physics_parameters import fit_physics_parameters, lookup_target_tuple, score_parameter_fit
 from .scene_rigidity import assess_static_scene_rigidity
+from .trajectory_3d_inclusion import (
+    assess_dynamic_3d_trajectory,
+    finalize_dynamic_3d_inclusion,
+)
 from .seedance978 import (
     _audit_index,
     _ordered_manifest,
@@ -56,7 +61,7 @@ from .seedance978 import (
 
 
 TRACK_SCHEMA_VERSION = "1.0.0"
-EVALUATOR_VERSION = "1.0.0"
+EVALUATOR_VERSION = "1.1.0"
 STATIC_ROUTE = "calibrated_static_sphere"
 DYNAMIC_ROUTE = "spatialtrackerv2_dynamic"
 DYNAMIC_MIN_ANCHOR_INLIER_FRACTION = 0.50
@@ -1536,6 +1541,10 @@ def evaluate_extracted_seedance978(
         str(sys.modules[fit_physics_parameters.__module__].__file__)
     ).resolve()
     physics_fitter_source_sha256 = _sha256(physics_source_file)
+    dynamic_gate_source_file = Path(
+        str(sys.modules[assess_dynamic_3d_trajectory.__module__].__file__)
+    ).resolve()
+    dynamic_3d_gate_source_sha256 = _sha256(dynamic_gate_source_file)
     registry_sha256 = _sha256(registry_path)
     for ordinal, source in enumerate(selected, 1):
         job_id = str(source["job_id"])
@@ -1555,6 +1564,7 @@ def evaluate_extracted_seedance978(
             "registry_sha256": registry_sha256,
             "evaluator_source_sha256": evaluator_source_sha256,
             "physics_fitter_source_sha256": physics_fitter_source_sha256,
+            "dynamic_3d_gate_source_sha256": dynamic_3d_gate_source_sha256,
             "evaluator_version": EVALUATOR_VERSION,
         }
         if destination.is_file() and not overwrite:
@@ -1563,6 +1573,17 @@ def evaluate_extracted_seedance978(
             except (OSError, json.JSONDecodeError):
                 cached = {}
             if cached.get("evaluation_lineage") == lineage:
+                portable_trajectory_path = destination.parent / "trajectory_frames.csv"
+                portable_valid = bool(
+                    portable_trajectory_path.is_file()
+                    and _sha256(portable_trajectory_path) == lineage["trajectory_sha256"]
+                )
+                if not portable_valid:
+                    portable_trajectory_path.parent.mkdir(parents=True, exist_ok=True)
+                    if trajectory_path.resolve() != portable_trajectory_path.resolve():
+                        shutil.copyfile(trajectory_path, portable_trajectory_path)
+                    cached["trajectory_csv"] = str(portable_trajectory_path)
+                    _write_json(destination, cached)
                 print(f"[{ordinal}/{len(selected)}] SKIP {job_id} lineage=unchanged", flush=True)
                 continue
             print(f"[{ordinal}/{len(selected)}] REEVALUATE {job_id} lineage=changed", flush=True)
@@ -1595,23 +1616,73 @@ def evaluate_extracted_seedance978(
             extraction.get("trajectory_fit_eligible")
             and fit_measurement_count >= 3
         )
+        dynamic_3d_inclusion = None
         if route == STATIC_ROUTE:
             validity_eligibility = _assess_frozen_trajectory_eligibility(validity, fit_rows)
         else:
             validity_status = str(validity.get("status", "indeterminate")).lower()
+            dynamic_3d_inclusion = assess_dynamic_3d_trajectory(
+                experiment_id,
+                rows,
+                reconstruction_metadata=extraction,
+            )
+            hard_validity_failure = bool(
+                validity_status in {"fail", "failed"}
+                or validity.get("failure_codes")
+            )
+            dynamic_evidence_usable = dynamic_3d_inclusion.get("decision") == "include"
             validity_eligibility = {
-                "eligible": validity_status == "pass",
-                "status": "full_generation_validity" if validity_status == "pass" else "blocked",
-                "reason": f"dynamic_generation_validity_{validity_status}",
+                # Moving-camera rigidity may remain formally indeterminate in
+                # the 2-D validity gate.  A target-independent metric 3-D
+                # manifold check is the appropriate replacement evidence.
+                "eligible": bool(not hard_validity_failure and dynamic_evidence_usable),
+                "status": (
+                    "qualified_dynamic_3d"
+                    if not hard_validity_failure and dynamic_evidence_usable
+                    else "blocked"
+                ),
+                "reason": (
+                    "dynamic_3d_motion_manifold_pass"
+                    if not hard_validity_failure and dynamic_evidence_usable
+                    else "dynamic_generation_validity_fail"
+                    if hard_validity_failure
+                    else "dynamic_3d_measurement_x"
+                ),
+                "original_generation_validity_status": validity_status,
+                "dynamic_3d_inclusion": dynamic_3d_inclusion,
             }
         eligible = bool(track_quality_ok and validity_eligibility.get("eligible"))
         target_lookup_performed = False
+        fit_attempted = False
         if eligible:
+            fit_attempted = True
             fit = fit_physics_parameters(experiment_id, fit_rows)
-            target = lookup_target_tuple(spec, str(extraction["job"]["parameter_tuple_id"]))
-            target_lookup_performed = True
-            metrics = score_parameter_fit(fit, spec, target)
-            reason = str(validity_eligibility.get("reason") or "trajectory_fit_completed")
+            if route == DYNAMIC_ROUTE:
+                dynamic_3d_inclusion = finalize_dynamic_3d_inclusion(
+                    dynamic_3d_inclusion or {},
+                    fit,
+                )
+                eligible = dynamic_3d_inclusion.get("decision") == "include"
+                validity_eligibility.update(
+                    {
+                        "eligible": eligible,
+                        "status": "qualified_dynamic_3d" if eligible else "blocked",
+                        "reason": (
+                            "dynamic_3d_motion_manifold_and_target_free_fit_pass"
+                            if eligible
+                            else "dynamic_3d_target_free_fit_x"
+                        ),
+                        "dynamic_3d_inclusion": dynamic_3d_inclusion,
+                    }
+                )
+            if eligible:
+                target = lookup_target_tuple(spec, str(extraction["job"]["parameter_tuple_id"]))
+                target_lookup_performed = True
+                metrics = score_parameter_fit(fit, spec, target)
+                reason = str(validity_eligibility.get("reason") or "trajectory_fit_completed")
+            else:
+                reason = str(validity_eligibility.get("reason") or "dynamic_3d_target_free_fit_x")
+                metrics = _not_scored(reason)
         else:
             reason = (
                 str(validity_eligibility.get("reason"))
@@ -1622,6 +1693,12 @@ def evaluate_extracted_seedance978(
             metrics = _not_scored(reason)
         job_dir = destination.parent
         job_dir.mkdir(parents=True, exist_ok=True)
+        # Keep a portable frozen copy beside result.json.  Reports can then be
+        # rebuilt after moving the evaluation directory without depending on
+        # the original extraction-root absolute path.
+        portable_trajectory_path = job_dir / "trajectory_frames.csv"
+        if trajectory_path.resolve() != portable_trajectory_path.resolve():
+            shutil.copyfile(trajectory_path, portable_trajectory_path)
         _write_rows(job_dir / "fit_frames.csv", [row for row in fit_rows if row["physics_fit_used"]])
         plot = None
         if any(_finite_xyz(row) for row in fit_rows):
@@ -1650,7 +1727,8 @@ def evaluate_extracted_seedance978(
                 "fit_measurement_count": fit_measurement_count,
                 "validity_policy": validity_eligibility,
             },
-            "fit_attempted": eligible,
+            "dynamic_3d_inclusion": dynamic_3d_inclusion,
+            "fit_attempted": fit_attempted,
             "fit": fit,
             "metrics": metrics,
             "target_lookup_performed": target_lookup_performed,
@@ -1658,7 +1736,7 @@ def evaluate_extracted_seedance978(
             "visual_evidence": {"trajectory_plot": plot},
             "camera_motion_evidence": extraction.get("camera_motion_evidence", {}),
             "tracking_csv": extraction.get("native_tracking_csv"),
-            "trajectory_csv": str(trajectory_path),
+            "trajectory_csv": str(portable_trajectory_path),
             "error": extraction.get("error"),
         }
         _write_json(destination, result)

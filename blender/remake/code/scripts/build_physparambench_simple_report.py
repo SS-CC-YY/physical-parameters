@@ -12,12 +12,13 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import math
 import statistics
 import sys
 from collections import Counter, defaultdict
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, Iterable, Mapping, Sequence
 
 
@@ -32,6 +33,11 @@ from remake_benchmark.reconstruction.simple_report_visuals import (  # noqa: E40
     write_experiment_scope_summary_svg,
     write_grade_counts_svg,
     write_parameter_scan_small_multiples_svg,
+)
+from remake_benchmark.reconstruction.trajectory_3d_inclusion import (  # noqa: E402
+    DYNAMIC_ROUTE,
+    assess_dynamic_3d_trajectory,
+    finalize_dynamic_3d_inclusion,
 )
 
 
@@ -68,6 +74,14 @@ def _write_csv(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
         writer.writerows(rows)
 
 
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def _truth(value: Any) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "pass", "passed", "ok"}
 
@@ -90,6 +104,206 @@ def _job_id(row: Mapping[str, Any]) -> str:
     return Path(value).stem
 
 
+def _evidence_path(value: Any, job_root: Path | None) -> Path | None:
+    if value not in (None, ""):
+        candidate = Path(str(value))
+        if candidate.is_file():
+            return candidate
+        if job_root is not None:
+            names = [candidate.name]
+            if "\\" in str(value):
+                names.append(PureWindowsPath(str(value)).name)
+            for name in dict.fromkeys(names):
+                portable = job_root / name
+                if portable.is_file():
+                    return portable
+    return None
+
+
+def _dynamic_trajectory_evidence(
+    job_root: Path | None,
+) -> tuple[dict[str, Any], dict[str, Any], Path | None, list[dict[str, str]]]:
+    if job_root is None:
+        return {}, {}, None, []
+    result_path = job_root / "result.json"
+    result = _read_json(result_path) if result_path.is_file() else {}
+    extraction: dict[str, Any] = {}
+    source_extraction = _evidence_path(result.get("source_extraction"), job_root)
+    if source_extraction is not None:
+        try:
+            extraction = _read_json(source_extraction)
+        except (OSError, json.JSONDecodeError):
+            extraction = {}
+    result_pipeline = result.get("pipeline") if isinstance(result, Mapping) else None
+    metadata = result if isinstance(result_pipeline, Mapping) else extraction or result
+    # Prefer the portable frozen evidence colocated with result.json.  An
+    # external source path may still exist but may have been regenerated since
+    # this fit was computed.
+    trajectory_candidates = [
+        job_root / "trajectory_frames.csv",
+        job_root / "trajectory.csv",
+        _evidence_path(result.get("source_trajectory"), job_root),
+        _evidence_path(result.get("trajectory_csv"), job_root),
+        _evidence_path(extraction.get("trajectory_frames_csv"), job_root),
+    ]
+    trajectory_path = next(
+        (candidate for candidate in trajectory_candidates if candidate is not None and candidate.is_file()),
+        None,
+    )
+    rows = _read_csv(trajectory_path) if trajectory_path is not None else []
+    return result, metadata, trajectory_path, rows
+
+
+def _enrich_measurement_routes(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    evaluation_root: Path | None,
+    policy: Mapping[str, Any],
+    primary_seed: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    thresholds = policy.get("measurement_policy", {}).get("dynamic_3d_inclusion", {})
+    dynamic_count = sum(
+        str(row.get("reconstruction_route") or "calibrated_static_sphere") == DYNAMIC_ROUTE
+        for row in rows
+    )
+    if dynamic_count and evaluation_root is None:
+        raise ValueError(
+            "--evaluation-root is required because all_jobs.csv contains "
+            f"{dynamic_count} dynamically reconstructed rows. The report must recompute "
+            "the current 3-D geometry and target-free motion-law gates from frozen evidence."
+        )
+    enriched: list[dict[str, Any]] = []
+    gate_rows: list[dict[str, Any]] = []
+    for source in rows:
+        row = dict(source)
+        route = str(row.get("reconstruction_route") or "calibrated_static_sphere")
+        job_id = _job_id(row)
+        if route != DYNAMIC_ROUTE:
+            row.update(
+                {
+                    "simple_measurement_route": "calibrated_2d",
+                    "simple_dynamic_3d_decision": "not_applicable",
+                    "simple_dynamic_3d_reason_codes": "",
+                }
+            )
+            enriched.append(row)
+            continue
+
+        job_root = None if evaluation_root is None else evaluation_root / "jobs" / job_id
+        evaluation_result, metadata, trajectory_path, trajectory_rows = _dynamic_trajectory_evidence(job_root)
+        evaluation_lineage = evaluation_result.get("evaluation_lineage")
+        if not isinstance(evaluation_lineage, Mapping):
+            evaluation_lineage = {}
+        expected_trajectory_sha256 = str(
+            evaluation_result.get("source_trajectory_sha256")
+            or evaluation_lineage.get("trajectory_sha256")
+            or ""
+        ).strip().lower()
+        actual_trajectory_sha256 = (
+            _sha256(trajectory_path) if trajectory_path is not None and trajectory_path.is_file() else ""
+        )
+        trajectory_provenance_error = None
+        if trajectory_rows and not expected_trajectory_sha256:
+            trajectory_provenance_error = "X_DYNAMIC_TRAJECTORY_HASH_PROVENANCE_MISSING"
+        elif (
+            trajectory_rows
+            and actual_trajectory_sha256.lower() != expected_trajectory_sha256
+        ):
+            trajectory_provenance_error = "X_DYNAMIC_TRAJECTORY_HASH_MISMATCH"
+        if trajectory_rows and trajectory_provenance_error is None:
+            geometry_gate = assess_dynamic_3d_trajectory(
+                str(row.get("experiment_id") or ""),
+                trajectory_rows,
+                reconstruction_metadata=metadata,
+                thresholds=thresholds,
+            )
+            gate = finalize_dynamic_3d_inclusion(
+                geometry_gate,
+                evaluation_result.get("fit") if isinstance(evaluation_result, Mapping) else None,
+                thresholds=thresholds,
+            )
+        else:
+            # Never silently reuse a stale gate produced under unknown
+            # thresholds.  The current report requires the frozen trajectory
+            # and recomputes both geometry and target-free fit evidence.
+            gate = {
+                "schema_version": "1.0.0",
+                "decision": "X",
+                "measurement_route": "dynamic_3d_measurement_x",
+                "experiment_id": str(row.get("experiment_id") or ""),
+                "expected_geometry": None,
+                "reason_codes": [
+                    trajectory_provenance_error or "X_DYNAMIC_TRAJECTORY_EVIDENCE_NOT_FOUND"
+                ],
+                "metrics": {},
+                "target_parameters_used": False,
+                "scope_note": "Missing 3-D evidence is measurement X, not a video-model failure.",
+            }
+        decision = str(gate.get("decision") or "X")
+        reasons = [str(value) for value in gate.get("reason_codes", [])]
+        metrics = dict(gate.get("metrics", {}))
+        measurement_route = (
+            "qualified_dynamic_3d" if decision == "include" else "dynamic_3d_measurement_x"
+        )
+        row.update(
+            {
+                "simple_measurement_route": measurement_route,
+                "simple_dynamic_3d_decision": decision,
+                "simple_dynamic_3d_reason_codes": ";".join(reasons),
+                "simple_dynamic_3d_main_motion_range_m": metrics.get("main_motion_range_m"),
+                "simple_dynamic_3d_off_manifold_range_ratio": metrics.get("off_manifold_range_ratio"),
+                "simple_dynamic_3d_expected_variance_fraction": metrics.get("expected_variance_fraction"),
+                "simple_dynamic_3d_valid_fraction": metrics.get("valid_fraction"),
+                "simple_dynamic_3d_motion_law_median_nrmse": metrics.get("motion_law_median_nrmse"),
+            }
+        )
+        result_path = None if job_root is None else job_root / "result.json"
+        gate_rows.append(
+            {
+                "job_id": job_id,
+                "experiment_id": row.get("experiment_id"),
+                "parameter_tuple_id": row.get("parameter_tuple_id"),
+                "scene_id": row.get("scene_id"),
+                "camera_name": row.get("camera_name"),
+                "seed": row.get("seed"),
+                "decision": decision,
+                "measurement_route": measurement_route,
+                "reason_codes": ";".join(reasons),
+                "valid_fraction": metrics.get("valid_fraction"),
+                "main_motion_range_m": metrics.get("main_motion_range_m"),
+                "off_manifold_range_ratio": metrics.get("off_manifold_range_ratio"),
+                "expected_variance_fraction": metrics.get("expected_variance_fraction"),
+                "jump_q95_ratio": metrics.get("jump_q95_ratio"),
+                "motion_law_median_nrmse": metrics.get("motion_law_median_nrmse"),
+                "fit_state": gate.get("fit_state"),
+                "expected_trajectory_sha256": expected_trajectory_sha256 or None,
+                "actual_trajectory_sha256": actual_trajectory_sha256 or None,
+                "result_json": None if result_path is None else str(result_path),
+                "trajectory_csv": None if trajectory_path is None else str(trajectory_path),
+                "gate_json": json.dumps(gate, ensure_ascii=False, separators=(",", ":")),
+            }
+        )
+        enriched.append(row)
+    counts = Counter(str(row["decision"]) for row in gate_rows)
+    primary_included = sum(
+        row["decision"] == "include"
+        and row.get("scene_id") == "baseline"
+        and row.get("camera_name") == "CAM_Side"
+        and _seed(row.get("seed")) == int(primary_seed)
+        for row in gate_rows
+    )
+    summary = {
+        "calibrated_2d_count": len(enriched) - len(gate_rows),
+        "routed_dynamic_3d_count": len(gate_rows),
+        "qualified_dynamic_3d_count": counts["include"],
+        "dynamic_3d_measurement_x_count": len(gate_rows) - counts["include"],
+        "primary_baseline_side_qualified_dynamic_3d_count": primary_included,
+        "gate_decision_counts": {"QUALIFIED_3D": counts["include"], "X": len(gate_rows) - counts["include"]},
+        "policy": "Target-independent metric 3-D motion-manifold gate; qualified baseline Side rows may enter primary scans.",
+    }
+    return enriched, gate_rows, summary
+
+
 def _paper_video_state(row: Mapping[str, Any]) -> str:
     """Return success, clear_failure, or measurement_unavailable.
 
@@ -104,12 +318,24 @@ def _paper_video_state(row: Mapping[str, Any]) -> str:
     if manual in {"pass", "passed", "ok"}:
         return "success"
     automatic = str(row.get("generation_validity_status") or "").strip().lower()
+    if automatic in {"fail", "failed", "invalid"}:
+        return "measurement_unavailable"
+    if (
+        str(row.get("reconstruction_route") or "") == DYNAMIC_ROUTE
+        and str(row.get("simple_dynamic_3d_decision") or "").lower() == "include"
+    ):
+        return "success"
     if automatic in {"pass", "passed", "ok"}:
         return "success"
     return "measurement_unavailable"
 
 
 def _motion_evaluable(row: Mapping[str, Any]) -> bool:
+    if (
+        str(row.get("reconstruction_route") or "") == DYNAMIC_ROUTE
+        and str(row.get("simple_dynamic_3d_decision") or "").lower() != "include"
+    ):
+        return False
     return _paper_video_state(row) == "success" and (
         _truth(row.get("fit_complete")) or _truth(row.get("trajectory_fit_eligible"))
     )
@@ -198,6 +424,12 @@ def _view_robustness(
             grouped[_condition_key(row)][view] = row
     triplets = [group for group in grouped.values() if len(group) == 3]
     all_evaluable = sum(all(_motion_evaluable(group[view]) for view in group) for group in triplets)
+    route_protocols = Counter(
+        "same_measurement_route"
+        if len({str(group[view].get("simple_measurement_route")) for view in group}) == 1
+        else "mixed_measurement_routes"
+        for group in triplets
+    )
     any_clear_failure = sum(
         any(_paper_video_state(group[view]) == "clear_failure" for view in group)
         for group in triplets
@@ -208,6 +440,8 @@ def _view_robustness(
         side = group["CAM_Side"]
         experiment = str(side.get("experiment_id") or "")
         for view in ("CAM_Main", "CAM_Top"):
+            if not (_motion_evaluable(side) and _motion_evaluable(group[view])):
+                continue
             values: list[float] = []
             for parameter in specs.get(experiment, []):
                 valid_range = parameter.get("valid_range", [])
@@ -226,6 +460,8 @@ def _view_robustness(
         "all_three_motion_evaluable_count": all_evaluable,
         "all_three_motion_evaluable_rate": all_evaluable / len(triplets) if triplets else None,
         "triplet_with_clear_failure_count": any_clear_failure,
+        "same_measurement_route_triplet_count": route_protocols["same_measurement_route"],
+        "mixed_measurement_route_triplet_count": route_protocols["mixed_measurement_routes"],
         "median_main_vs_side_parameter_nad": (
             statistics.median(distances["CAM_Main"]) if distances["CAM_Main"] else None
         ),
@@ -265,7 +501,12 @@ def _seed_stability(
             if len(valid_range) != 2:
                 continue
             span = float(valid_range[1]) - float(valid_range[0])
-            estimates = [value for row in values if (value := _estimate(row, name)) is not None]
+            estimates = [
+                value
+                for row in values
+                if _motion_evaluable(row)
+                and (value := _estimate(row, name)) is not None
+            ]
             if len(estimates) >= 2 and span > 0:
                 dispersions.append(statistics.pstdev(estimates) / span)
         group_rows.append(
@@ -351,9 +592,11 @@ def _evidence_index(
                 "experiment_id": row.get("experiment_id"),
                 "parameter_tuple_id": row.get("parameter_tuple_id"),
                 "video_grade": row.get("grade"),
+                "measurement_route": row.get("measurement_route"),
                 "reason_codes": ";".join(str(value) for value in row.get("reason_codes", [])),
                 "result_json": None if job_root is None else str(job_root / "result.json"),
                 "trajectory_plot": None if job_root is None else str(job_root / "trajectory_plot.png"),
+                "trajectory_3d_plot": None if job_root is None else str(job_root / "trajectory_3d.png"),
                 "track_overlay": None if job_root is None else str(job_root / "validity_object_track_overlay.mp4"),
             }
         )
@@ -411,10 +654,11 @@ def _write_report(
     background = summary["background_robustness"]
     views = summary["view_robustness"]
     seeds = summary["seed_stability"]
+    dynamic = summary["dynamic_3d_inclusion"]
     lines = [
         "# PhysParamBench 简化主评测结果",
         "",
-        "> 本报告对应论文 abstract 的最小可用结论。严格分级和 3D/4D 结果仅作为补充审计，不改变本页主统计。",
+        "> 本报告对应论文 abstract 的最小可用结论。固定相机优先使用标定 2D；相机明显漂移时，只有通过 target-independent 3D 运动流形门的轨迹才进入其原有统计作用域。",
         "",
         "## 1. Baseline + CAM_Side：主参数评测",
         "",
@@ -443,16 +687,26 @@ def _write_report(
         "",
         "![四类实验作用域](fig4_evaluation_scopes.svg)",
         "",
-        "## 3. 与 abstract 对齐的结论",
+        "## 3. 相机漂移与 3D 轨迹",
+        "",
+        f"共路由到动态 3D 的视频 {dynamic['routed_dynamic_3d_count']} 条，其中 {dynamic['qualified_dynamic_3d_count']} 条通过公制坐标、覆盖率、连续性和预期运动子空间门，"
+        f"{dynamic['dynamic_3d_measurement_x_count']} 条记为测量 X；通过者中 baseline Side 主统计样本 {dynamic['primary_baseline_side_qualified_dynamic_3d_count']} 条。",
+        "",
+        "例如预期沿 X 轴运动时，门控要求 3D 轨迹的 X 向范围占主导，Y/Z 离轴范围相对较小；预期在 X-Z 平面运动时，则要求 Y 向进深漂移较小。"
+        "门控不读取 prompt 中的目标参数，也不把未通过的重建写成模型失败。通过后的轨迹仍使用同一组运动方程反演参数。",
+        "",
+        "![动态 3D 证据门](fig5_dynamic_3d_gate.svg)",
+        "",
+        "## 4. 与 abstract 对齐的结论",
         "",
         "视频在视觉上或定性上看起来合理，并不保证其轨迹实现了 prompt 中给定的数值参数。"
         "本报告首先在标定的 baseline Side 视角中进行参数反演，再把复杂背景、视角和 seed 分别作为鲁棒性压力测试。"
         "结果允许支持‘存在局部、方向正确的参数响应’，但只有 L4 才支持在当前容差内的数值一致性。",
         "",
-        "轨迹抖动、目标关联错误或不稳定 3D 深度被归为测量不可用 X，不作为生成模型失败。"
+        "轨迹抖动、目标关联错误或不稳定 3D 深度被归为测量不可用 X，不作为生成模型失败；通过运动流形门的 3D 轨迹则不会因使用重建路线而被排除。"
         "因此这些数字可以用于支持 benchmark 叙事，但不能被写成世界模型的绝对物理理解率。",
         "",
-        "## 4. 复杂度",
+        "## 5. 复杂度",
         "",
         "|层级|扫描数|L2|L3|L4|X|Median scan NAE|",
         "|---|---:|---:|---:|---:|---:|---:|",
@@ -463,12 +717,14 @@ def _write_report(
         )
     lines += [
         "",
-        "## 5. 证据",
+        "## 6. 证据",
         "",
         "- `parameter_scans.csv/jsonl`：baseline Side 的完整扫描结果；",
         "- `representative_scans.csv`：每个结果等级的一个可展示案例；",
         "- `evidence_index.csv`：对应 trajectory plot、检测 overlay 和 result.json；",
         "- `video_gate.csv`：L1、PASS_TO_SCAN 与 X 的单视频门控；",
+        "- `measurement_cohorts.csv`：每条视频使用 calibrated 2D 或 qualified dynamic 3D 的明确分组；",
+        "- `dynamic_3d_gate.csv`：每条动态轨迹的覆盖率、主运动范围、离流形漂移和原因码；",
         "- 原始严格 G0–G4 结果继续保留在原目录，仅作为附录。",
     ]
     (output / "REPORT_ZH.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -482,9 +738,10 @@ def _write_report(
         f"Indoor and outdoor motion-evidence retention relative to measurable baseline counterparts was {_pct(background['matched_to_baseline']['indoor']['motion_evaluable_retention_rate'])} and {_pct(background['matched_to_baseline']['outdoor']['motion_evaluable_retention_rate'])}, respectively.",
         f"Across matched independently generated viewpoints, all three views remained motion-evaluable in {_pct(views['all_three_motion_evaluable_rate'])} of conditions.",
         f"Median recovered-parameter differences were {_fmt(views['median_main_vs_side_parameter_nad'])} valid ranges for Main versus Side and {_fmt(views['median_top_vs_side_parameter_nad'])} for Top versus Side; these are robustness descriptors rather than primary accuracy scores.",
+        f"For camera-drift cases, {dynamic['qualified_dynamic_3d_count']}/{dynamic['routed_dynamic_3d_count']} dynamically reconstructed trajectories passed a target-independent metric motion-manifold gate; qualified baseline Side cases remain eligible for the primary parameter scans.",
         f"The multi-seed pilot produced a median valid-range-normalized recovered-parameter standard deviation of {_fmt(seeds['median_parameter_range_normalized_std'])}.",
         f"Median scan-level normalized error increased from {_fmt(tier_error.get('v1'))} in V1 to {_fmt(tier_error.get('v2'))} in V2 and {_fmt(tier_error.get('v3'))} in V3, consistent with greater difficulty under composed dynamics.",
-        "Tracking, calibration, or monocular reconstruction failures are reported as measurement-unavailable and are not counted as failures of the video model.",
+        "Tracking, calibration, or monocular reconstruction failures are reported as measurement-unavailable and are not counted as failures of the video model; qualified 3-D trajectories are retained with an explicit measurement-route label.",
     ]
     (output / "ABSTRACT_RESULTS_EN.md").write_text("\n".join(english) + "\n", encoding="utf-8")
 
@@ -498,11 +755,17 @@ def build(
     evaluation_root: Path | None = None,
     primary_seed: int | None = None,
 ) -> dict[str, Any]:
-    rows = _read_csv(all_jobs_csv)
+    source_rows = _read_csv(all_jobs_csv)
     registry = _read_json(registry_path)
     policy = _read_json(policy_path)
     configured_seed = int(policy.get("primary_scope", {}).get("seed", DEFAULT_PRIMARY_SEED))
     selected_seed = configured_seed if primary_seed is None else int(primary_seed)
+    rows, dynamic_gate_rows, dynamic_3d_summary = _enrich_measurement_routes(
+        source_rows,
+        evaluation_root=evaluation_root,
+        policy=policy,
+        primary_seed=selected_seed,
+    )
     threshold_config = policy.get("response_grading", {})
     grading = grade_simple_paper_benchmark(
         rows,
@@ -526,6 +789,25 @@ def build(
     _write_csv(output / "complexity_summary.csv", complexity)
     _write_csv(output / "evidence_index.csv", evidence)
     _write_csv(output / "representative_scans.csv", _representative_scans(scans))
+    _write_csv(output / "dynamic_3d_gate.csv", dynamic_gate_rows)
+    _write_csv(
+        output / "measurement_cohorts.csv",
+        [
+            {
+                "job_id": _job_id(row),
+                "experiment_id": row.get("experiment_id"),
+                "parameter_tuple_id": row.get("parameter_tuple_id"),
+                "scene_id": row.get("scene_id"),
+                "camera_name": row.get("camera_name"),
+                "seed": row.get("seed"),
+                "reconstruction_route": row.get("reconstruction_route"),
+                "measurement_route": row.get("simple_measurement_route"),
+                "dynamic_3d_decision": row.get("simple_dynamic_3d_decision"),
+                "dynamic_3d_reason_codes": row.get("simple_dynamic_3d_reason_codes"),
+            }
+            for row in rows
+        ],
+    )
 
     visual_scans = [
         {
@@ -587,13 +869,20 @@ def build(
         title="PhysParamBench paper-facing evaluation scopes",
         subtitle="Only baseline Side drives numerical parameter claims; the other scopes test robustness.",
     )
+    write_grade_counts_svg(
+        output / "fig5_dynamic_3d_gate.svg",
+        dynamic_3d_summary["gate_decision_counts"],
+        title="Dynamic 3-D trajectory evidence gate",
+        subtitle="QUALIFIED_3D may enter its normal scope; X is reconstruction evidence unavailable, not model failure.",
+        grade_order=("QUALIFIED_3D", "X"),
+    )
 
     summary = {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "policy_id": policy.get("policy_id"),
         "input": {
             "all_jobs_csv": str(all_jobs_csv),
-            "input_row_count": len(rows),
+            "input_row_count": len(source_rows),
             "registry": str(registry_path),
             "evaluation_root": None if evaluation_root is None else str(evaluation_root),
         },
@@ -601,11 +890,13 @@ def build(
         "background_robustness": background,
         "view_robustness": views,
         "seed_stability": seed_summary,
+        "dynamic_3d_inclusion": dynamic_3d_summary,
         "complexity": complexity,
         "interpretation": {
             "primary_claim": "baseline Side parameter-conditioned system identification",
             "auxiliary_claims": "background, view, and seed robustness",
-            "dynamic_3d": "exploratory_only",
+            "dynamic_3d": "eligible_after_target_independent_metric_motion_manifold_gate",
+            "mixed_measurement_routes_are_explicitly_labeled": True,
             "measurement_unavailable_is_model_failure": False,
         },
     }
@@ -627,7 +918,14 @@ def main() -> None:
         type=Path,
         default=CODE_ROOT / "configs" / "evaluations" / "physparambench_simple_paper_v1.json",
     )
-    parser.add_argument("--evaluation-root", type=Path, help="Optional root containing jobs/<job_id>/ evidence.")
+    parser.add_argument(
+        "--evaluation-root",
+        type=Path,
+        help=(
+            "Root containing jobs/<job_id>/ evidence; required when all_jobs.csv "
+            "contains spatialtrackerv2_dynamic rows."
+        ),
+    )
     parser.add_argument("--primary-seed", type=int)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()

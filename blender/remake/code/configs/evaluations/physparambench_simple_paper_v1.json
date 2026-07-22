@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "policy_id": "physparambench_simple_paper_v1",
   "purpose": "A deliberately compact paper-facing evaluation. The stricter hierarchical audit remains available as supplementary evidence.",
   "primary_scope": {
@@ -18,13 +18,31 @@
     "tracking_or_reconstruction_failure_grade": "X",
     "automatic_generation_failure_without_manual_confirmation_grade": "X",
     "ignore_small_track_jitter_for_grade": true,
-    "do_not_require_strict_nrmse_or_r2_gate": true
+    "do_not_require_strict_nrmse_or_r2_gate": true,
+    "dynamic_3d_inclusion": {
+      "minimum_direct_points": 12,
+      "minimum_valid_fraction": 0.5,
+      "minimum_time_span_s": 0.5,
+      "maximum_missing_gap_s": 0.75,
+      "minimum_main_motion_range_m": 0.05,
+      "maximum_axis_off_manifold_range_ratio": 0.35,
+      "maximum_plane_off_manifold_range_ratio": 0.3,
+      "minimum_axis_expected_variance_fraction": 0.75,
+      "minimum_plane_expected_variance_fraction": 0.8,
+      "maximum_jump_q95_ratio": 0.25,
+      "maximum_jump_ratio": 0.75,
+      "maximum_motion_law_median_nrmse": 0.35,
+      "require_motion_law_residual_evidence": true,
+      "require_native_quality_pass": true,
+      "decision_semantics": "include_or_measurement_X_never_model_failure",
+      "target_parameters_used": false
+    }
   },
   "auxiliary_scopes": {
     "indoor_outdoor": "visual_and_motion_robustness_only",
     "main_top": "motion_law_robustness_only",
     "extra_seeds": "same_condition_stability_only",
-    "dynamic_3d": "exploratory_only"
+    "dynamic_3d": "eligible_in_its_original_scope_after_target_independent_metric_motion_manifold_gate"
   },
   "grade_labels": {
     "L1": "clear_motion_generation_failure",
