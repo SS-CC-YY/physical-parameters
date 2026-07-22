@@ -531,7 +531,12 @@ def _decoded_video_properties(video_path: Path) -> dict[str, float | int | bool]
     }
 
 
-def _reusable_track_result(result_path: Path, video_path: Path) -> dict[str, Any] | None:
+def _reusable_track_result(
+    result_path: Path,
+    video_path: Path,
+    *,
+    expected_route: str | None = None,
+) -> dict[str, Any] | None:
     """Return a complete cached extraction, otherwise force an automatic retry."""
 
     if not result_path.is_file():
@@ -544,6 +549,10 @@ def _reusable_track_result(result_path: Path, video_path: Path) -> dict[str, Any
         result.get("schema_version") != TRACK_SCHEMA_VERSION
         or result.get("status") not in {"succeeded", "partial"}
         or result.get("target_parameters_used") is not False
+        or (
+            expected_route is not None
+            and result.get("reconstruction_route") != expected_route
+        )
     ):
         return None
     job_dir = result_path.parent
@@ -801,7 +810,11 @@ def _extract_static_job(payload: Mapping[str, Any]) -> tuple[str, dict[str, Any]
     job_dir = Path(payload["output_root"]) / "jobs" / job_id
     result_path = job_dir / "track_result.json"
     if not payload.get("overwrite"):
-        cached = _reusable_track_result(result_path, video_path)
+        cached = _reusable_track_result(
+            result_path,
+            video_path,
+            expected_route=STATIC_ROUTE,
+        )
         if cached is not None:
             return job_id, cached
     job_dir.mkdir(parents=True, exist_ok=True)

@@ -88,9 +88,24 @@ class TrajectoryPipelineTests(unittest.TestCase):
                     "schema_version": pipeline.TRACK_SCHEMA_VERSION,
                     "status": "partial",
                     "target_parameters_used": False,
+                    "reconstruction_route": pipeline.STATIC_ROUTE,
                 },
             )
             self.assertIsNotNone(pipeline._reusable_track_result(result_path, video_path))
+            self.assertIsNotNone(
+                pipeline._reusable_track_result(
+                    result_path,
+                    video_path,
+                    expected_route=pipeline.STATIC_ROUTE,
+                )
+            )
+            self.assertIsNone(
+                pipeline._reusable_track_result(
+                    result_path,
+                    video_path,
+                    expected_route=pipeline.DYNAMIC_ROUTE,
+                )
+            )
             _write_video(overlay_path, 3)
             self.assertIsNone(pipeline._reusable_track_result(result_path, video_path))
 
