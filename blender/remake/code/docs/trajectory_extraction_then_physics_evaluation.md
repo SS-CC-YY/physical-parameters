@@ -132,7 +132,7 @@ python rebuild-test/spatialtrackerv2/scripts/preflight.py \
 cat "$TRACK_ROOT/run_metadata_all.json"
 ```
 
-预期 `route_counts` 为 `974` 条 `calibrated_static_sphere` 和 `4` 条 `spatialtrackerv2_dynamic`。若 preflight 只报告缺少适配器依赖，可在当前已跑通 example0 的环境中补装：
+预期 `route_counts` 为 `975` 条 `calibrated_static_sphere` 和 `3` 条 `spatialtrackerv2_dynamic`。若 preflight 只报告缺少适配器依赖，可在当前已跑通 example0 的环境中补装：
 
 ```bash
 python -m pip install -r rebuild-test/spatialtrackerv2/requirements-inference.txt
