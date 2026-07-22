@@ -205,14 +205,15 @@ def _git_checkout_state(path: Path | None) -> dict[str, Any] | None:
     if not (path / ".git").exists():
         return {"root": str(path), "git_commit": None, "git_dirty": None}
     try:
+        git_prefix = ["git", "-c", f"safe.directory={path}", "-C", str(path)]
         commit = subprocess.check_output(
-            ["git", "-C", str(path), "rev-parse", "HEAD"],
+            [*git_prefix, "rev-parse", "HEAD"],
             text=True,
             stderr=subprocess.DEVNULL,
         ).strip()
         dirty = bool(
             subprocess.check_output(
-                ["git", "-C", str(path), "status", "--porcelain"],
+                [*git_prefix, "status", "--porcelain"],
                 text=True,
                 stderr=subprocess.DEVNULL,
             ).strip()

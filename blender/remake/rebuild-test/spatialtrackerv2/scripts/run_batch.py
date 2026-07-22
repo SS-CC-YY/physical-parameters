@@ -90,14 +90,15 @@ def upstream_git_state() -> dict[str, object]:
     if not (UPSTREAM / ".git").exists():
         return {"root": str(UPSTREAM), "git_commit": None, "git_dirty": None}
     try:
+        git_prefix = ["git", "-c", f"safe.directory={UPSTREAM}", "-C", str(UPSTREAM)]
         commit = subprocess.check_output(
-            ["git", "-C", str(UPSTREAM), "rev-parse", "HEAD"],
+            [*git_prefix, "rev-parse", "HEAD"],
             text=True,
             stderr=subprocess.DEVNULL,
         ).strip()
         dirty = bool(
             subprocess.check_output(
-                ["git", "-C", str(UPSTREAM), "status", "--porcelain"],
+                [*git_prefix, "status", "--porcelain"],
                 text=True,
                 stderr=subprocess.DEVNULL,
             ).strip()

@@ -19,6 +19,12 @@ REMAKE_ROOT = PACKAGE_ROOT.parents[1]
 MANIFEST = PACKAGE_ROOT / "manifests" / "v1a_seedance27.jsonl"
 
 
+def module_version(module: object) -> object:
+    """Read an eagerly defined version without invoking module __getattr__."""
+
+    return vars(module).get("__version__", "installed")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, default=MANIFEST)
@@ -51,7 +57,11 @@ def main() -> None:
     for name in modules:
         try:
             module = importlib.import_module(name)
-            versions[name] = getattr(module, "__version__", "installed")
+            # Some dependencies (notably EasternJournalist/utils3d) implement a
+            # dynamic module-level __getattr__.  Calling getattr for an absent
+            # __version__ then tries to import ``utils3d.__version__`` and turns
+            # a successful package import into a false dependency failure.
+            versions[name] = module_version(module)
         except Exception as exc:
             failures.append(f"{name}: {exc}")
     if failures:
@@ -155,14 +165,15 @@ def main() -> None:
     try:
         if not (upstream / ".git").exists():
             raise FileNotFoundError("upstream is a vendored snapshot, not a standalone checkout")
+        git_prefix = ["git", "-c", f"safe.directory={upstream}", "-C", str(upstream)]
         upstream_commit = subprocess.check_output(
-            ["git", "-C", str(upstream), "rev-parse", "HEAD"],
+            [*git_prefix, "rev-parse", "HEAD"],
             text=True,
             stderr=subprocess.DEVNULL,
         ).strip()
         upstream_dirty = bool(
             subprocess.check_output(
-                ["git", "-C", str(upstream), "status", "--porcelain"],
+                [*git_prefix, "status", "--porcelain"],
                 text=True,
                 stderr=subprocess.DEVNULL,
             ).strip()
