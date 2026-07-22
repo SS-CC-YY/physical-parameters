@@ -8,6 +8,7 @@ from unittest import mock
 from remake_benchmark.reconstruction.physics_evaluation import (
     _is_trusted_measurement,
     aggregate_results,
+    assess_trajectory_fit_eligibility,
     benchmark_split,
     run_physics_job,
 )
@@ -27,7 +28,7 @@ def _registry() -> dict:
 def _tracks(deformed: bool) -> list[dict]:
     rows = []
     for frame in range(12):
-        bad = deformed and 4 <= frame <= 7
+        bad = deformed and 3 <= frame <= 9
         rows.append(
             {
                 "frame_index": frame,
@@ -37,8 +38,8 @@ def _tracks(deformed: bool) -> list[dict]:
                 "measurement_radius_px": 8.0,
                 "track_confidence": 0.95,
                 "candidate_count": 1,
-                "circularity": 0.40 if bad else 0.93,
-                "ellipse_axis_ratio": 1.95 if bad else 1.03,
+                "circularity": 0.10 if bad else 0.93,
+                "ellipse_axis_ratio": 2.60 if bad else 1.03,
                 "touches_frame_boundary": False,
             }
         )
@@ -74,6 +75,49 @@ class PhysicsEvaluationValidityTests(unittest.TestCase):
             benchmark_split({**base, "camera_name": "CAM_Main"}),
             "main_robustness",
         )
+
+    def test_late_tracking_gap_can_fit_without_becoming_generation_valid(self) -> None:
+        rows = _tracks(False) + [
+            {
+                "frame_index": frame,
+                "found": False,
+                "observation_status": "missing",
+                "measurement_valid": False,
+                "identity_verified": False,
+            }
+            for frame in range(12, 24)
+        ]
+        validity = {
+            "status": "indeterminate",
+            "fit_eligible": False,
+            "failure_codes": [],
+            "indeterminate_codes": ["insufficient_reliable_object_tracking"],
+            "checks": {
+                "camera_motion": {"status": "pass"},
+                "object_identity": {"trusted_first_frame": True},
+                "object_shape_2d": {"status": "pass"},
+                "object_scale_2d": {"status": "pass"},
+                "scene_rigidity_2d": {"status": "pass"},
+            },
+        }
+        eligibility = assess_trajectory_fit_eligibility(validity, rows)
+        self.assertTrue(eligibility["eligible"])
+        self.assertEqual(eligibility["status"], "partial_verified_trajectory")
+        self.assertEqual(eligibility["trusted_segment_end_frame"], 11)
+
+    def test_shape_or_scene_uncertainty_blocks_partial_fit(self) -> None:
+        validity = {
+            "status": "indeterminate",
+            "fit_eligible": False,
+            "failure_codes": [],
+            "indeterminate_codes": [
+                "insufficient_reliable_object_tracking",
+                "insufficient_object_shape_evidence",
+            ],
+            "checks": {},
+        }
+        eligibility = assess_trajectory_fit_eligibility(validity, _tracks(False))
+        self.assertFalse(eligibility["eligible"])
 
     def test_obvious_deformation_never_calls_physics_fitter(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -114,7 +158,10 @@ class PhysicsEvaluationValidityTests(unittest.TestCase):
             return {
                 "job": {"experiment_id": "v1_A"},
                 "video_generation_validity": {"status": status},
-                "fit_attempted": status == "pass",
+                "trajectory_fit_eligibility": {
+                    "eligible": status in {"pass", "indeterminate"}
+                },
+                "fit_attempted": status in {"pass", "indeterminate"},
                 "metrics": {
                     "experiment_nmae": nmae,
                     "experiment_score_0_100": None if nmae is None else 100 * (1 - nmae),
@@ -123,10 +170,25 @@ class PhysicsEvaluationValidityTests(unittest.TestCase):
                 "pipeline": {"tracking": {"tracked_fraction": 1.0}},
             }
 
-        aggregate = aggregate_results([item("pass", 0.2), item("fail", None)])
-        self.assertEqual(aggregate["generation_valid_rate"], 0.5)
-        self.assertAlmostEqual(aggregate["conditional_macro_nmae_equal_experiment_weight"], 0.2)
-        self.assertEqual(aggregate["generation_validity_counts"], {"pass": 1, "fail": 1})
+        aggregate = aggregate_results(
+            [item("pass", 0.2), item("indeterminate", 0.4), item("fail", None)]
+        )
+        self.assertAlmostEqual(aggregate["generation_valid_rate"], 1.0 / 3.0)
+        self.assertAlmostEqual(aggregate["trajectory_usable_rate"], 2.0 / 3.0)
+        self.assertAlmostEqual(aggregate["conditional_macro_nmae_equal_experiment_weight"], 0.3)
+        self.assertEqual(
+            aggregate["generation_validity_counts"],
+            {"pass": 1, "indeterminate": 1, "fail": 1},
+        )
+        experiment = aggregate["by_experiment"]["v1_A"]
+        self.assertAlmostEqual(
+            experiment["mean_experiment_nmae_conditional_on_generation_valid"],
+            0.2,
+        )
+        self.assertAlmostEqual(
+            experiment["mean_experiment_nmae_conditional_on_trajectory_usable"],
+            0.3,
+        )
 
 
 if __name__ == "__main__":

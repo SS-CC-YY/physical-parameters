@@ -41,9 +41,9 @@ def _rigid_frames(count: int = 8, *, bad: bool = False, background: bool = False
 class GenerationValidityTest(unittest.TestCase):
     def test_persistent_ellipse_is_a_hard_failure(self) -> None:
         rows = _tracks()
-        for frame in (4, 5, 6, 7):
-            rows[frame]["ellipse_axis_ratio"] = 1.95
-            rows[frame]["circularity"] = 0.48
+        for frame in (3, 4, 5, 6, 7, 8):
+            rows[frame]["ellipse_axis_ratio"] = 2.60
+            rows[frame]["circularity"] = 0.10
         result = evaluate_generation_validity(
             rows,
             camera_motion_evidence={"final_category": "no_significant_camera_change"},
@@ -51,7 +51,34 @@ class GenerationValidityTest(unittest.TestCase):
         self.assertEqual(result["status"], "fail")
         self.assertFalse(result["fit_eligible"])
         self.assertIn("persistent_experiment_object_deformation_2d", result["failure_codes"])
-        self.assertEqual(result["offending_frames"]["object_shape_2d"], [4, 5, 6, 7])
+        self.assertEqual(
+            result["offending_frames"]["object_shape_2d"],
+            [3, 4, 5, 6, 7, 8],
+        )
+
+    def test_persistent_moderate_contour_merge_is_review_not_failure(self) -> None:
+        rows = _tracks()
+        for frame in (4, 5, 6, 7):
+            rows[frame]["ellipse_axis_ratio"] = 1.95
+            rows[frame]["circularity"] = 0.48
+        result = evaluate_generation_validity(
+            rows,
+            camera_motion_evidence={"final_category": "no_significant_camera_change"},
+        )
+        self.assertEqual(result["status"], "pass")
+        self.assertTrue(result["fit_eligible"])
+        self.assertNotIn(
+            "persistent_experiment_object_deformation_2d",
+            result["failure_codes"],
+        )
+        self.assertIn(
+            "persistent_segmentation_shape_outlier_requires_review",
+            result["warning_codes"],
+        )
+        self.assertEqual(
+            result["checks"]["object_shape_2d"]["review_frames"],
+            [4, 5, 6, 7],
+        )
 
     def test_one_frame_blur_is_warning_but_still_passes(self) -> None:
         rows = _tracks()
@@ -213,6 +240,28 @@ class GenerationValidityTest(unittest.TestCase):
         self.assertEqual(result["failure_codes"], [])
         self.assertIn("insufficient_reliable_object_tracking", result["warning_codes"])
 
+    def test_dense_intermittent_measurements_can_support_validity(self) -> None:
+        rows = _tracks(count=20)
+        for frame in (3, 6, 9, 12, 15, 18, 19):
+            rows[frame].update(
+                {
+                    "found": False,
+                    "identity_verified": False,
+                    "measurement_valid": False,
+                    "track_confidence": 0.0,
+                }
+            )
+        result = evaluate_generation_validity(
+            rows,
+            camera_motion_evidence={"final_category": "no_significant_camera_change"},
+        )
+        self.assertEqual(result["status"], "pass")
+        self.assertTrue(result["fit_eligible"])
+        self.assertAlmostEqual(
+            result["checks"]["object_identity"]["tracked_fraction"],
+            0.65,
+        )
+
     def test_missing_trusted_frame_zero_is_indeterminate_before_geometry(self) -> None:
         rows = _tracks()
         rows[0].update(
@@ -232,9 +281,28 @@ class GenerationValidityTest(unittest.TestCase):
         self.assertFalse(result["checks"]["object_identity"]["trusted_first_frame"])
         self.assertIn("missing_trusted_first_frame_observation", result["warning_codes"])
 
+    def test_calibration_supported_clipped_frame_is_identity_not_shape_evidence(self) -> None:
+        rows = _tracks(count=20)
+        rows[0].update(
+            {
+                "touches_frame_boundary": True,
+                "calibration_boundary_supported": True,
+                "shape_evidence_out_of_frame": True,
+                "shape_evidence_available": False,
+            }
+        )
+        result = evaluate_generation_validity(
+            rows,
+            camera_motion_evidence={"final_category": "no_significant_camera_change"},
+        )
+        self.assertEqual(result["status"], "pass")
+        self.assertTrue(result["fit_eligible"])
+        self.assertTrue(result["checks"]["object_identity"]["trusted_first_frame"])
+        self.assertNotIn(0, result["checks"]["object_shape_2d"]["unresolved_frames"])
+
     def test_long_tracking_gap_blocks_even_with_high_total_coverage(self) -> None:
         rows = _tracks(count=100)
-        for row in rows[45:58]:
+        for row in rows[45:70]:
             row["found"] = False
             row["observation_status"] = "missing"
             row["measurement_valid"] = False
@@ -243,10 +311,26 @@ class GenerationValidityTest(unittest.TestCase):
             camera_motion_evidence={"final_category": "no_significant_camera_change"},
         )
         self.assertEqual(result["status"], "indeterminate")
-        self.assertGreater(result["checks"]["object_identity"]["tracked_fraction"], 0.80)
+        self.assertGreater(result["checks"]["object_identity"]["tracked_fraction"], 0.70)
         self.assertEqual(
             result["checks"]["object_identity"]["unresolved_runs_exceeding_limit"],
-            [list(range(45, 58))],
+            [list(range(45, 70))],
+        )
+
+    def test_twenty_four_frame_bracketed_gap_is_allowed_with_dense_measurements(self) -> None:
+        rows = _tracks(count=100)
+        for row in rows[45:69]:
+            row["found"] = False
+            row["observation_status"] = "missing"
+            row["measurement_valid"] = False
+        result = evaluate_generation_validity(
+            rows,
+            camera_motion_evidence={"final_category": "no_significant_camera_change"},
+        )
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(
+            result["checks"]["object_identity"]["unresolved_runs_exceeding_limit"],
+            [],
         )
 
     def test_changed_camera_without_3d_evidence_is_indeterminate(self) -> None:

@@ -230,6 +230,18 @@ def _fit_v1a(t: np.ndarray, _x: np.ndarray, z: np.ndarray) -> dict[str, Any]:
     gaps = np.flatnonzero(np.diff(indices) > 1)
     if len(gaps):
         indices = indices[: gaps[0] + 1]
+    # The total number of airborne samples can be large because later bounce
+    # arcs also rise above the contact threshold.  Gravity for v1_A is defined
+    # from the first continuous free-fall arc, so re-check that arc after the
+    # split.  Otherwise four points can exactly overfit a three-parameter
+    # quadratic and produce a numerically precise but physically meaningless
+    # estimate.
+    if len(indices) < 8:
+        return _failure(
+            "v1_A",
+            "fewer_than_8_points_in_first_contiguous_airborne_run",
+            ["gravity_g"],
+        )
     coefficients, diagnostics = _fit_quadratic(t[indices], z[indices])
     diagnostics.update({"airborne_start_index": int(indices[0]), "airborne_end_index": int(indices[-1])})
     return _result(

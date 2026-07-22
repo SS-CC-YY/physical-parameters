@@ -153,11 +153,28 @@ def _draw_track_frame(
     frame: np.ndarray,
     row: Mapping[str, Any] | None,
     history_segments: Sequence[Sequence[tuple[int, int]]],
+    continuous_segments: Sequence[Sequence[tuple[tuple[int, int], str]]],
     status: str,
     failure_codes: Sequence[str],
 ) -> np.ndarray:
     output = frame.copy()
     colour = (0, 190, 0) if status == "pass" else (0, 0, 230) if status == "fail" else (0, 190, 255)
+    for history in continuous_segments:
+        for (start, start_source), (end, end_source) in zip(history[:-1], history[1:]):
+            if "bracketed_linear_interpolation" not in {start_source, end_source}:
+                continue
+            vector = np.asarray(end, dtype=np.float64) - np.asarray(start, dtype=np.float64)
+            distance = float(np.linalg.norm(vector))
+            if distance <= 1e-6:
+                continue
+            direction = vector / distance
+            cursor = 0.0
+            while cursor < distance:
+                dash_end = min(distance, cursor + 6.0)
+                point_a = tuple(np.rint(np.asarray(start) + direction * cursor).astype(int))
+                point_b = tuple(np.rint(np.asarray(start) + direction * dash_end).astype(int))
+                cv2.line(output, point_a, point_b, (255, 190, 0), 2, cv2.LINE_AA)
+                cursor += 11.0
     for history in history_segments:
         for start, end in zip(history[:-1], history[1:]):
             cv2.line(output, start, end, colour, 2, cv2.LINE_AA)
@@ -254,6 +271,12 @@ def _draw_track_frame(
                 1,
                 cv2.LINE_AA,
             )
+        if row.get("continuous_source") == "bracketed_linear_interpolation":
+            text = "cyan dashed=interpolated path (not fit evidence)"
+            cv2.putText(output, text, (12, 95), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.46, (0, 0, 0), 4, cv2.LINE_AA)
+            cv2.putText(output, text, (12, 95), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.46, (255, 255, 255), 1, cv2.LINE_AA)
     return output
 
 
@@ -266,6 +289,96 @@ def _is_trusted_measurement(row: Mapping[str, Any] | None) -> bool:
         and row.get("measurement_valid") is not False
         and row.get("identity_verified") is not False
     )
+
+
+def assess_trajectory_fit_eligibility(
+    validity: Mapping[str, Any],
+    track_rows: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Separate global generation validity from parameter identifiability.
+
+    A video can remain globally indeterminate because tracking is lost after
+    the informative motion has finished, while its earlier calibrated segment
+    still supports a fit.  We allow that narrow case only: hard failures,
+    missing frame-zero anchors, shape/scene uncertainty, camera uncertainty,
+    or identity ambiguity still block fitting.
+    """
+
+    status = str(validity.get("status", "indeterminate"))
+    if status == "pass" and validity.get("fit_eligible") is True:
+        return {
+            "eligible": True,
+            "status": "full_generation_validity",
+            "reason": "generation_validity_pass",
+            "trusted_segment_start_frame": 0,
+            "trusted_segment_end_frame": None,
+            "trusted_segment_frame_count": None,
+        }
+    if status == "fail" or validity.get("failure_codes"):
+        return {
+            "eligible": False,
+            "status": "blocked",
+            "reason": "generation_validity_fail",
+        }
+
+    indeterminate_codes = set(str(value) for value in validity.get("indeterminate_codes", []))
+    allowed_codes = {"insufficient_reliable_object_tracking"}
+    if not indeterminate_codes or not indeterminate_codes.issubset(allowed_codes):
+        return {
+            "eligible": False,
+            "status": "blocked",
+            "reason": "indeterminate_for_more_than_late_tracking_coverage",
+            "blocking_codes": sorted(indeterminate_codes),
+        }
+    checks = validity.get("checks", {})
+    identity = checks.get("object_identity", {})
+    required_checks = {
+        "trusted_first_frame": identity.get("trusted_first_frame") is True,
+        "camera_motion": checks.get("camera_motion", {}).get("status") == "pass",
+        "object_shape_2d": checks.get("object_shape_2d", {}).get("status") == "pass",
+        "object_scale_2d": checks.get("object_scale_2d", {}).get("status") != "fail",
+        "scene_rigidity_2d": checks.get("scene_rigidity_2d", {}).get("status") == "pass",
+    }
+    if not all(required_checks.values()):
+        return {
+            "eligible": False,
+            "status": "blocked",
+            "reason": "partial_track_safety_checks_failed",
+            "safety_checks": required_checks,
+        }
+
+    trusted_frames = sorted(
+        int(row.get("frame_index", index))
+        for index, row in enumerate(track_rows)
+        if _is_trusted_measurement(row)
+        and row.get("metric_measurement_eligible") is not False
+    )
+    runs: list[list[int]] = []
+    for frame in trusted_frames:
+        if not runs or frame != runs[-1][-1] + 1:
+            runs.append([frame])
+        else:
+            runs[-1].append(frame)
+    anchored = next((run for run in runs if run and run[0] == 0), [])
+    minimum_frames = max(12, int(math.ceil(max(len(track_rows), 1) * 0.10)))
+    if len(anchored) < minimum_frames:
+        return {
+            "eligible": False,
+            "status": "blocked",
+            "reason": "insufficient_contiguous_metric_anchor_segment",
+            "trusted_segment_frame_count": len(anchored),
+            "required_frame_count": minimum_frames,
+        }
+    return {
+        "eligible": True,
+        "status": "partial_verified_trajectory",
+        "reason": "only_late_tracking_coverage_is_unresolved",
+        "trusted_segment_start_frame": int(anchored[0]),
+        "trusted_segment_end_frame": int(anchored[-1]),
+        "trusted_segment_frame_count": len(anchored),
+        "required_frame_count": minimum_frames,
+        "safety_checks": required_checks,
+    }
 
 
 def write_validity_visuals(
@@ -290,6 +403,8 @@ def write_validity_visuals(
     )
     history_segments: list[list[tuple[int, int]]] = []
     active_history: list[tuple[int, int]] | None = None
+    continuous_segments: list[list[tuple[tuple[int, int], str]]] = []
+    active_continuous: list[tuple[tuple[int, int], str]] | None = None
     rendered: list[np.ndarray] = []
     for index, frame in enumerate(frames):
         row = track_rows[index] if index < len(track_rows) else None
@@ -307,10 +422,33 @@ def write_validity_visuals(
             # Keep prior verified segments visible, but never draw a line over
             # an unresolved gap: that line would look like measured motion.
             active_history = None
+        continuous_source = "" if row is None else str(row.get("continuous_source", ""))
+        if (
+            row is not None
+            and continuous_source
+            in {"verified_measurement", "bracketed_linear_interpolation"}
+            and row.get("continuous_center_u_px") is not None
+            and row.get("continuous_center_v_px") is not None
+        ):
+            if active_continuous is None:
+                active_continuous = []
+                continuous_segments.append(active_continuous)
+            active_continuous.append(
+                (
+                    (
+                        int(round(float(row["continuous_center_u_px"]))),
+                        int(round(float(row["continuous_center_v_px"]))),
+                    ),
+                    continuous_source,
+                )
+            )
+        else:
+            active_continuous = None
         rendered_frame = _draw_track_frame(
             frame,
             row,
             history_segments,
+            continuous_segments,
             status,
             failures,
         )
@@ -521,6 +659,11 @@ def run_physics_job(
         "failure_codes": [],
         "warning_codes": ["evaluation_not_started"],
     }
+    trajectory_fit_eligibility: dict[str, Any] = {
+        "eligible": False,
+        "status": "not_evaluated",
+        "reason": "evaluation_not_started",
+    }
     error: dict[str, Any] | None = None
     target_lookup_performed = False
     visuals: dict[str, Any] = {
@@ -551,7 +694,11 @@ def run_physics_job(
                 camera_motion_evidence=camera_motion_evidence,
                 static_scene_rigidity_evidence=static_scene_evidence,
             )
-            if validity["fit_eligible"]:
+            trajectory_fit_eligibility = assess_trajectory_fit_eligibility(
+                validity,
+                track_rows,
+            )
+            if trajectory_fit_eligibility["eligible"]:
                 video = pipeline["video"]
                 trajectory, geometry_summary = reconstruct_metric_trajectory(
                     track_rows,
@@ -567,6 +714,10 @@ def run_physics_job(
                     camera_motion_evidence=camera_motion_evidence,
                     static_scene_rigidity_evidence=static_scene_evidence,
                     trajectory_evidence=trajectory,
+                )
+                trajectory_fit_eligibility = assess_trajectory_fit_eligibility(
+                    validity,
+                    track_rows,
                 )
         elif reconstruction_route == "spatialtrackerv2_dynamic":
             trajectory, dynamic_result = _dynamic_payload(dynamic_result_dir)
@@ -601,10 +752,23 @@ def run_physics_job(
                     )
             if trajectory:
                 write_trajectory_csv(trajectory_path, trajectory)
+            trajectory_fit_eligibility = (
+                {
+                    "eligible": True,
+                    "status": "full_generation_validity",
+                    "reason": "dynamic_reconstruction_generation_validity_pass",
+                }
+                if validity.get("fit_eligible") is True
+                else {
+                    "eligible": False,
+                    "status": "blocked",
+                    "reason": f"dynamic_generation_validity_{validity.get('status', 'indeterminate')}",
+                }
+            )
         else:
             raise ValueError(f"unknown reconstruction route: {reconstruction_route}")
 
-        if validity.get("fit_eligible") and trajectory:
+        if trajectory_fit_eligibility.get("eligible") and trajectory:
             fit = fit_physics_parameters(experiment_id, trajectory)
             # Ground truth is intentionally looked up only after reconstruction + fit.
             target = lookup_target_tuple(spec, str(job["parameter_tuple_id"]))
@@ -685,7 +849,8 @@ def run_physics_job(
         "trajectory_csv": str(trajectory_path) if trajectory else None,
         "pipeline": pipeline,
         "video_generation_validity": validity,
-        "fit_attempted": bool(validity.get("fit_eligible") and trajectory),
+        "trajectory_fit_eligibility": trajectory_fit_eligibility,
+        "fit_attempted": bool(trajectory_fit_eligibility.get("eligible") and trajectory),
         "fit": fit,
         "metrics": metrics,
         "target_lookup_performed": target_lookup_performed,
@@ -715,6 +880,8 @@ def _summary_row(result: Mapping[str, Any]) -> dict[str, Any]:
         "generation_validity_status": validity.get("status"),
         "generation_failure_codes": ";".join(validity.get("failure_codes", [])),
         "generation_warning_codes": ";".join(validity.get("warning_codes", [])),
+        "trajectory_fit_eligibility": result.get("trajectory_fit_eligibility", {}).get("status"),
+        "trajectory_fit_eligible": result.get("trajectory_fit_eligibility", {}).get("eligible"),
         "fit_attempted": result.get("fit_attempted"),
         "fit_status": fit.get("status"),
         "fit_complete": metrics.get("fit_complete"),
@@ -745,6 +912,19 @@ def aggregate_results(results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         ]
         nmaes = [float(item["metrics"]["experiment_nmae"]) for item in scored]
         scores = [float(item["metrics"]["experiment_score_0_100"]) for item in scored]
+        generation_valid_scored = [
+            item
+            for item in scored
+            if item.get("video_generation_validity", {}).get("status") == "pass"
+        ]
+        generation_valid_nmaes = [
+            float(item["metrics"]["experiment_nmae"])
+            for item in generation_valid_scored
+        ]
+        generation_valid_scores = [
+            float(item["metrics"]["experiment_score_0_100"])
+            for item in generation_valid_scored
+        ]
         tracked = [
             float(item.get("pipeline", {}).get("tracking", {}).get("tracked_fraction", 0.0))
             for item in items
@@ -754,6 +934,14 @@ def aggregate_results(results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             validity_counts[
                 str(item.get("video_generation_validity", {}).get("status", "missing"))
             ] += 1
+        trajectory_usable = [
+            item
+            for item in items
+            if item.get("trajectory_fit_eligibility", {}).get(
+                "eligible",
+                item.get("video_generation_validity", {}).get("status") == "pass",
+            )
+        ]
         experiment_mean = float(np.mean(nmaes)) if nmaes else None
         if experiment_mean is not None:
             experiment_nmaes.append(experiment_mean)
@@ -762,15 +950,34 @@ def aggregate_results(results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             "generation_validity_counts": dict(validity_counts),
             "generation_valid_rate": validity_counts.get("pass", 0) / max(len(items), 1),
             "fit_attempted_count": int(sum(bool(item.get("fit_attempted")) for item in items)),
+            "trajectory_usable_count": len(trajectory_usable),
+            "trajectory_usable_rate": len(trajectory_usable) / max(len(items), 1),
             "complete_fit_count": int(sum(bool(item["metrics"]["fit_complete"]) for item in scored)),
             "complete_fit_rate_conditional_on_generation_valid": (
                 None
-                if not scored
-                else float(np.mean([bool(item["metrics"]["fit_complete"]) for item in scored]))
+                if validity_counts.get("pass", 0) == 0
+                else sum(
+                    bool(item.get("metrics", {}).get("fit_complete"))
+                    for item in items
+                    if item.get("video_generation_validity", {}).get("status") == "pass"
+                )
+                / validity_counts["pass"]
+            ),
+            "complete_fit_rate_conditional_on_trajectory_usable": (
+                None
+                if not trajectory_usable
+                else sum(bool(item.get("metrics", {}).get("fit_complete")) for item in trajectory_usable)
+                / len(trajectory_usable)
             ),
             "mean_tracking_fraction": float(np.mean(tracked)),
-            "mean_experiment_nmae_conditional_on_generation_valid": experiment_mean,
+            "mean_experiment_nmae_conditional_on_generation_valid": (
+                float(np.mean(generation_valid_nmaes)) if generation_valid_nmaes else None
+            ),
+            "mean_experiment_nmae_conditional_on_trajectory_usable": experiment_mean,
             "mean_experiment_score_0_100_conditional_on_generation_valid": (
+                float(np.mean(generation_valid_scores)) if generation_valid_scores else None
+            ),
+            "mean_experiment_score_0_100_conditional_on_trajectory_usable": (
                 float(np.mean(scores)) if scores else None
             ),
         }
@@ -780,12 +987,23 @@ def aggregate_results(results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         validity_counts[
             str(result.get("video_generation_validity", {}).get("status", "missing"))
         ] += 1
+    trajectory_usable_count = sum(
+        bool(
+            result.get("trajectory_fit_eligibility", {}).get(
+                "eligible",
+                result.get("video_generation_validity", {}).get("status") == "pass",
+            )
+        )
+        for result in results
+    )
     return {
         "job_count": len(results),
         "experiment_count": len(by_experiment),
         "scored_experiment_count": len(experiment_nmaes),
         "generation_validity_counts": dict(validity_counts),
         "generation_valid_rate": validity_counts.get("pass", 0) / max(len(results), 1),
+        "trajectory_usable_count": trajectory_usable_count,
+        "trajectory_usable_rate": trajectory_usable_count / max(len(results), 1),
         "by_experiment": by_experiment,
         "conditional_macro_nmae_equal_experiment_weight": macro_nmae,
         "conditional_macro_score_0_100_equal_experiment_weight": (
@@ -793,9 +1011,11 @@ def aggregate_results(results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         ),
         "aggregation": (
             "Generation validity uses every scheduled video as denominator. Physics accuracy is "
-            "reported only conditional on generation-valid, fitted videos: mean within experiment, "
+            "reported only for completed fits from trajectory-usable videos: mean within experiment, "
             "then equal-weight macro mean across experiments. Invalid videos are never assigned a "
-            "fabricated parameter estimate."
+            "fabricated parameter estimate. A globally indeterminate video may be fitted only when "
+            "its sole unresolved issue is late tracking coverage and a calibrated, contiguous, "
+            "shape/scene-audited trajectory segment remains available."
         ),
     }
 

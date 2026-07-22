@@ -60,6 +60,20 @@ class PhysicsParameterTests(unittest.TestCase):
         fit = fit_physics_parameters("v1_A", _rows(t, np.zeros_like(t), z))
         self.assertAlmostEqual(fit["parameter_estimates"]["gravity_g"], gravity, delta=0.08)
 
+        # Later bounce samples can make the total airborne count exceed eight,
+        # but a four-point first fall is not an identifiable robust quadratic.
+        short_t = np.arange(12, dtype=float) / 16.0
+        short_z = np.asarray([1.2, 1.0, 0.75, 0.50, 0.44, 0.60, 0.80, 0.95, 0.44, 0.65, 0.85, 1.0])
+        short_fit = fit_physics_parameters(
+            "v1_A",
+            _rows(short_t, np.zeros_like(short_t), short_z),
+        )
+        self.assertEqual(short_fit["status"], "insufficient_evidence")
+        self.assertEqual(
+            short_fit["reason"],
+            "fewer_than_8_points_in_first_contiguous_airborne_run",
+        )
+
         impact_time = 3.0
         incoming = 1.8
         restitution = 0.75

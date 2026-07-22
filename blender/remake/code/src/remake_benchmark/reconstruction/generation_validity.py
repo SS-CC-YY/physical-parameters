@@ -35,19 +35,37 @@ SCHEMA_VERSION = "1.0.0"
 
 DEFAULT_THRESHOLDS: dict[str, Any] = {
     "tracking": {
-        "min_tracked_fraction": 0.70,
+        # Sixty percent verified observations over a 5 s clip is still 48--72
+        # independent measurements at 16--24 fps.  Require the same fraction
+        # to be reliable and separately forbid gaps longer than 12 frames;
+        # this accepts dense intermittent tracks without accepting a long
+        # detector collapse.
+        "min_tracked_fraction": 0.60,
         "min_reliable_fraction": 0.60,
         "min_reliable_frames": 8,
         "min_confidence": 0.30,
         "ambiguous_candidate_count": 2,
         "persistent_frames": 3,
-        "max_consecutive_unresolved_frames": 12,
+        # Match the dense-path policy: a gap bracketed by verified observations
+        # can be visualized/interpolated for at most 24 frames, while at least
+        # 60% of the whole clip must still be real measurements.  Frame 25 and
+        # beyond remains a detector collapse and blocks validity.
+        "max_consecutive_unresolved_frames": 24,
     },
     "object_shape_2d": {
         "max_axis_ratio": 1.55,
         "severe_axis_ratio": 1.85,
         "max_circularity_with_elongation": 0.72,
         "severe_min_circularity": 0.28,
+        # Moderate contour elongation is common when the ball touches a rail,
+        # floor, highlight, or similarly coloured prop.  It is a detector
+        # warning, not sufficient proof that the generated object deformed.
+        # A hard failure requires a much stronger conjunction sustained over
+        # more frames.
+        "hard_axis_ratio": 2.20,
+        "hard_max_circularity_with_elongation": 0.40,
+        "hard_min_circularity": 0.16,
+        "hard_persistent_frames": 5,
         "min_edge_support_fraction": 0.55,
         "max_edge_radial_residual_ratio": 0.18,
         "persistent_frames": 3,
@@ -416,7 +434,11 @@ def evaluate_generation_validity(
             continue
         confidence = _finite_float(row.get("track_confidence"))
         boundary = row.get("touches_frame_boundary") is True
-        if (confidence is None or confidence >= float(tracking_config["min_confidence"])) and not boundary:
+        boundary_supported = row.get("calibration_boundary_supported") is True
+        if (
+            confidence is None
+            or confidence >= float(tracking_config["min_confidence"])
+        ) and (not boundary or boundary_supported):
             reliable_rows.append((fallback, row))
         else:
             unreliable_frames.append(frame)
@@ -485,10 +507,20 @@ def evaluate_generation_validity(
         offending["object_identity_ambiguity"] = _flatten(ambiguous_runs)
 
     shape_config = config["object_shape_2d"]
-    shape_bad: list[int] = []
+    shape_suspect: list[int] = []
+    shape_hard: list[int] = []
     shape_unresolved: list[int] = []
     shape_metrics: list[dict[str, Any]] = []
+    shape_applicable_count = 0
     for fallback, row in reliable_rows:
+        # A calibration-supported sphere that is partly outside the image is
+        # useful for identity continuity, but its full silhouette is not
+        # observable.  Exclude it from the shape denominator instead of
+        # treating the known crop as evidence of deformation or detector
+        # failure.
+        if row.get("shape_evidence_out_of_frame") is True:
+            continue
+        shape_applicable_count += 1
         # A centre/radius recovered from a circle detector can be a useful
         # trajectory measurement, but it is not an observed silhouette and
         # must not be used to accuse the generated object of deformation.
@@ -510,16 +542,6 @@ def evaluate_generation_validity(
         ):
             shape_unresolved.append(frame)
             continue
-        shape_metrics.append(
-            {
-                "frame_index": frame,
-                "evidence_source": evidence_source,
-                "axis_ratio": ratio,
-                "circularity": circularity,
-                "edge_support_fraction": edge_support,
-                "edge_radial_residual_ratio": edge_radial_residual,
-            }
-        )
         elongated_and_noncircular = (
             ratio is not None
             and ratio > float(shape_config["max_axis_ratio"])
@@ -531,14 +553,52 @@ def evaluate_generation_validity(
             circularity is not None
             and circularity < float(shape_config["severe_min_circularity"])
         )
+        hard_elongated_and_noncircular = (
+            ratio is not None
+            and ratio > float(shape_config["hard_axis_ratio"])
+            and circularity is not None
+            and circularity
+            < float(shape_config["hard_max_circularity_with_elongation"])
+        )
+        hard_noncircularity = (
+            circularity is not None
+            and circularity < float(shape_config["hard_min_circularity"])
+        )
+        suspect = bool(
+            elongated_and_noncircular
+            or severe_elongation
+            or severe_noncircularity
+        )
+        hard = bool(hard_elongated_and_noncircular or hard_noncircularity)
+        shape_metrics.append(
+            {
+                "frame_index": frame,
+                "evidence_source": evidence_source,
+                "axis_ratio": ratio,
+                "circularity": circularity,
+                "edge_support_fraction": edge_support,
+                "edge_radial_residual_ratio": edge_radial_residual,
+                "segmentation_shape_suspect": suspect,
+                "hard_deformation_evidence": hard,
+            }
+        )
         if (
             elongated_and_noncircular
             or severe_elongation
             or severe_noncircularity
         ):
-            shape_bad.append(frame)
-    shape_runs = _runs(shape_bad, int(shape_config["persistent_frames"]))
-    shape_evaluable_fraction = len(shape_metrics) / max(len(reliable_rows), 1)
+            shape_suspect.append(frame)
+        if hard:
+            shape_hard.append(frame)
+    shape_suspect_runs = _runs(
+        shape_suspect,
+        int(shape_config["persistent_frames"]),
+    )
+    shape_runs = _runs(
+        shape_hard,
+        int(shape_config["hard_persistent_frames"]),
+    )
+    shape_evaluable_fraction = len(shape_metrics) / max(shape_applicable_count, 1)
     unresolved_shape_runs = _runs(
         shape_unresolved,
         int(shape_config["max_consecutive_unresolved_frames"]) + 1,
@@ -551,9 +611,12 @@ def evaluate_generation_validity(
     if shape_runs:
         _append_unique(failures, "persistent_experiment_object_deformation_2d")
         offending["object_shape_2d"] = _flatten(shape_runs)
-    elif shape_bad:
+    elif shape_suspect_runs:
+        _append_unique(warnings, "persistent_segmentation_shape_outlier_requires_review")
+        offending["segmentation_shape_2d_review"] = _flatten(shape_suspect_runs)
+    elif shape_suspect:
         _append_unique(warnings, "transient_object_shape_outlier")
-        offending["transient_object_shape_2d"] = sorted(set(shape_bad))
+        offending["transient_object_shape_2d"] = sorted(set(shape_suspect))
     if not shape_runs and not shape_evidence_sufficient:
         _append_unique(warnings, "insufficient_object_shape_evidence")
         _append_unique(blocking_indeterminate, "insufficient_object_shape_evidence")
@@ -568,6 +631,10 @@ def evaluate_generation_validity(
     scale_bad: list[int] = []
     scale_metrics: list[dict[str, Any]] = []
     for fallback, base_row in reliable_rows:
+        if base_row.get("shape_evidence_out_of_frame") is True:
+            # Radius from a clipped silhouette is a tracking diagnostic, not a
+            # valid apparent-scale observation.
+            continue
         frame = _frame_index(base_row, fallback)
         row = dict(base_row)
         row.update(trajectory_by_frame.get(frame, {}))
@@ -752,8 +819,16 @@ def evaluate_generation_validity(
                 "unresolved_frames": sorted(set(shape_unresolved)),
                 "unresolved_runs_exceeding_limit": unresolved_shape_runs,
                 "offending_frames": _flatten(shape_runs),
-                "transient_outlier_frames": [] if shape_runs else sorted(set(shape_bad)),
+                "review_frames": _flatten(shape_suspect_runs),
+                "transient_outlier_frames": (
+                    [] if shape_suspect_runs else sorted(set(shape_suspect))
+                ),
                 "per_frame_metrics": shape_metrics,
+                "interpretation": (
+                    "Segmentation-contour distortion is a review warning. A hard 2-D "
+                    "deformation failure requires extreme, persistent evidence; 3-D rigidity "
+                    "evidence can still independently fail the video."
+                ),
             },
             "object_scale_2d": {
                 "status": (

@@ -430,7 +430,7 @@ def write_seedance978_reports(
         },
         "reporting_policy": {
             "generation_validity_denominator": "all scheduled videos, including failures and indeterminate cases",
-            "physics_accuracy": "conditional on generation-valid videos; invalid videos have no fabricated estimates",
+            "physics_accuracy": "reported for completed fits from trajectory-usable videos; fail videos are never fitted, and indeterminate videos require a separately audited partial trajectory",
             "side_primary_excludes_extra_seeds": True,
             "main_top_are_robustness_not_headline": True,
         },

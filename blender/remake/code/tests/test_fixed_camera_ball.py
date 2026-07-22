@@ -133,6 +133,21 @@ class FixedCameraBallTests(unittest.TestCase):
             self.assertIsNone(gated[1]["x_m"])
             self.assertEqual(gated_summary["tracker_eligible_frame_count"], len(track) - 1)
 
+        oversized = [dict(row) for row in track]
+        oversized[1]["measurement_radius_px"] = 2.0 * radius0
+        constrained, constrained_summary = reconstruct_metric_trajectory(
+            oversized,
+            calibration,
+            experiment_id="v3_A",
+            video_size=(width, height),
+            fps=16.0,
+        )
+        self.assertTrue(constrained[1]["radius_gt_constraint_applied"])
+        self.assertGreater(constrained[1]["radius_preconstraint_ratio"], 1.90)
+        self.assertLessEqual(constrained[1]["sphere_radius_ratio"], 1.35)
+        self.assertTrue(constrained[1]["measurement_valid"])
+        self.assertEqual(constrained_summary["radius_gt_constraint_applied_count"], 1)
+
     @staticmethod
     def _draw_synthetic_sphere(
         frame: "np.ndarray",
@@ -186,6 +201,67 @@ class FixedCameraBallTests(unittest.TestCase):
                 self.assertIsNone(row["ellipse_axis_ratio"])
                 self.assertIsNone(row["radial_residual_ratio"])
 
+    def test_calibration_supported_top_boundary_keeps_identity_and_metric_anchor(self) -> None:
+        radius = 18
+        frames = []
+        for center_y in (8, 10, 14, 20, 30, 44):
+            frame = np.full((160, 200, 3), 170, dtype=np.uint8)
+            self._draw_synthetic_sphere(frame, (100, center_y), radius)
+            frames.append(frame)
+
+        rows, summary = track_standard_ball(frames, (100.0, 8.0), float(radius))
+
+        self.assertTrue(rows[0]["found"])
+        self.assertTrue(rows[0]["calibration_boundary_supported"])
+        self.assertEqual(rows[0]["measurement_source"], "calibrated_boundary_anchor")
+        self.assertTrue(rows[0]["metric_measurement_eligible"])
+        self.assertAlmostEqual(float(rows[0]["center_u_px"]), 100.0)
+        self.assertAlmostEqual(float(rows[0]["center_v_px"]), 8.0)
+        self.assertAlmostEqual(float(rows[0]["measurement_radius_px"]), float(radius))
+        self.assertTrue(rows[0]["shape_evidence_out_of_frame"])
+        self.assertFalse(rows[0]["shape_evidence_available"])
+        self.assertGreaterEqual(summary["calibration_supported_boundary_count"], 1)
+        self.assertEqual(summary["metric_boundary_anchor_count"], 1)
+        self.assertTrue(rows[-1]["found"])
+        self.assertFalse(rows[-1]["touches_frame_boundary"])
+
+    def test_unpredicted_boundary_blob_remains_rejected(self) -> None:
+        radius = 14
+        frames = []
+        for _ in range(4):
+            frame = np.full((160, 200, 3), 170, dtype=np.uint8)
+            self._draw_synthetic_sphere(frame, (100, 80), radius)
+            self._draw_synthetic_sphere(frame, (4, 80), radius)
+            frames.append(frame)
+
+        rows, _ = track_standard_ball(frames, (100.0, 80.0), float(radius))
+
+        self.assertTrue(all(row["found"] for row in rows))
+        self.assertTrue(all(not row["touches_frame_boundary"] for row in rows))
+        self.assertTrue(all(abs(float(row["center_u_px"]) - 100.0) < 2.0 for row in rows))
+
+    def test_missing_frame_zero_detector_uses_frozen_gt_anchor_only_once(self) -> None:
+        radius = 14
+        frames = [np.full((180, 220, 3), 170, dtype=np.uint8)]
+        for center in ((80, 70), (80, 82), (80, 96)):
+            frame = np.full((180, 220, 3), 170, dtype=np.uint8)
+            self._draw_synthetic_sphere(frame, center, radius)
+            frames.append(frame)
+
+        rows, summary = track_standard_ball(
+            frames,
+            (80.0, 60.0),
+            float(radius),
+            experiment_id="v1_A",
+        )
+
+        self.assertTrue(rows[0]["found"])
+        self.assertTrue(rows[0]["calibration_first_frame_gt_forced"])
+        self.assertEqual(rows[0]["measurement_source"], "calibrated_first_frame_gt_anchor")
+        self.assertFalse(rows[0]["shape_evidence_available"])
+        self.assertEqual(summary["calibration_first_frame_gt_forced_count"], 1)
+        self.assertTrue(all(not row["calibration_first_frame_gt_forced"] for row in rows[1:]))
+
     def test_large_jump_is_missing_and_does_not_poison_reacquisition(self) -> None:
         radius = 14
         frames = []
@@ -220,6 +296,11 @@ class FixedCameraBallTests(unittest.TestCase):
             self.assertFalse(row["identity_verified"])
             self.assertFalse(row["measurement_valid"])
             self.assertIsNotNone(row["display_radius_px"])
+            self.assertEqual(
+                row["continuous_source"],
+                "bracketed_linear_interpolation",
+            )
+            self.assertFalse(row["continuous_physics_fit_used"])
         for frame_index in (8, 9, 10):
             row = rows[frame_index]
             self.assertTrue(row["found"])
@@ -228,6 +309,34 @@ class FixedCameraBallTests(unittest.TestCase):
             self.assertLess(float(row["center_u_px"]), 170.0)
             self.assertLessEqual(float(row["association_cost"]), 1.20)
             self.assertGreaterEqual(int(row["plausible_candidate_count"]), 1)
+
+    def test_vertical_first_frame_manifold_recovers_after_stale_prediction(self) -> None:
+        radius = 12
+        frames = []
+        centers = [(50, 30), (50, 35), (50, 45), (50, 60), (50, 120), (50, 150)]
+        for center in centers:
+            frame = np.full((220, 180, 3), 170, dtype=np.uint8)
+            self._draw_synthetic_sphere(frame, (120, 100), radius)
+            self._draw_synthetic_sphere(frame, center, radius)
+            frames.append(frame)
+
+        rows, summary = track_standard_ball(
+            frames,
+            (50.0, 30.0),
+            float(radius),
+            experiment_id="v1_A",
+        )
+
+        self.assertFalse(rows[4]["found"])
+        self.assertTrue(rows[5]["found"])
+        self.assertTrue(rows[5]["gt_assisted_reacquisition"])
+        self.assertEqual(
+            rows[5]["prediction_mode"],
+            "gt_first_frame_manifold_reacquisition",
+        )
+        self.assertLess(abs(float(rows[5]["center_u_px"]) - 50.0), 2.0)
+        self.assertLess(abs(float(rows[5]["center_v_px"]) - 150.0), 2.0)
+        self.assertGreaterEqual(summary["gt_assisted_reacquisition_count"], 1)
 
     def test_one_frame_dropout_does_not_switch_to_persistent_same_size_circle(self) -> None:
         radius = 14

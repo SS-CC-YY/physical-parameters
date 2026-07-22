@@ -325,9 +325,15 @@ def _hough_candidates(
     predicted: np.ndarray | None,
     *,
     roi_radius_in_reference_radii: float = 4.0,
+    roi_bounds: tuple[int, int, int, int] | None = None,
 ) -> list[SphereCandidate]:
     height, width = frame.shape[:2]
-    if predicted is None:
+    if roi_bounds is not None:
+        x0 = max(0, min(width, int(roi_bounds[0])))
+        y0 = max(0, min(height, int(roi_bounds[1])))
+        x1 = max(x0, min(width, int(roi_bounds[2])))
+        y1 = max(y0, min(height, int(roi_bounds[3])))
+    elif predicted is None:
         x0, y0, x1, y1 = 0, 0, width, height
     else:
         half_size = max(24, int(math.ceil(float(roi_radius_in_reference_radii) * reference_radius_px)))
@@ -351,7 +357,10 @@ def _hough_candidates(
         dp=1.25,
         minDist=max(8.0, 1.2 * reference_radius_px),
         param1=110.0,
-        param2=23.0,
+        # Use a permissive proposal threshold, then retain circles only after
+        # the independent colour/edge/radius checks below.  This improves
+        # recall for compressed indoor videos without weakening identity.
+        param2=18.0,
         minRadius=max(3, int(round(0.45 * reference_radius_px))),
         maxRadius=max(5, int(round(1.8 * reference_radius_px))),
     )
@@ -424,6 +433,52 @@ def _hough_candidates(
             )
         )
     return output
+
+
+def _manifold_hough_candidates(
+    frame: np.ndarray,
+    colour: Mapping[str, float],
+    reference_radius_px: float,
+    centers: Sequence[np.ndarray],
+    expected: np.ndarray,
+    experiment_id: str | None,
+) -> list[SphereCandidate]:
+    """Search a frozen line-motion corridor after local prediction is lost."""
+
+    manifold = LINE_MANIFOLDS.get(str(experiment_id))
+    if manifold is None:
+        return []
+    height, width = frame.shape[:2]
+    recent = (
+        np.stack([np.asarray(center, dtype=np.float64) for center in centers[-9:]])
+        if centers
+        else np.asarray([expected], dtype=np.float64)
+    )
+    center = np.median(recent, axis=0)
+    # Hough voting needs some surrounding edge context even though the final
+    # centre is constrained to the much tighter manifold below.
+    half_width = max(28, int(math.ceil(4.00 * reference_radius_px)))
+    if manifold == "vertical":
+        bounds = (
+            int(math.floor(float(center[0]))) - half_width,
+            0,
+            int(math.ceil(float(center[0]))) + half_width + 1,
+            height,
+        )
+    else:
+        bounds = (
+            0,
+            int(math.floor(float(center[1]))) - half_width,
+            width,
+            int(math.ceil(float(center[1]))) + half_width + 1,
+        )
+    return _hough_candidates(
+        frame,
+        colour,
+        reference_radius_px,
+        None,
+        roi_bounds=bounds,
+    )
 
 
 def _association_terms(
@@ -545,6 +600,12 @@ def _candidate_needs_hough(
     previous_radius: float,
     reference_radius: float,
 ) -> bool:
+    if candidate is not None and candidate.boundary:
+        # A clipped segmentation component can bias both centre and radius.
+        # Ask the independent circle detector for a second local proposal;
+        # the association/ambiguity gates below still decide whether either
+        # proposal is trustworthy.
+        return True
     if candidate is None or not math.isfinite(cost) or cost > 0.90:
         return True
     distance = float(
@@ -567,6 +628,53 @@ def _candidate_needs_hough(
         if candidate.radial_residual_ratio is not None and candidate.radial_residual_ratio > 0.24:
             return True
     return False
+
+
+def _calibration_supported_boundary_candidate(
+    candidate: SphereCandidate | None,
+    predicted: np.ndarray,
+    reference_radius: float,
+    frame_shape: Sequence[int],
+    *,
+    plausible_candidate_count: int,
+    association_cost: float,
+) -> bool:
+    """Allow a clipped ball only when frozen calibration predicts the clip.
+
+    Top-view first frames can place the sphere partly outside the image.  A
+    blanket boundary rejection then loses the only metric alignment anchor.
+    This exception remains deliberately local: the prediction itself must
+    intersect the image edge, exactly one plausible identity cluster may be
+    present, and the selected warm-colour candidate must pass the normal
+    association gate.  It therefore cannot turn an arbitrary boundary blob
+    into a full-frame re-detection.
+    """
+
+    if candidate is None or not candidate.boundary:
+        return False
+    if plausible_candidate_count != 1:
+        return False
+    if not math.isfinite(association_cost) or association_cost > _MAX_TRUSTED_ASSOCIATION_COST:
+        return False
+    if candidate.hue_distance > 12.0:
+        return False
+    height, width = int(frame_shape[0]), int(frame_shape[1])
+    radius = float(reference_radius)
+    prediction_intersects_boundary = bool(
+        float(predicted[0]) - radius <= 1.0
+        or float(predicted[1]) - radius <= 1.0
+        or float(predicted[0]) + radius >= width - 1.0
+        or float(predicted[1]) + radius >= height - 1.0
+    )
+    if not prediction_intersects_boundary:
+        return False
+    distance = float(
+        np.linalg.norm(
+            np.asarray([candidate.center_u_px, candidate.center_v_px], dtype=np.float64)
+            - predicted
+        )
+    )
+    return distance <= 1.10 * radius
 
 
 def _plausible_candidate_clusters(
@@ -636,6 +744,15 @@ def _persistent_distractor_match(
     reference_radius: float,
 ) -> bool:
     if candidate is None:
+        return False
+    if (
+        candidate.reference_change_fraction is not None
+        and candidate.reference_change_fraction >= _REFERENCE_CHANGE_HIGH_SUPPORT
+    ):
+        # A candidate whose interior changed strongly from the frozen first
+        # frame is not the unchanged prop stored in distractor memory.  This
+        # matters after impact: the real sphere can stop at a location where a
+        # previously rejected warm-colour blob was remembered.
         return False
     center = np.asarray([candidate.center_u_px, candidate.center_v_px], dtype=np.float64)
     for item in memory:
@@ -776,10 +893,216 @@ def _robust_recent_prediction(
     return last + velocity * effective_gap
 
 
+def _gt_manifold_reacquisition_candidate(
+    candidates: Sequence[SphereCandidate],
+    centers: Sequence[np.ndarray],
+    center_frames: Sequence[int],
+    frame_index: int,
+    expected: np.ndarray,
+    reference_radius: float,
+    experiment_id: str | None,
+) -> tuple[SphereCandidate | None, float, float | None]:
+    """Strictly re-acquire a lost sphere using frozen first-frame evidence.
+
+    This is intentionally not an unrestricted nearest-colour search.  A
+    proposal must have the calibrated size/colour, differ strongly from frame
+    zero, remain compatible with the experiment's known 2-D motion manifold,
+    and be a clear winner.  The independent constraints let an accelerating
+    falling ball recover after a stale constant-velocity prediction without
+    allowing an indoor orange prop to become the tracked object.
+    """
+
+    if frame_index <= 0 or not centers:
+        return None, float("inf"), None
+
+    last = np.asarray(centers[-1], dtype=np.float64)
+    recent = np.stack([np.asarray(center, dtype=np.float64) for center in centers[-9:]])
+    reference_line_center = np.median(recent, axis=0)
+    manifold = LINE_MANIFOLDS.get(str(experiment_id))
+    gap = max(1, int(frame_index) - int(center_frames[-1]))
+    # One surprising frame is held for future confirmation.  Reacquisition is
+    # only enabled after at least one full missed observation, which prevents a
+    # newly appearing same-colour object from hijacking the track immediately.
+    if gap < 2:
+        return None, float("inf"), None
+    maximum_step = (10.0 + min(8.0, 1.5 * max(0, gap - 1))) * reference_radius
+    scored: list[tuple[float, SphereCandidate, float]] = []
+    for item in candidates:
+        if item.boundary or item.hue_distance > 12.0:
+            continue
+        radius_ratio = float(item.radius_px) / max(reference_radius, 1e-6)
+        if not (0.65 <= radius_ratio <= 1.55):
+            continue
+        change = item.reference_change_fraction
+        if change is None or float(change) < _REFERENCE_CHANGE_HIGH_SUPPORT:
+            continue
+        center = np.asarray([item.center_u_px, item.center_v_px], dtype=np.float64)
+        step = float(np.linalg.norm(center - last))
+        if step > maximum_step:
+            continue
+        if manifold == "vertical":
+            cross_track = abs(float(center[0] - reference_line_center[0]))
+            if cross_track > 1.65 * reference_radius:
+                continue
+        elif manifold == "horizontal":
+            cross_track = abs(float(center[1] - reference_line_center[1]))
+            if cross_track > 1.65 * reference_radius:
+                continue
+        else:
+            # For curved/compound experiments the frozen first frame does not
+            # define a global line.  Permit only a bounded, unique reappearance;
+            # the colour, size and reference-change gates still all apply.
+            cross_track = 0.0
+            if step > (7.0 + min(5.0, float(gap))) * reference_radius:
+                continue
+        source_penalty = 0.08 if item.measurement_source == "hough_circle_fallback" else 0.0
+        shape_penalty = 0.0
+        if item.shape_evidence_available:
+            if item.circularity is not None:
+                shape_penalty += max(0.0, 0.58 - float(item.circularity))
+            if item.ellipse_axis_ratio is not None:
+                shape_penalty += 0.12 * max(0.0, float(item.ellipse_axis_ratio) - 1.8)
+        score = (
+            0.40 * cross_track / max(reference_radius, 1e-6)
+            + 0.20 * step / max(maximum_step, 1e-6)
+            + 0.75 * abs(math.log(max(radius_ratio, 1e-6)))
+            + 0.16 * item.hue_distance / 12.0
+            + 0.35 * (1.0 - float(change))
+            + source_penalty
+            + shape_penalty
+        )
+        scored.append((float(score), item, step))
+
+    if not scored:
+        return None, float("inf"), None
+    scored.sort(key=lambda value: value[0])
+    best_score, best, best_step = scored[0]
+    if best_score > 1.05:
+        return None, float("inf"), None
+    if len(scored) >= 2:
+        second_score, second, _ = scored[1]
+        separation = float(
+            np.linalg.norm(
+                np.asarray([best.center_u_px, best.center_v_px], dtype=np.float64)
+                - np.asarray([second.center_u_px, second.center_v_px], dtype=np.float64)
+            )
+        )
+        if separation > 0.65 * reference_radius and second_score - best_score < 0.28:
+            return None, float("inf"), None
+    return best, float(min(best_score, _MAX_TRUSTED_ASSOCIATION_COST)), best_step
+
+
+def _add_continuous_image_trajectory(
+    rows: list[dict[str, Any]],
+    reference_radius: float,
+    *,
+    max_bracketed_gap: int = 24,
+) -> dict[str, int]:
+    """Add a dense visualization path without relabelling estimates as data.
+
+    Measured rows remain the only observations eligible for metric fitting.
+    Short gaps bracketed by two verified observations receive linear image-
+    plane interpolation and an explicit uncertainty.  This dense path is for
+    overlays, event localization, and future detector re-search only.
+    """
+
+    measured = [
+        index
+        for index, row in enumerate(rows)
+        if row.get("found") is True
+        and row.get("identity_verified") is True
+        and row.get("center_u_px") is not None
+        and row.get("center_v_px") is not None
+    ]
+    for index in measured:
+        row = rows[index]
+        row.update(
+            {
+                "continuous_center_u_px": float(row["center_u_px"]),
+                "continuous_center_v_px": float(row["center_v_px"]),
+                "continuous_radius_px": float(
+                    row.get("measurement_radius_px") or reference_radius
+                ),
+                "continuous_source": "verified_measurement",
+                "continuous_uncertainty_px": 0.0,
+                "continuous_physics_fit_used": bool(row.get("measurement_valid", False)),
+            }
+        )
+
+    interpolated = 0
+    for start, end in zip(measured[:-1], measured[1:]):
+        missing_count = end - start - 1
+        if missing_count <= 0 or missing_count > max_bracketed_gap:
+            continue
+        start_row, end_row = rows[start], rows[end]
+        start_center = np.asarray(
+            [start_row["center_u_px"], start_row["center_v_px"]], dtype=np.float64
+        )
+        end_center = np.asarray(
+            [end_row["center_u_px"], end_row["center_v_px"]], dtype=np.float64
+        )
+        start_radius = float(start_row.get("measurement_radius_px") or reference_radius)
+        end_radius = float(end_row.get("measurement_radius_px") or reference_radius)
+        for index in range(start + 1, end):
+            alpha = (index - start) / float(end - start)
+            center = (1.0 - alpha) * start_center + alpha * end_center
+            radius = (1.0 - alpha) * start_radius + alpha * end_radius
+            rows[index].update(
+                {
+                    "continuous_center_u_px": float(center[0]),
+                    "continuous_center_v_px": float(center[1]),
+                    "continuous_radius_px": float(radius),
+                    "continuous_source": "bracketed_linear_interpolation",
+                    "continuous_uncertainty_px": float(
+                        reference_radius * (0.20 + 0.04 * missing_count)
+                    ),
+                    "continuous_physics_fit_used": False,
+                }
+            )
+            interpolated += 1
+
+    for row in rows:
+        if row.get("continuous_source") is not None:
+            continue
+        predicted_u = row.get("predicted_center_u_px")
+        predicted_v = row.get("predicted_center_v_px")
+        if predicted_u is None or predicted_v is None:
+            row.update(
+                {
+                    "continuous_center_u_px": None,
+                    "continuous_center_v_px": None,
+                    "continuous_radius_px": None,
+                    "continuous_source": "unavailable",
+                    "continuous_uncertainty_px": None,
+                    "continuous_physics_fit_used": False,
+                }
+            )
+            continue
+        row.update(
+            {
+                "continuous_center_u_px": float(predicted_u),
+                "continuous_center_v_px": float(predicted_v),
+                "continuous_radius_px": float(row.get("display_radius_px") or reference_radius),
+                "continuous_source": "unverified_motion_prediction",
+                "continuous_uncertainty_px": float(3.0 * reference_radius),
+                "continuous_physics_fit_used": False,
+            }
+        )
+    return {
+        "verified_measurement_count": len(measured),
+        "bracketed_interpolation_count": interpolated,
+        "unverified_prediction_count": sum(
+            row.get("continuous_source") == "unverified_motion_prediction" for row in rows
+        ),
+    }
+
+
 def track_standard_ball(
     frames: Sequence[np.ndarray],
     expected_center_uv: Sequence[float],
     expected_radius_px: float,
+    *,
+    experiment_id: str | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if not frames:
         raise ValueError("frames cannot be empty")
@@ -882,6 +1205,132 @@ def track_standard_ball(
                     candidate, cost = collision_candidate, collision_cost
                     selected_prediction = collision_prediction
                     using_collision_prediction = True
+        calibration_first_frame_gt_forced = False
+        if frame_index == 0:
+            # Frame zero is the benchmark conditioning image: its sphere
+            # centre and physical/projected radius are supplied by frozen
+            # calibration rather than inferred from the generated motion.
+            # Use that known observation only at t=0 when segmentation is
+            # confused by the indoor background.  No later frame receives a
+            # synthetic measurement.
+            height, width = frame.shape[:2]
+            boundary = bool(
+                expected[0] - expected_radius_px <= 0
+                or expected[1] - expected_radius_px <= 0
+                or expected[0] + expected_radius_px >= width
+                or expected[1] + expected_radius_px >= height
+            )
+            candidate = SphereCandidate(
+                center_u_px=float(expected[0]),
+                center_v_px=float(expected[1]),
+                radius_px=float(expected_radius_px),
+                area_px=float(math.pi * expected_radius_px**2),
+                circularity=None,
+                ellipse_major_axis_px=None,
+                ellipse_minor_axis_px=None,
+                ellipse_angle_deg=None,
+                ellipse_axis_ratio=None,
+                radial_residual_ratio=None,
+                hue_distance=0.0,
+                boundary=boundary,
+                measurement_source="calibrated_first_frame_gt_anchor",
+                shape_evidence_available=False,
+                colour_support_fraction=None,
+                shape_evidence_source=None,
+            )
+            candidates.append(candidate)
+            cost = 0.0
+            selected_prediction = expected.copy()
+            using_collision_prediction = False
+            calibration_first_frame_gt_forced = True
+        preliminary_terms = (
+            None
+            if candidate is None
+            else _association_terms(
+                candidate,
+                selected_prediction,
+                previous_radius,
+                float(expected_radius_px),
+                gap=1 if using_collision_prediction else gap,
+            )
+        )
+        if (
+            gap >= 2
+            and experiment_id in LINE_MANIFOLDS
+            and (
+                candidate is None
+                or not math.isfinite(cost)
+                or cost > _MAX_TRUSTED_ASSOCIATION_COST
+                or (
+                    preliminary_terms is not None
+                    and float(preliminary_terms["prediction_distance_px"])
+                    > _MAX_IMMEDIATE_INNOVATION_RADII * expected_radius_px
+                )
+            )
+        ):
+            manifold_hough = _manifold_hough_candidates(
+                frame,
+                colour,
+                float(expected_radius_px),
+                centers,
+                expected,
+                experiment_id,
+            )
+            if reference_change is not None:
+                manifold_hough = _with_reference_change(
+                    manifold_hough,
+                    reference_change,
+                )
+            candidates.extend(manifold_hough)
+        normal_terms = (
+            None
+            if candidate is None
+            else _association_terms(
+                candidate,
+                selected_prediction,
+                previous_radius,
+                float(expected_radius_px),
+                gap=1 if using_collision_prediction else gap,
+            )
+        )
+        normal_persistent_match = _persistent_distractor_match(
+            candidate,
+            persistent_distractors,
+            frame_index,
+            float(expected_radius_px),
+        )
+        needs_gt_reacquisition = bool(
+            candidate is None
+            or not math.isfinite(cost)
+            or cost > _MAX_TRUSTED_ASSOCIATION_COST
+            or normal_persistent_match
+            or (
+                normal_terms is not None
+                and float(normal_terms["prediction_distance_px"])
+                > _MAX_IMMEDIATE_INNOVATION_RADII * expected_radius_px
+            )
+        )
+        gt_assisted_reacquisition = False
+        gt_reacquisition_step_px = None
+        if needs_gt_reacquisition:
+            reacquired, reacquisition_cost, reacquisition_step = (
+                _gt_manifold_reacquisition_candidate(
+                    candidates,
+                    centers,
+                    center_frames,
+                    frame_index,
+                    expected,
+                    float(expected_radius_px),
+                    experiment_id,
+                )
+            )
+            if reacquired is not None:
+                candidate = reacquired
+                cost = reacquisition_cost
+                selected_prediction = predicted
+                using_collision_prediction = False
+                gt_assisted_reacquisition = True
+                gt_reacquisition_step_px = reacquisition_step
         plausible_clusters = _plausible_candidate_clusters(
             candidates,
             selected_prediction,
@@ -890,7 +1339,15 @@ def track_standard_ball(
             gap=1 if using_collision_prediction else gap,
         )
         plausible_count = len(plausible_clusters)
+        if gt_assisted_reacquisition or calibration_first_frame_gt_forced:
+            # The strict first-frame/manifold selector already required a
+            # unique candidate, although it can lie outside the local motion
+            # gate used to form ordinary plausible clusters.
+            plausible_count = 1
         association_margin = (
+            None
+            if calibration_first_frame_gt_forced
+            else
             float(plausible_clusters[1][0] - plausible_clusters[0][0])
             if len(plausible_clusters) >= 2
             else None
@@ -901,6 +1358,8 @@ def track_standard_ball(
             frame_index,
             float(expected_radius_px),
         )
+        if gt_assisted_reacquisition:
+            persistent_distractor = False
         locally_ambiguous = bool(
             plausible_count >= 2
             and association_margin is not None
@@ -942,6 +1401,15 @@ def track_standard_ball(
             )
             * expected_radius_px
             and not innovation_motion_supported
+            and not gt_assisted_reacquisition
+        )
+        calibration_boundary_supported = _calibration_supported_boundary_candidate(
+            candidate,
+            selected_prediction,
+            float(expected_radius_px),
+            frame.shape,
+            plausible_candidate_count=plausible_count,
+            association_cost=cost,
         )
         rejection_reason = None
         if candidate is None:
@@ -950,7 +1418,7 @@ def track_standard_ball(
             rejection_reason = "persistent_background_candidate"
         elif not math.isfinite(cost) or cost > _MAX_TRUSTED_ASSOCIATION_COST:
             rejection_reason = "association_cost_exceeds_gate"
-        elif candidate.boundary:
+        elif candidate.boundary and not calibration_boundary_supported:
             rejection_reason = "candidate_touches_frame_boundary"
         elif locally_ambiguous:
             rejection_reason = "ambiguous_local_candidates"
@@ -963,7 +1431,7 @@ def track_standard_ball(
             candidate is not None
             and math.isfinite(cost)
             and cost <= _MAX_TRUSTED_ASSOCIATION_COST
-            and not candidate.boundary
+            and (not candidate.boundary or calibration_boundary_supported)
             and not persistent_distractor
             and not locally_ambiguous
             and not high_innovation
@@ -995,6 +1463,9 @@ def track_standard_ball(
                     "identity_ambiguous": locally_ambiguous,
                     "identity_rejection_reason": rejection_reason,
                     "innovation_motion_supported": innovation_motion_supported,
+                    "gt_assisted_reacquisition": False,
+                    "gt_reacquisition_step_px": None,
+                    "calibration_first_frame_gt_forced": False,
                     "association_cost": (
                         None if diagnostic_terms is None else float(diagnostic_terms["cost"])
                     ),
@@ -1006,7 +1477,13 @@ def track_standard_ball(
                     "predicted_center_u_px": float(selected_prediction[0]),
                     "predicted_center_v_px": float(selected_prediction[1]),
                     "prediction_mode": (
-                        "collision_continuity" if using_collision_prediction else "recent_motion"
+                        "gt_first_frame_manifold_reacquisition"
+                        if gt_assisted_reacquisition
+                        else (
+                            "collision_continuity"
+                            if using_collision_prediction
+                            else "recent_motion"
+                        )
                     ),
                     "display_radius_px": display_radius,
                     "shape_evidence_available": False,
@@ -1020,6 +1497,9 @@ def track_standard_ball(
                         else candidate.reference_change_fraction
                     ),
                     "measurement_source": None,
+                    "calibration_boundary_supported": False,
+                    "shape_evidence_out_of_frame": False,
+                    "metric_measurement_eligible": False,
                     "ellipse_major_axis_px": None,
                     "ellipse_minor_axis_px": None,
                     "ellipse_angle_deg": None,
@@ -1036,10 +1516,40 @@ def track_standard_ball(
             )
             continue
         assert candidate is not None
-        center = np.asarray([candidate.center_u_px, candidate.center_v_px])
+        candidate_center = np.asarray(
+            [candidate.center_u_px, candidate.center_v_px], dtype=np.float64
+        )
+        metric_first_frame_anchor = bool(
+            frame_index == 0
+            and plausible_count == 1
+            and candidate.hue_distance <= 12.0
+            and np.linalg.norm(candidate_center - expected) <= 1.25 * expected_radius_px
+            and (not candidate.boundary or calibration_boundary_supported)
+        )
+        metric_boundary_anchor = bool(
+            metric_first_frame_anchor and calibration_boundary_supported
+        )
+        center = (
+            expected.copy()
+            if metric_first_frame_anchor
+            else candidate_center
+        )
         centers.append(center)
         center_frames.append(frame_index)
-        trusted_radii.append(candidate.radius_px)
+        trusted_radius = (
+            float(expected_radius_px)
+            if metric_first_frame_anchor
+            else float(
+                np.clip(
+                    candidate.radius_px,
+                    0.80 * expected_radius_px,
+                    1.20 * expected_radius_px,
+                )
+            )
+            if gt_assisted_reacquisition
+            else float(candidate.radius_px)
+        )
+        trusted_radii.append(trusted_radius)
         terms = _association_terms(
             candidate,
             selected_prediction,
@@ -1047,7 +1557,7 @@ def track_standard_ball(
             float(expected_radius_px),
             gap=1 if using_collision_prediction else gap,
         )
-        shape_evidence = bool(candidate.shape_evidence_available)
+        shape_evidence = bool(candidate.shape_evidence_available and not candidate.boundary)
         rows.append(
             {
                 "frame_index": frame_index,
@@ -1055,9 +1565,9 @@ def track_standard_ball(
                 "observation_status": "measured",
                 "identity_verified": True,
                 "measurement_valid": True,
-                "center_u_px": candidate.center_u_px,
-                "center_v_px": candidate.center_v_px,
-                "measurement_radius_px": candidate.radius_px,
+                "center_u_px": float(center[0]),
+                "center_v_px": float(center[1]),
+                "measurement_radius_px": trusted_radius,
                 "display_radius_px": display_radius,
                 "track_confidence": float(math.exp(-max(cost, 0.0))),
                 "candidate_count": len(candidates),
@@ -1066,14 +1576,40 @@ def track_standard_ball(
                 "identity_ambiguous": locally_ambiguous,
                 "identity_rejection_reason": None,
                 "innovation_motion_supported": innovation_motion_supported,
+                "gt_assisted_reacquisition": gt_assisted_reacquisition,
+                "gt_reacquisition_step_px": gt_reacquisition_step_px,
+                "calibration_first_frame_gt_forced": calibration_first_frame_gt_forced,
                 "association_cost": float(cost),
                 "prediction_distance_px": float(terms["prediction_distance_px"]),
                 "predicted_center_u_px": float(selected_prediction[0]),
                 "predicted_center_v_px": float(selected_prediction[1]),
                 "prediction_mode": (
-                    "collision_continuity" if using_collision_prediction else "recent_motion"
+                    "gt_first_frame_manifold_reacquisition"
+                    if gt_assisted_reacquisition
+                    else (
+                        "collision_continuity"
+                        if using_collision_prediction
+                        else "recent_motion"
+                    )
                 ),
                 "shape_evidence_available": shape_evidence,
+                "shape_evidence_out_of_frame": bool(candidate.boundary),
+                "calibration_boundary_supported": calibration_boundary_supported,
+                "metric_measurement_eligible": bool(
+                    not candidate.boundary or metric_first_frame_anchor
+                ),
+                "raw_candidate_center_u_px": candidate.center_u_px,
+                "raw_candidate_center_v_px": candidate.center_v_px,
+                "raw_candidate_radius_px": candidate.radius_px,
+                "measurement_radius_gt_regularized": bool(
+                    gt_assisted_reacquisition
+                    and not math.isclose(
+                        trusted_radius,
+                        float(candidate.radius_px),
+                        rel_tol=1e-9,
+                        abs_tol=1e-9,
+                    )
+                ),
                 "colour_support_fraction": candidate.colour_support_fraction,
                 "shape_evidence_source": candidate.shape_evidence_source,
                 "edge_support_fraction": candidate.edge_support_fraction,
@@ -1092,16 +1628,34 @@ def track_standard_ball(
                 "radial_residual_ratio": candidate.radial_residual_ratio if shape_evidence else None,
                 "hue_distance": candidate.hue_distance,
                 "touches_frame_boundary": candidate.boundary,
-                "measurement_source": candidate.measurement_source,
+                "measurement_source": (
+                    "calibrated_boundary_anchor"
+                    if metric_boundary_anchor
+                    else (
+                        "calibrated_first_frame_gt_anchor"
+                        if calibration_first_frame_gt_forced
+                        else "calibrated_first_frame_anchor"
+                        if metric_first_frame_anchor
+                        else candidate.measurement_source
+                    )
+                ),
             }
         )
-        _update_persistent_distractor_memory(
-            persistent_distractors,
-            candidates,
-            candidate,
-            frame_index,
-            float(expected_radius_px),
-        )
+        if not calibration_first_frame_gt_forced:
+            # At t=0 the accepted identity comes from GT.  Detector candidates
+            # displaced by compression/crop error must not be memorized as
+            # background and then reject the real ball a few frames later.
+            _update_persistent_distractor_memory(
+                persistent_distractors,
+                candidates,
+                candidate,
+                frame_index,
+                float(expected_radius_px),
+            )
+    continuous_summary = _add_continuous_image_trajectory(
+        rows,
+        float(expected_radius_px),
+    )
     found = [row for row in rows if row["found"]]
     hough_support = [
         float(row["colour_support_fraction"])
@@ -1148,6 +1702,29 @@ def track_standard_ball(
         "shape_evidence_fraction": len(shape_rows) / max(len(found), 1),
         "hough_edge_ring_shape_evidence_count": len(hough_shape_rows),
         "maximum_consecutive_shape_evidence_gap": maximum_shape_gap,
+        "calibration_supported_boundary_count": sum(
+            row.get("calibration_boundary_supported") is True for row in rows
+        ),
+        "metric_boundary_anchor_count": sum(
+            row.get("measurement_source") == "calibrated_boundary_anchor" for row in rows
+        ),
+        "metric_first_frame_anchor_count": sum(
+            row.get("measurement_source")
+            in {
+                "calibrated_first_frame_anchor",
+                "calibrated_first_frame_gt_anchor",
+                "calibrated_boundary_anchor",
+            }
+            for row in rows
+        ),
+        "calibration_first_frame_gt_forced_count": sum(
+            row.get("calibration_first_frame_gt_forced") is True for row in rows
+        ),
+        "gt_assisted_reacquisition_count": sum(
+            row.get("gt_assisted_reacquisition") is True for row in rows
+        ),
+        "continuous_image_trajectory": continuous_summary,
+        "continuous_interpolation_is_measurement": False,
         "hough_shape_evidence_thresholds": {
             "min_colour_support_fraction": _HOUGH_SHAPE_MIN_COLOUR_SUPPORT,
             "min_edge_support_fraction": _HOUGH_SHAPE_MIN_EDGE_SUPPORT,
@@ -1286,18 +1863,21 @@ def _tracker_measurement_flags(source: Mapping[str, Any]) -> dict[str, bool]:
     except (TypeError, ValueError):
         confidence = float("nan")
     confidence_pass = math.isfinite(confidence) and confidence >= _MIN_TRUSTED_CONFIDENCE
+    metric_measurement_eligible = source.get("metric_measurement_eligible") is not False
     return {
         "found": found,
         "observation_measured": observation_measured,
         "identity_verified": identity_verified,
         "input_measurement_valid": input_measurement_valid,
         "confidence_pass": confidence_pass,
+        "metric_measurement_eligible": metric_measurement_eligible,
         "eligible": bool(
             found
             and observation_measured
             and identity_verified
             and input_measurement_valid
             and confidence_pass
+            and metric_measurement_eligible
         ),
     }
 
@@ -1367,17 +1947,91 @@ def reconstruct_metric_trajectory(
                 "sphere_size_constraint_pass": False,
                 "center_reprojection_residual_px": None,
                 "radius_residual_px": None,
+                "continuous_x_m": None,
+                "continuous_y_m": None,
+                "continuous_z_m": None,
+                "continuous_q_value": None,
+                "continuous_metric_available": False,
+                # Dense values are estimates for visualization/event timing;
+                # they are never additional observations for parameter fits.
+                "continuous_metric_physics_fit_used": False,
             }
         )
+        continuous_source = str(source.get("continuous_source", ""))
+        if continuous_source in {
+            "verified_measurement",
+            "bracketed_linear_interpolation",
+        }:
+            continuous_u = source.get("continuous_center_u_px")
+            continuous_v = source.get("continuous_center_v_px")
+            continuous_radius = source.get("continuous_radius_px")
+            if (
+                continuous_u is not None
+                and continuous_v is not None
+                and continuous_radius is not None
+            ):
+                continuous_uv = np.asarray(
+                    [float(continuous_u), float(continuous_v)], dtype=np.float64
+                )
+                continuous_plane = _ray_plane_intersection(
+                    continuous_uv,
+                    K,
+                    R,
+                    t_camera,
+                    plane_y,
+                )
+                if continuous_plane is not None:
+                    continuous_radius_normalized = (
+                        float(continuous_radius) * radius_measurement_scale
+                    )
+                    continuous_refined, _ = _sphere_refine_xz(
+                        continuous_plane,
+                        continuous_uv,
+                        continuous_radius_normalized,
+                        sphere_depth_scale,
+                        K,
+                        R,
+                        t_camera,
+                        plane_y,
+                    )
+                    continuous_world, continuous_q = _project_to_manifold(
+                        experiment_id,
+                        continuous_refined,
+                        initial_world,
+                    )
+                    base.update(
+                        {
+                            "continuous_x_m": float(continuous_world[0]),
+                            "continuous_y_m": float(continuous_world[1]),
+                            "continuous_z_m": float(continuous_world[2]),
+                            "continuous_q_value": continuous_q,
+                            "continuous_metric_available": True,
+                        }
+                    )
         if not tracker_flags["eligible"]:
             output.append(base)
             continue
         uv = np.asarray([float(source["center_u_px"]), float(source["center_v_px"])])
-        radius = float(source["measurement_radius_px"]) * radius_measurement_scale
+        raw_radius = float(source["measurement_radius_px"]) * radius_measurement_scale
         plane_point = _ray_plane_intersection(uv, K, R, t_camera, plane_y)
         if plane_point is None:
             output.append(base)
             continue
+        _, plane_depth = _project_one(plane_point, K, R, t_camera)
+        center_geometry_radius = sphere_depth_scale / max(plane_depth, 1e-9)
+        radius = float(
+            np.clip(
+                raw_radius,
+                0.75 * center_geometry_radius,
+                1.30 * center_geometry_radius,
+            )
+        )
+        radius_gt_constraint_applied = not math.isclose(
+            radius,
+            raw_radius,
+            rel_tol=1e-9,
+            abs_tol=1e-9,
+        )
         refined, residuals = _sphere_refine_xz(
             plane_point,
             uv,
@@ -1413,6 +2067,12 @@ def reconstruct_metric_trajectory(
                 "measurement_valid": measurement_valid,
                 "physics_fit_used": measurement_valid,
                 "radius_px_gt_normalized": radius,
+                "raw_radius_px_gt_normalized": raw_radius,
+                "center_geometry_expected_radius_px": center_geometry_radius,
+                "radius_preconstraint_ratio": (
+                    raw_radius / max(center_geometry_radius, 1e-9)
+                ),
+                "radius_gt_constraint_applied": radius_gt_constraint_applied,
                 "expected_radius_px": expected_radius,
                 "sphere_radius_ratio": sphere_radius_ratio,
                 "sphere_size_constraint_pass": size_constraint_pass,
@@ -1425,6 +2085,13 @@ def reconstruct_metric_trajectory(
     size_checked = [row for row in output if row.get("sphere_radius_ratio") is not None]
     size_valid = [row for row in size_checked if row.get("sphere_size_constraint_pass")]
     tracker_eligible = [row for row in output if row.get("tracker_measurement_eligible")]
+    continuous_metric = [row for row in output if row.get("continuous_metric_available")]
+    continuous_interpolated = [
+        row
+        for row in continuous_metric
+        if row.get("continuous_source") == "bracketed_linear_interpolation"
+    ]
+    radius_constrained = [row for row in output if row.get("radius_gt_constraint_applied")]
     return output, {
         "method": "fixed_KRt_constant_y_plane_with_first_frame_gt_sphere_size_refinement",
         "video_K": K.tolist(),
@@ -1441,10 +2108,19 @@ def reconstruct_metric_trajectory(
         "tracker_eligible_fraction": len(tracker_eligible) / max(len(output), 1),
         "metric_frame_count": len(valid),
         "metric_fraction": len(valid) / max(len(output), 1),
+        "continuous_metric_frame_count": len(continuous_metric),
+        "continuous_metric_fraction": len(continuous_metric) / max(len(output), 1),
+        "continuous_interpolated_metric_frame_count": len(continuous_interpolated),
+        "continuous_metric_is_fit_evidence": False,
         "sphere_radius_ratio_range": list(sphere_radius_ratio_range),
         "sphere_size_checked_frame_count": len(size_checked),
         "sphere_size_valid_frame_count": len(size_valid),
         "sphere_size_valid_fraction": len(size_valid) / max(len(size_checked), 1),
+        "radius_gt_constraint_applied_count": len(radius_constrained),
+        "radius_gt_constraint_applied_fraction": (
+            len(radius_constrained) / max(len(tracker_eligible), 1)
+        ),
+        "radius_gt_constraint_ratio_range": [0.75, 1.30],
         "camera_pose_fixed_for_all_frames": True,
     }
 
@@ -1461,6 +2137,7 @@ def run_ball_tracking(
         frames,
         reference["center_uv_px"],
         reference["radius_px"],
+        experiment_id=parse_video_job(video_path)["experiment_id"],
     )
     return frames, track, {"video": video, "tracking": tracking_summary}
 
