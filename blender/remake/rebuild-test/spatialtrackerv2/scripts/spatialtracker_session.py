@@ -7,6 +7,7 @@ adapter keeps them resident while the 27 benchmark videos are processed.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -17,7 +18,12 @@ import torchvision.transforms as T
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
-UPSTREAM = PACKAGE_ROOT / "upstream" / "SpaTrackerV2"
+UPSTREAM = Path(
+    os.environ.get(
+        "SPATIALTRACKERV2_ROOT",
+        str(PACKAGE_ROOT / "upstream" / "SpaTrackerV2"),
+    )
+).expanduser().resolve()
 sys.path.insert(0, str(UPSTREAM))
 
 from models.SpaTrackV2.models.predictor import Predictor  # noqa: E402

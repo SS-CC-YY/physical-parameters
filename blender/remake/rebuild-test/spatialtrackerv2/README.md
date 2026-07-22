@@ -2,6 +2,8 @@
 
 > 当前适配器已兼容冻结的全部 13 个实验校准 sidecar。下面保留的 V1A 27 条说明是最初的可行性测试；正式 Seedance 978 调度、生成有效性 gate、Side 主评估和 Main/Top 鲁棒性评估请以 `code/docs/seedance978_physics_evaluation.md` 为准。
 
+> 若已单独 clone 官方 SpaTrackerV2 并跑通 example0，不需要使用本目录的上游快照；设置 `SPATIALTRACKERV2_ROOT=/官方仓库绝对路径` 即可复用。当前正式的“先逐帧轨迹、再独立拟合”流程见 `code/docs/trajectory_extraction_then_physics_evaluation.md`。
+
 这个目录用于测试 **模型生成视频本身** 的三维物体轨迹，不与 6 条 Blender 真值视频比较。首轮固定为：
 
 - 实验：`v1_A`，标准球，`g=-9.81 m/s²`，seed `341867882`

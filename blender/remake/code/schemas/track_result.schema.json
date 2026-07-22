@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://physical-parameter-benchmark.local/schemas/track_result.schema.json",
+  "title": "Per-video trajectory extraction result",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "job",
+    "reconstruction_route",
+    "target_parameters_used",
+    "trajectory_frames_csv",
+    "object_track_overlay",
+    "position_summary",
+    "trajectory_fit_eligible"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "status": {"enum": ["succeeded", "partial", "failed", "pending_dynamic"]},
+    "job": {"type": "object"},
+    "reconstruction_route": {
+      "enum": ["calibrated_static_sphere", "spatialtrackerv2_dynamic"]
+    },
+    "target_parameters_used": {"const": false},
+    "calibration_path": {"type": ["string", "null"]},
+    "calibration_sha256": {"type": ["string", "null"]},
+    "trajectory_frames_csv": {"type": ["string", "null"]},
+    "object_track_overlay": {"type": ["string", "null"]},
+    "trajectory_fit_eligible": {"type": "boolean"},
+    "position_summary": {
+      "type": "object",
+      "required": [
+        "frame_count",
+        "valid_2d_count",
+        "valid_2d_fraction",
+        "valid_3d_count",
+        "valid_3d_fraction",
+        "direct_measurement_count",
+        "fit_eligible_count",
+        "interpolated_count"
+      ]
+    },
+    "video_generation_validity": {"type": "object"},
+    "error": {"type": ["object", "string", "null"]}
+  }
+}

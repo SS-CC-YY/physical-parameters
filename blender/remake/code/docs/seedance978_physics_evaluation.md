@@ -1,5 +1,7 @@
 # Seedance 978：Side 2D 主评估 → 条件 3D 重建 → 物理参数
 
+> 本文保留原一体化流程作为历史兼容说明。当前正式运行已按“逐帧轨迹提取”和“轨迹-only 物理评估”拆成两个阶段；服务器命令、统一逐帧 CSV 契约和每视频 overlay 请以 `code/docs/trajectory_extraction_then_physics_evaluation.md` 为准。
+
 这条流程覆盖冻结的全部 `978` 条标准球视频，并固定采用以下执行和汇报顺序：
 
 1. `CAM_Side` 共 `510` 条先运行；

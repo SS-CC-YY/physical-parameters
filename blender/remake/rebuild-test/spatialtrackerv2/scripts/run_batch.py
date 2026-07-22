@@ -21,7 +21,12 @@ from prepare_queries import prepare_queries
 HERE = Path(__file__).resolve().parent
 PACKAGE_ROOT = HERE.parent
 REMAKE_ROOT = PACKAGE_ROOT.parents[1]
-UPSTREAM = PACKAGE_ROOT / "upstream" / "SpaTrackerV2"
+UPSTREAM = Path(
+    os.environ.get(
+        "SPATIALTRACKERV2_ROOT",
+        str(PACKAGE_ROOT / "upstream" / "SpaTrackerV2"),
+    )
+).expanduser().resolve()
 DEFAULT_MANIFEST = PACKAGE_ROOT / "manifests" / "v1a_seedance27.jsonl"
 DEFAULT_OUTPUT = PACKAGE_ROOT / "outputs" / "v1a_seedance27"
 DEFAULT_WORK = PACKAGE_ROOT / "work" / "v1a_seedance27"
@@ -56,24 +61,62 @@ def successful_result(path: Path) -> bool:
     if not path.is_file():
         return False
     try:
-        return json.loads(path.read_text(encoding="utf-8")).get("status") == "succeeded"
+        result = json.loads(path.read_text(encoding="utf-8"))
+        required = [
+            path.parent / "raw_spatialtrackerv2.npz",
+            path.parent / "trajectory_world.csv",
+            path.parent / "object_track_overlay.mp4",
+        ]
+        return result.get("status") == "succeeded" and all(item.is_file() for item in required)
     except (OSError, json.JSONDecodeError):
         return False
 
 
+def write_json_atomic(path: Path, value: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        with temporary.open("w", encoding="utf-8") as handle:
+            json.dump(value, handle, indent=2)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def upstream_git_state() -> dict[str, object]:
+    if not (UPSTREAM / ".git").exists():
+        return {"root": str(UPSTREAM), "git_commit": None, "git_dirty": None}
+    try:
+        commit = subprocess.check_output(
+            ["git", "-C", str(UPSTREAM), "rev-parse", "HEAD"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        dirty = bool(
+            subprocess.check_output(
+                ["git", "-C", str(UPSTREAM), "status", "--porcelain"],
+                text=True,
+                stderr=subprocess.DEVNULL,
+            ).strip()
+        )
+    except (OSError, subprocess.CalledProcessError):
+        commit = None
+        dirty = None
+    return {"root": str(UPSTREAM), "git_commit": commit, "git_dirty": dirty}
+
+
 def write_failed_result(result_path: Path, job: dict, error: str, elapsed: float) -> None:
-    result_path.parent.mkdir(parents=True, exist_ok=True)
-    result_path.write_text(
-        json.dumps(
-            {
-                "status": "failed",
-                "job_id": job["job_id"],
-                "error": error,
-                "elapsed_seconds": elapsed,
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
+    write_json_atomic(
+        result_path,
+        {
+            "status": "failed",
+            "job_id": job["job_id"],
+            "error": error,
+            "elapsed_seconds": elapsed,
+        },
     )
 
 
@@ -198,6 +241,7 @@ def main() -> None:
 
     attempted = 0
     session = None
+    upstream_state = upstream_git_state()
     for ordinal, job in enumerate(selected, start=1):
         output_dir = args.output_root / job["job_id"]
         result_path = output_dir / "result.json"
@@ -270,7 +314,11 @@ def main() -> None:
                         args.track_mode,
                         max(256, args.object_points + args.anchor_points),
                     )
-                with log_path.open("w", encoding="utf-8") as log, contextlib.redirect_stdout(log), contextlib.redirect_stderr(log):
+                with (
+                    log_path.open("w", encoding="utf-8") as log,
+                    contextlib.redirect_stdout(log),
+                    contextlib.redirect_stderr(log),
+                ):
                     session.run(
                         video,
                         queries_path,
@@ -288,9 +336,10 @@ def main() -> None:
                     "frame_stride": args.frame_stride,
                     "elapsed_seconds": elapsed,
                     "ground_truth_comparison": False,
+                    "spatialtrackerv2_upstream": upstream_state,
                 }
             )
-            result_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
+            write_json_atomic(result_path, result)
             print(
                 f"[{ordinal}/{len(selected)}] DONE {job['job_id']} "
                 f"quality_pass={result['quality_pass']} elapsed={elapsed:.1f}s",
