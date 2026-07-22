@@ -639,7 +639,7 @@ def evaluate_motion_type(
         else:
             checks.append(_check("alternating_reversals", "pass" if len(turns) >= required else "fail", observed={"turn_count": len(turns), "wall_geometry": wall_geometry}, expected={"minimum_turn_count": required}, evidence_frames=[int(frames[index]) for index in turns], reason=None if len(turns) >= required else "alternating_wall_reversals_not_observed"))
         events.extend({"name": "wall_turn", "frame": int(frames[index])} for index in turns)
-        if motion_type == "frictional_alternating_wall_bounces" and turns:
+        if wall_geometry == "frozen" and turns:
             left_wall = float(experiment["left_wall_x_m"])
             right_wall = float(experiment["right_wall_x_m"])
             snap_radius = max(2, int(round(window_s / max(float(np.median(np.diff(time))), 1e-6))))

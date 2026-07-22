@@ -193,20 +193,20 @@ class AdversarialG1Tests(unittest.TestCase):
         )
         self.assertEqual(result["status"], "pass", result)
 
-    def test_v2b_without_frozen_wall_geometry_is_u(self) -> None:
+    def test_v2b_free_space_reversals_away_from_frozen_walls_fail(self) -> None:
         time = np.linspace(0.0, 5.0, 121)
         triangle = (2.0 / math.pi) * np.arcsin(
             np.sin(2.0 * math.pi * time / 2.0)
         )
         result = evaluate_motion_type(
             "v2_B",
-            _extraction_rows(time, 3.0 * triangle, np.zeros_like(time)),
+            _extraction_rows(time, 1.5 * triangle, np.zeros_like(time)),
             self.profile,
         )
-        self.assertEqual(result["status"], "indeterminate", result)
+        self.assertEqual(result["status"], "fail", result)
         self.assertIn(
-            "wall_geometry_unavailable_for_bounce_validation",
-            result["indeterminate_codes"],
+            "turns_do_not_match_alternating_frozen_walls",
+            result["failure_codes"],
         )
 
     def test_measurement_valid_alone_is_not_metric_g1_evidence(self) -> None:

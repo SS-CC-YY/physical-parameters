@@ -18,7 +18,7 @@
     "v1_C": {"type": "one_way_friction_slide", "direction": 1},
     "v1_D": {"type": "damped_pendulum", "pivot_xz_m": [0.0, 3.8], "length_m": 2.3, "minimum_turns": 2},
     "v2_A": {"type": "bounded_periodic_track", "minimum_turns": 2},
-    "v2_B": {"type": "alternating_wall_bounces", "minimum_turns": 2, "wall_geometry": "trajectory_extrema_only"},
+    "v2_B": {"type": "alternating_wall_bounces", "minimum_turns": 2, "wall_geometry": "frozen", "left_wall_x_m": -2.75, "right_wall_x_m": 2.75},
     "v2_C": {"type": "two_surface_friction_slide", "transition_x_m": 0.0, "direction": 1},
     "v2_D": {"type": "damped_pendulum", "pivot_xz_m": [0.0, 3.28], "length_m": 1.85, "minimum_turns": 2},
     "v2_E": {"type": "vertical_bounce", "contact_z_m": 0.82, "minimum_impacts": 1},
@@ -27,5 +27,5 @@
     "v3_C": {"type": "ramp_floor_wall_bounce", "floor_transition_x_m": -0.5, "wall_x_m": 4.61, "direction": 1},
     "v3_D": {"type": "magnetic_damped_pendulum", "pivot_xz_m": [0.0, 4.05], "length_m": 1.35, "magnet_center_deg": 38.0, "magnet_width_deg": 18.0, "minimum_turns": 2, "minimum_magnet_zone_transitions": 1}
   },
-  "provenance_note": "Profiles contain experiment apparatus geometry frozen from the Blender benchmark. V2_B wall positions are not frozen in the current registry, so its first policy uses alternating trajectory extrema and reports that limitation explicitly."
+  "provenance_note": "Profiles contain experiment apparatus geometry frozen from the Blender benchmark. V2_B contact faces are frozen at x=-2.75 m and x=+2.75 m from code/assets/fixed_camera_ball_calibration/v2_B/baseline/CAM_{Main,Side,Top}.json."
 }

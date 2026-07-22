@@ -115,6 +115,7 @@ class MotionTypeValidityTests(unittest.TestCase):
             "v1_B": (np.where(time <= 2.5, -2.0 + (4.96 / 2.5) * time, 2.96 - 1.2 * (time - 2.5)), np.full_like(time, 0.44)),
             "v1_C": (2.0 * time - 0.16 * time**2, np.full_like(time, 0.44)),
             "v2_A": (2.0 * np.sin(2.0 * math.pi * time / 2.0), np.zeros_like(time)),
+            "v2_B": (2.75 * triangle, np.zeros_like(time)),
             "v2_C": (-2.0 + 2.0 * time - 0.15 * time**2, np.zeros_like(time)),
             "v2_D": (v2d_x, v2d_z),
             "v2_E": (np.zeros_like(time), 0.82 + np.abs(time - 2.5)),
@@ -127,22 +128,6 @@ class MotionTypeValidityTests(unittest.TestCase):
             with self.subTest(experiment_id=experiment_id):
                 result = evaluate_motion_type(experiment_id, _rows(time, x, z), self.profile)
                 self.assertEqual(result["status"], "pass", result)
-
-        # V2_B's frozen registry does not yet expose the two wall positions.
-        # Alternating extrema alone cannot prove wall contacts, so even a
-        # canonical-looking triangle wave remains U until that geometry is
-        # registered.
-        v2b = evaluate_motion_type(
-            "v2_B",
-            _rows(time, 3.0 * triangle, np.zeros_like(time)),
-            self.profile,
-        )
-        self.assertEqual(v2b["status"], "indeterminate", v2b)
-        self.assertIn(
-            "wall_geometry_unavailable_for_bounce_validation",
-            v2b["indeterminate_codes"],
-        )
-
 
 class ResponseGradeTests(unittest.TestCase):
     @classmethod
