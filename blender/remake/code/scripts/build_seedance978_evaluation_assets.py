@@ -10,8 +10,8 @@ from typing import Any, Iterable, Mapping
 
 
 EXPECTED_JOBS = 978
-MANIFEST_FIELDS = {"job_id", "experiment_id", "seed", "inputs", "factors"}
-AUDIT_FIELDS = {
+MANIFEST_FIELDS = ("seed", "inputs", "experiment_id", "job_id", "factors")
+AUDIT_FIELDS = (
     "filename",
     "status",
     "decision",
@@ -28,17 +28,31 @@ AUDIT_FIELDS = {
     "valid_pair_fraction",
     "median_inlier_ratio",
     "median_residual_px",
+    "max_global_translation_px",
+    "p95_global_translation_px",
+    "max_global_rotation_deg",
+    "p95_global_rotation_deg",
+    "max_global_scale_change",
+    "p95_global_scale_change",
+    "max_adjacent_translation_px",
+    "max_adjacent_rotation_deg",
+    "max_adjacent_scale_change",
     "max_direct_translation_px",
+    "p95_direct_translation_px",
     "max_direct_rotation_deg",
+    "p95_direct_rotation_deg",
     "max_direct_scale_change",
+    "p95_direct_scale_change",
     "direct_translation_hit_count",
     "direct_rotation_hit_count",
     "direct_scale_hit_count",
     "direct_motion_cluster_max",
+    "direct_strong_motion_sample_count",
+    "strong_adjacent_pair_count",
     "cut_pair_count",
     "cut_pairs",
     "error",
-}
+)
 
 
 def _read(path: Path) -> list[dict[str, Any]]:
@@ -95,7 +109,7 @@ def build(manifest: Path, audit: Path, output_dir: Path) -> dict[str, Any]:
     _write(output_dir / "manifest.jsonl", compact_manifest)
     _write(output_dir / "camera_motion.jsonl", compact_audit)
     summary = {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "job_count": EXPECTED_JOBS,
         "manifest_source": str(manifest),
         "camera_audit_source": str(audit),

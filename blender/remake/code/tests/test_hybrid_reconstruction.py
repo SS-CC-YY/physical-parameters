@@ -122,6 +122,73 @@ class HybridRoutingTests(unittest.TestCase):
         )
         self.assertEqual(route["route"], "spatialtrackerv2_dynamic")
 
+    def test_non_side_reviewed_isolated_motion_returns_to_calibrated_2d(self) -> None:
+        route = choose_reconstruction_route(
+            {
+                "filename": "sample__CAM_Top__seed-1.mp4",
+                "status": "ok",
+                "final_category": "borderline_below_threshold",
+                "width": 864,
+                "height": 496,
+                "p95_direct_translation_px": 1.4052,
+                "p95_direct_rotation_deg": 0.1194,
+                "p95_direct_scale_change": 0.00748,
+                "p95_global_translation_px": 1.2687,
+                "p95_global_rotation_deg": 0.0865,
+                "p95_global_scale_change": 0.00644,
+                "direct_translation_hit_count": 0,
+                "direct_rotation_hit_count": 0,
+                "direct_scale_hit_count": 0,
+                "direct_motion_cluster_max": 0,
+                "valid_pair_fraction": 1.0,
+                "median_inlier_ratio": 0.9713,
+                "median_residual_px": 0.1257,
+                "cut_pair_count": 0,
+            },
+            "sample__CAM_Top__seed-1.mp4",
+        )
+        self.assertEqual(route["route"], "calibrated_static_sphere")
+        self.assertEqual(
+            route["reason"],
+            "reviewed_motion_within_calibrated_2d_tolerance",
+        )
+        self.assertEqual(
+            route["effective_camera_motion_category"],
+            "calibrated_motion_within_tolerance",
+        )
+        self.assertTrue(route["calibrated_2d_evidence"]["eligible"])
+
+    def test_non_side_sustained_zoom_never_returns_to_direct_calibrated_2d(self) -> None:
+        route = choose_reconstruction_route(
+            {
+                "filename": "sample__CAM_Main__seed-1.mp4",
+                "status": "ok",
+                "final_category": "camera_changed",
+                "width": 832,
+                "height": 464,
+                "p95_direct_translation_px": 13.9186,
+                "p95_direct_rotation_deg": 0.1110,
+                "p95_direct_scale_change": 0.04773,
+                "p95_global_translation_px": 65.8512,
+                "p95_global_rotation_deg": 1.6355,
+                "p95_global_scale_change": 0.16274,
+                "direct_translation_hit_count": 3,
+                "direct_rotation_hit_count": 0,
+                "direct_scale_hit_count": 3,
+                "direct_motion_cluster_max": 3,
+                "valid_pair_fraction": 1.0,
+                "median_inlier_ratio": 0.7351,
+                "median_residual_px": 1.0772,
+                "cut_pair_count": 0,
+            },
+            "sample__CAM_Main__seed-1.mp4",
+        )
+        self.assertEqual(route["route"], "spatialtrackerv2_dynamic")
+        self.assertFalse(route["calibrated_2d_evidence"]["eligible"])
+        self.assertFalse(
+            route["calibrated_2d_evidence"]["threshold_checks"]["scale_small"]
+        )
+
     def test_frozen_seedance_side_audit_routes_509_to_2d_and_1_to_3d(self) -> None:
         audit_path = CODE_ROOT / "assets" / "seedance978_evaluation" / "camera_motion.jsonl"
         audit_rows = [
@@ -152,6 +219,54 @@ class HybridRoutingTests(unittest.TestCase):
         )
         self.assertEqual(reviewed["route"], "calibrated_static_sphere")
         self.assertEqual(reviewed["reason"], "side_motion_below_reliable_3d_threshold")
+
+    def test_frozen_seedance_all_views_route_975_to_2d_and_3_to_3d(self) -> None:
+        audit_path = CODE_ROOT / "assets" / "seedance978_evaluation" / "camera_motion.jsonl"
+        audit_rows = [
+            json.loads(line)
+            for line in audit_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        decisions = [
+            (row, choose_reconstruction_route(row, row["filename"]))
+            for row in audit_rows
+        ]
+        calibrated = [item for item in decisions if item[1]["route"] == "calibrated_static_sphere"]
+        dynamic = [item for item in decisions if item[1]["route"] == "spatialtrackerv2_dynamic"]
+        self.assertEqual(len(calibrated), 975)
+        self.assertEqual(
+            [row["filename"] for row, _ in dynamic],
+            [
+                "v1_C__mu0p18__baseline__standard_ball__CAM_Main__seed-341867882.mp4",
+                "v1_C__mu0p18__indoor1__standard_ball__CAM_Side__seed-341867882.mp4",
+                "v1_C__mu0p18__indoor3__standard_ball__CAM_Top__seed-341867882.mp4",
+            ],
+        )
+
+        decision = next(
+            route
+            for row, route in decisions
+            if row["filename"]
+            == "v1_C__mu0p30__baseline__standard_ball__CAM_Top__seed-341867882.mp4"
+        )
+        self.assertEqual(decision["route"], "calibrated_static_sphere")
+        self.assertEqual(
+            decision["reason"],
+            "reviewed_motion_within_calibrated_2d_tolerance",
+        )
+
+        cumulative_top = next(
+            route
+            for row, route in decisions
+            if row["filename"]
+            == "v1_C__mu0p18__indoor3__standard_ball__CAM_Top__seed-341867882.mp4"
+        )
+        self.assertEqual(cumulative_top["route"], "spatialtrackerv2_dynamic")
+        self.assertFalse(
+            cumulative_top["calibrated_2d_evidence"]["threshold_checks"][
+                "global_translation_small"
+            ]
+        )
 
 
 if __name__ == "__main__":

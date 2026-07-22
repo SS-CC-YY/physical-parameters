@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "job_count": 978,
   "manifest_source": "tmp\\seedance978_validate_20260719_215502836\\manifest.jsonl",
   "camera_audit_source": "camera_motion_audit_978_20260721\\final\\final_camera_motion_results.jsonl",

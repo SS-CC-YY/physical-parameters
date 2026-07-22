@@ -96,6 +96,7 @@ _STATIC_CAMERA_CATEGORIES = {
     "fixed",
     "static",
     "no_significant_camera_change",
+    "calibrated_motion_within_tolerance",
     "side_2d_motion_within_tolerance",
     "unchanged",
 }

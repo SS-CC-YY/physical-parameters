@@ -25,6 +25,7 @@ from .v1a_geometry import crop_resize_homography, project_points
 STATIC_CAMERA_CATEGORIES = {
     "fixed",
     "no_significant_camera_change",
+    "calibrated_motion_within_tolerance",
     "side_2d_motion_within_tolerance",
 }
 
