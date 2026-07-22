@@ -93,8 +93,12 @@ class SpatialTrackerPreflightTests(unittest.TestCase):
         source = SPATIALTRACKER_SESSION.read_text(encoding="utf-8")
 
         self.assertLess(
-            source.index("CUDA_BOOTSTRAP = initialize_cuda_before_xformers(torch)"),
+            source.index("cuda_bootstrap = initialize_cuda_before_xformers(torch)"),
             source.index("from models.SpaTrackV2.models.predictor import Predictor"),
+        )
+        self.assertLess(
+            source.index("class SpatialTrackerSession:"),
+            source.index("cuda_bootstrap = initialize_cuda_before_xformers(torch)"),
         )
 
 

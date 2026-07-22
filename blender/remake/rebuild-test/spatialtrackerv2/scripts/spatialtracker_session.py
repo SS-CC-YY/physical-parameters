@@ -11,10 +11,8 @@ import os
 import sys
 from pathlib import Path
 
-import decord
 import numpy as np
 import torch
-import torchvision.transforms as T
 
 from cuda_bootstrap import initialize_cuda_before_xformers
 
@@ -28,24 +26,33 @@ UPSTREAM = Path(
 ).expanduser().resolve()
 sys.path.insert(0, str(UPSTREAM))
 
-# Do not let xformers perform the process's first CUDA lazy-init from inside
-# its own import graph.  That import-order path has produced a native-loader
-# SIGSEGV on an otherwise healthy H20 CUDA context.
-CUDA_BOOTSTRAP = initialize_cuda_before_xformers(torch)
-print(
-    "CUDA ready before xformers import: "
-    f"logical_device={CUDA_BOOTSTRAP['logical_device_index']} "
-    f"name={CUDA_BOOTSTRAP['device_name']}",
-    flush=True,
-)
-
-from models.SpaTrackV2.models.predictor import Predictor  # noqa: E402
-from models.SpaTrackV2.models.vggt4track.models.vggt_moe import VGGT4Track  # noqa: E402
-from models.SpaTrackV2.models.vggt4track.utils.load_fn import preprocess_image  # noqa: E402
-
 
 class SpatialTrackerSession:
     def __init__(self, track_mode: str = "offline", vo_points: int = 256) -> None:
+        # This method runs after spatialtracker_session itself has finished
+        # importing.  Initialising CUDA here avoids both problematic cases:
+        # xformers performing first lazy-init from its nested import graph, and
+        # torch.cuda.init running while this module still holds the import lock.
+        cuda_bootstrap = initialize_cuda_before_xformers(torch)
+        print(
+            "CUDA ready before xformers import: "
+            f"logical_device={cuda_bootstrap['logical_device_index']} "
+            f"name={cuda_bootstrap['device_name']}",
+            flush=True,
+        )
+
+        from models.SpaTrackV2.models.predictor import Predictor
+        from models.SpaTrackV2.models.vggt4track.models.vggt_moe import VGGT4Track
+        from models.SpaTrackV2.models.vggt4track.utils.load_fn import preprocess_image
+
+        # Delay other native/video imports until the CUDA runtime is stable as
+        # well.  They are retained on the session for the per-video run path.
+        import decord
+        import torchvision.transforms as transforms
+
+        self._decord = decord
+        self._transforms = transforms
+        self._preprocess_image = preprocess_image
         print("Loading SpatialTrackerV2 front-end once...", flush=True)
         self.front = VGGT4Track.from_pretrained("Yuxihenry/SpatialTrackerV2_Front")
         self.front.eval().to("cuda")
@@ -68,11 +75,11 @@ class SpatialTrackerSession:
         source_fps: float,
         frame_stride: int,
     ) -> None:
-        reader = decord.VideoReader(str(video_path))
+        reader = self._decord.VideoReader(str(video_path))
         source_frame_indices = np.arange(0, len(reader), frame_stride, dtype=np.int32)
         video = torch.from_numpy(reader.get_batch(source_frame_indices).asnumpy()).permute(0, 3, 1, 2).float()
         source_h, source_w = int(video.shape[2]), int(video.shape[3])
-        video = preprocess_image(video)[None]
+        video = self._preprocess_image(video)[None]
         processed_h, processed_w = int(video.shape[-2]), int(video.shape[-1])
         resize_scale_x = processed_w / float(source_w)
         resized_h = round(source_h * (518.0 / source_w) / 14) * 14
@@ -153,9 +160,9 @@ class SpatialTrackerSession:
         intrinsics_save = intrinsics_out
         if scale < 1:
             new_h, new_w = int(height * scale), int(width * scale)
-            video_save = T.Resize((new_h, new_w))(video_save)
-            point_map_save = T.Resize((new_h, new_w))(point_map_save)
-            confidence_depth_save = T.Resize((new_h, new_w))(confidence_depth_save)
+            video_save = self._transforms.Resize((new_h, new_w))(video_save)
+            point_map_save = self._transforms.Resize((new_h, new_w))(point_map_save)
+            confidence_depth_save = self._transforms.Resize((new_h, new_w))(confidence_depth_save)
             intrinsics_save = intrinsics_save.clone()
             intrinsics_save[:, :2, :] *= scale
 

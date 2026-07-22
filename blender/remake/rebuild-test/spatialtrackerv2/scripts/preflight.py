@@ -41,8 +41,13 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    # Establish CUDA before importing torchvision/decord or the upstream
+    # Predictor/xformers module graph.  This mirrors the inference process and
+    # turns the preflight into a meaningful import-order canary.
+    import torch
+
+    cuda_bootstrap = initialize_cuda_before_xformers(torch)
     modules = [
-        "torch",
         "torchvision",
         "cv2",
         "decord",
@@ -55,7 +60,7 @@ def main() -> None:
         "pyceres",
     ]
     failures = []
-    versions = {}
+    versions = {"torch": module_version(torch)}
     for name in modules:
         try:
             module = importlib.import_module(name)
@@ -69,9 +74,6 @@ def main() -> None:
     if failures:
         raise RuntimeError("Missing/broken Python dependencies:\n  - " + "\n  - ".join(failures))
 
-    import torch
-
-    cuda_bootstrap = initialize_cuda_before_xformers(torch)
     upstream = Path(
         os.environ.get(
             "SPATIALTRACKERV2_ROOT",
