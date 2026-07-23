@@ -62,7 +62,7 @@ from .seedance978 import (
 
 
 TRACK_SCHEMA_VERSION = "1.0.0"
-EVALUATOR_VERSION = "1.3.0"
+EVALUATOR_VERSION = "1.3.1"
 STATIC_ROUTE = "calibrated_static_sphere"
 DYNAMIC_ROUTE = "spatialtrackerv2_dynamic"
 DYNAMIC_MIN_ANCHOR_INLIER_FRACTION = 0.50
@@ -106,6 +106,39 @@ COMMON_FIELDS = [
     "alignment_fallback",
     "invalid_reason_codes",
 ]
+
+
+def _is_baseline_side_static_job(
+    route: str,
+    source: Mapping[str, Any],
+    extraction: Mapping[str, Any],
+) -> bool:
+    """Recognize the primary calibrated split across manifest schema variants.
+
+    The factorized manifest stores scene/camera under ``factors`` while frozen
+    extraction artifacts expose the same values under ``job``.  Reading only
+    top-level manifest keys silently disabled the baseline-side eligibility
+    policy for every current 978-job manifest.
+    """
+
+    job = extraction.get("job")
+    factors = source.get("factors")
+    job_fields = job if isinstance(job, Mapping) else {}
+    factor_fields = factors if isinstance(factors, Mapping) else {}
+
+    def first_value(*keys: str) -> str:
+        for fields in (job_fields, factor_fields, source):
+            for key in keys:
+                value = fields.get(key)
+                if value is not None and str(value):
+                    return str(value)
+        return ""
+
+    return bool(
+        route == STATIC_ROUTE
+        and first_value("scene_id") == "baseline"
+        and first_value("camera_name", "camera") == "CAM_Side"
+    )
 
 
 def _json_safe(value: Any) -> Any:
@@ -1676,10 +1709,10 @@ def evaluate_extracted_seedance978(
         validity = extraction.get("video_generation_validity", {})
         route = str(extraction.get("reconstruction_route"))
         fit_measurement_count = sum(_truth(row.get("physics_fit_used")) for row in fit_rows)
-        baseline_side_static = bool(
-            route == STATIC_ROUTE
-            and str(source.get("scene_id") or "") == "baseline"
-            and str(source.get("camera_name") or "") == "CAM_Side"
+        baseline_side_static = _is_baseline_side_static_job(
+            route,
+            source,
+            extraction,
         )
         direct_measurement_fraction = (
             fit_measurement_count / len(fit_rows) if fit_rows else 0.0

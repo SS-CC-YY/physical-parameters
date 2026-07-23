@@ -41,7 +41,7 @@ class UnifiedFiveModelEvaluationTest(unittest.TestCase):
             "evaluator_source_sha256": "evaluator",
             "physics_fitter_source_sha256": "fitter",
             "dynamic_3d_gate_source_sha256": "gate",
-            "evaluator_version": "1.3.0",
+            "evaluator_version": "1.3.1",
         }
         evaluations: dict[str, Path] = {}
         for model in ("wan", "seedance", "cosmos", "helios", "longlive"):
@@ -91,7 +91,7 @@ class UnifiedFiveModelEvaluationTest(unittest.TestCase):
             self.assertEqual(audit["status"], "passed")
             self.assertEqual(audit["model_count"], 5)
             self.assertEqual(audit["manifest_job_count"], 2)
-            self.assertEqual(audit["common_lineage"]["evaluator_version"], "1.3.0")
+            self.assertEqual(audit["common_lineage"]["evaluator_version"], "1.3.1")
 
     def test_rejects_one_model_with_different_fitter(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

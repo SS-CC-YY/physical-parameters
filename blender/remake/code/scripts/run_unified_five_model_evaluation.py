@@ -24,7 +24,7 @@ CODE_ROOT = Path(__file__).resolve().parents[1]
 REMAKE_ROOT = CODE_ROOT.parent
 sys.path.insert(0, str(CODE_ROOT / "src"))
 
-FROZEN_EVALUATOR_VERSION = "1.3.0"
+FROZEN_EVALUATOR_VERSION = "1.3.1"
 EXPECTED_MODEL_COUNT = 5
 COMMON_LINEAGE_FIELDS = (
     "registry_sha256",

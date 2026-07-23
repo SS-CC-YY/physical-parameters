@@ -184,6 +184,51 @@ class TrajectoryPipelineTests(unittest.TestCase):
             "baseline_static_scene_warning_does_not_block_object_trajectory",
         )
 
+    def test_baseline_side_static_job_reads_factorized_manifest_fields(self) -> None:
+        source = {
+            "job_id": "v1_C__mu0p18__baseline__standard_ball__CAM_Side__seed-1",
+            "factors": {
+                "scene_id": "baseline",
+                "camera": "CAM_Side",
+            },
+        }
+        extraction = {
+            "job": {
+                "scene_id": "baseline",
+                "camera_name": "CAM_Side",
+            }
+        }
+
+        self.assertTrue(
+            pipeline._is_baseline_side_static_job(
+                pipeline.STATIC_ROUTE,
+                source,
+                extraction,
+            )
+        )
+        self.assertFalse(
+            pipeline._is_baseline_side_static_job(
+                pipeline.DYNAMIC_ROUTE,
+                source,
+                extraction,
+            )
+        )
+
+    def test_baseline_side_static_job_rejects_non_primary_view(self) -> None:
+        source = {
+            "factors": {
+                "scene_id": "baseline",
+                "camera": "CAM_Top",
+            }
+        }
+        self.assertFalse(
+            pipeline._is_baseline_side_static_job(
+                pipeline.STATIC_ROUTE,
+                source,
+                {"job": {}},
+            )
+        )
+
     def test_standard_headline_is_baseline_side_only(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary)
@@ -477,7 +522,7 @@ class TrajectoryPipelineTests(unittest.TestCase):
                         "fit_eligible": True,
                         "interpolated": False,
                     }
-                    for index in range(4)
+                    for index in range(12)
                 ],
             )
             job = {
@@ -495,8 +540,26 @@ class TrajectoryPipelineTests(unittest.TestCase):
                         "benchmark_split": "side_primary",
                         "reconstruction_route": "calibrated_static_sphere",
                         "trajectory_frames_csv": str(trajectory),
-                        "trajectory_fit_eligible": True,
-                        "video_generation_validity": {"status": "pass", "fit_eligible": True},
+                        "trajectory_fit_eligible": False,
+                        "video_generation_validity": {
+                            "status": "indeterminate",
+                            "fit_eligible": False,
+                            "failure_codes": [],
+                            "indeterminate_codes": [
+                                "static_scene_rigidity_unresolved"
+                            ],
+                            "checks": {
+                                "camera_motion": {"status": "pass"},
+                                "object_identity": {
+                                    "trusted_first_frame": True
+                                },
+                                "object_shape_2d": {"status": "pass"},
+                                "object_scale_2d": {"status": "pass"},
+                                "scene_rigidity_2d": {
+                                    "status": "indeterminate"
+                                },
+                            },
+                        },
                         "pipeline": {},
                         "camera_motion_evidence": {},
                         "error": None,
@@ -603,8 +666,13 @@ class TrajectoryPipelineTests(unittest.TestCase):
             self.assertFalse(evaluated["evaluation_invokes_tracker"])
             self.assertTrue(evaluated["fit_attempted"])
             self.assertTrue(evaluated["target_lookup_performed"])
+            self.assertTrue(
+                evaluated["trajectory_fit_eligibility"]["validity_policy"][
+                    "baseline_side_track_override"
+                ]
+            )
             fitted_rows = fit_mock.call_args.args[1]
-            self.assertEqual([row["x_m"] for row in fitted_rows], [0.0] * 4)
+            self.assertEqual([row["x_m"] for row in fitted_rows], [0.0] * 12)
 
     def test_qualified_dynamic_3d_track_runs_target_free_fitter(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

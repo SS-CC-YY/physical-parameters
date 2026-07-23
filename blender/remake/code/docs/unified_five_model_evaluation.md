@@ -8,7 +8,7 @@ tracks/jobs/<job_id>/trajectory_frames.csv
 ```
 
 它不会重新读取 MP4，不会重新运行 2D 检测或 SpaTrackerV2。五个模型依次使用
-同一份 978-job manifest、experiment registry、物理拟合器和 evaluator 1.3.0，
+同一份 978-job manifest、experiment registry、物理拟合器和 evaluator 1.3.1，
 随后才允许生成统一表格和实验级证据报告。
 
 ## 服务器运行
@@ -50,7 +50,7 @@ conda activate SpaTrack2
 cd "$REMAKE_ROOT"
 export PYTHONPATH="$REMAKE_ROOT/code/src${PYTHONPATH:+:$PYTHONPATH}"
 
-OUT="$REMAKE_ROOT/analysis/five_models_unified_v13"
+OUT="$REMAKE_ROOT/analysis/five_models_unified_v131"
 mkdir -p "$OUT"
 
 CUDA_VISIBLE_DEVICES="" \
@@ -84,7 +84,7 @@ assert d["status"] == "passed"
 assert d["model_count"] == 5
 assert d["manifest_job_count"] == 978
 assert d["phase"] == "all"
-assert d["common_lineage"]["evaluator_version"] == "1.3.0"
+assert d["common_lineage"]["evaluator_version"] == "1.3.1"
 PY
 ```
 
@@ -101,7 +101,7 @@ PY
 主要输出：
 
 ```text
-analysis/five_models_unified_v13/
+analysis/five_models_unified_v131/
 ├── lineage_audit.json
 ├── unified_run_summary.json
 ├── models/<model>/evaluation/
