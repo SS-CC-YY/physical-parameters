@@ -88,6 +88,27 @@ def _pct(value: Any, digits: int = 1) -> str:
     return "—" if numeric is None else f"{100.0 * numeric:.{digits}f}%"
 
 
+def _latex_escape(value: Any) -> str:
+    """Escape plain table text without a backslash inside an f-string expression.
+
+    Python 3.11 rejects backslashes inside f-string expressions.  Keeping the
+    LaTeX escaping in this ordinary helper makes the report generator portable
+    across the server's Python 3.11 and newer local Python versions.
+    """
+
+    replacements = {
+        "\\": r"\textbackslash{}",
+        "&": r"\&",
+        "%": r"\%",
+        "$": r"\$",
+        "#": r"\#",
+        "_": r"\_",
+        "{": r"\{",
+        "}": r"\}",
+    }
+    return "".join(replacements.get(character, character) for character in str(value))
+
+
 def _json_key(value: Any) -> str:
     if isinstance(value, str):
         try:
@@ -1427,7 +1448,7 @@ imputed as zero-error observations.
 
     latex_rows = "\n".join(
         (
-            f'{str(row["model"]).replace("_", r"\_")} & '
+            f'{_latex_escape(row["model"])} & '
             f'{100.0 * float(row["equation_supported_parameter_coverage"]):.1f} & '
             f'{100.0 * float(row["parameter_success_at_25pct_all"]):.1f} & '
             f'{_fmt(row.get("median_candidate_bnae_supported"))} & '

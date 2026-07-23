@@ -18,6 +18,14 @@ SPEC.loader.exec_module(MODULE)
 
 
 class CandidatePhysicsReportDynamicTest(unittest.TestCase):
+    def test_latex_model_name_escaping_is_python311_compatible(self) -> None:
+        self.assertEqual(
+            MODULE._latex_escape("model_name&variant"),
+            r"model\_name\&variant",
+        )
+        source = Path(MODULE.__file__).read_text(encoding="utf-8")
+        self.assertNotIn('.replace("_", r"\\_")', source)
+
     def test_five_model_inventory_and_cases_are_data_driven(self) -> None:
         models = [f"Model-{letter}" for letter in "ABCDE"]
         summaries = []
