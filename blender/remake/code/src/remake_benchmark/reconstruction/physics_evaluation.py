@@ -319,6 +319,44 @@ def _is_trusted_measurement(row: Mapping[str, Any] | None) -> bool:
     )
 
 
+def generation_validity_review_state(validity: Mapping[str, Any]) -> dict[str, Any]:
+    """Classify a generation-validity record without losing REVIEW provenance.
+
+    ``review`` is a soft adjudication state: it may continue into trajectory
+    fitting when the underlying tracker/reconstruction evidence is otherwise
+    eligible.  A declared failure or any concrete ``failure_codes`` remains a
+    hard block.  Warning codes containing ``review`` are retained as review
+    provenance even when the upstream validity status is still ``pass``.
+    """
+
+    status = str(validity.get("status", "indeterminate") or "indeterminate").strip().lower()
+    failure_codes = [str(value) for value in validity.get("failure_codes", []) if str(value)]
+    warning_codes = [str(value) for value in validity.get("warning_codes", []) if str(value)]
+    indeterminate_codes = [
+        str(value) for value in validity.get("indeterminate_codes", []) if str(value)
+    ]
+    review_codes = [
+        value
+        for value in (*warning_codes, *indeterminate_codes)
+        if "review" in value.lower()
+    ]
+    hard_failure = bool(status in {"fail", "failed", "invalid"} or failure_codes)
+    provisional_review = bool(
+        not hard_failure
+        and (
+            status in {"review", "needs_review", "provisional_review"}
+            or review_codes
+        )
+    )
+    return {
+        "status": status,
+        "hard_failure": hard_failure,
+        "provisional_review": provisional_review,
+        "review_codes": list(dict.fromkeys(review_codes)),
+        "failure_codes": failure_codes,
+    }
+
+
 def assess_trajectory_fit_eligibility(
     validity: Mapping[str, Any],
     track_rows: Sequence[Mapping[str, Any]],
@@ -332,21 +370,48 @@ def assess_trajectory_fit_eligibility(
     or identity ambiguity still block fitting.
     """
 
-    status = str(validity.get("status", "indeterminate"))
-    if status == "pass" and validity.get("fit_eligible") is True:
-        return {
-            "eligible": True,
-            "status": "full_generation_validity",
-            "reason": "generation_validity_pass",
-            "trusted_segment_start_frame": 0,
-            "trusted_segment_end_frame": None,
-            "trusted_segment_frame_count": None,
-        }
-    if status == "fail" or validity.get("failure_codes"):
+    review_state = generation_validity_review_state(validity)
+    status = str(review_state["status"])
+    if review_state["hard_failure"]:
         return {
             "eligible": False,
             "status": "blocked",
             "reason": "generation_validity_fail",
+            "generation_review_provisional": False,
+            "generation_hard_failure": True,
+            "generation_review_codes": review_state["review_codes"],
+        }
+    if (
+        status == "pass" or review_state["provisional_review"]
+    ) and validity.get("fit_eligible") is True:
+        provisional = bool(review_state["provisional_review"])
+        return {
+            "eligible": True,
+            "status": (
+                "provisional_generation_review"
+                if provisional
+                else "full_generation_validity"
+            ),
+            "reason": (
+                "soft_generation_review_provisionally_accepted"
+                if provisional
+                else "generation_validity_pass"
+            ),
+            "trusted_segment_start_frame": 0,
+            "trusted_segment_end_frame": None,
+            "trusted_segment_frame_count": None,
+            "generation_review_provisional": provisional,
+            "generation_hard_failure": False,
+            "generation_review_codes": review_state["review_codes"],
+        }
+    if review_state["provisional_review"]:
+        return {
+            "eligible": False,
+            "status": "blocked",
+            "reason": "soft_generation_review_without_fit_eligible_measurements",
+            "generation_review_provisional": True,
+            "generation_hard_failure": False,
+            "generation_review_codes": review_state["review_codes"],
         }
 
     indeterminate_codes = set(str(value) for value in validity.get("indeterminate_codes", []))
@@ -357,6 +422,9 @@ def assess_trajectory_fit_eligibility(
             "status": "blocked",
             "reason": "indeterminate_for_more_than_late_tracking_coverage",
             "blocking_codes": sorted(indeterminate_codes),
+            "generation_review_provisional": False,
+            "generation_hard_failure": False,
+            "generation_review_codes": review_state["review_codes"],
         }
     checks = validity.get("checks", {})
     identity = checks.get("object_identity", {})
@@ -373,6 +441,9 @@ def assess_trajectory_fit_eligibility(
             "status": "blocked",
             "reason": "partial_track_safety_checks_failed",
             "safety_checks": required_checks,
+            "generation_review_provisional": False,
+            "generation_hard_failure": False,
+            "generation_review_codes": review_state["review_codes"],
         }
 
     trusted_frames = sorted(
@@ -396,6 +467,9 @@ def assess_trajectory_fit_eligibility(
             "reason": "insufficient_contiguous_metric_anchor_segment",
             "trusted_segment_frame_count": len(anchored),
             "required_frame_count": minimum_frames,
+            "generation_review_provisional": False,
+            "generation_hard_failure": False,
+            "generation_review_codes": review_state["review_codes"],
         }
     return {
         "eligible": True,
@@ -406,6 +480,9 @@ def assess_trajectory_fit_eligibility(
         "trusted_segment_frame_count": len(anchored),
         "required_frame_count": minimum_frames,
         "safety_checks": required_checks,
+        "generation_review_provisional": False,
+        "generation_hard_failure": False,
+        "generation_review_codes": review_state["review_codes"],
     }
 
 
@@ -769,9 +846,22 @@ def run_physics_job(
                         "dynamic_reconstruction_confirmed_generation_failure"
                     )
                 elif (
-                    native_status in {"review", "indeterminate"}
+                    native_status in {"review", "needs_review", "provisional_review"}
+                    and dynamic_result.get("quality_pass") is True
+                    and not generation_validity_review_state(validity)["hard_failure"]
+                ):
+                    # A soft native review is preserved, but it is not treated
+                    # as a failure.  The target-independent dynamic 3-D gate
+                    # below still has to accept the recovered motion manifold.
+                    validity["status"] = "review"
+                    validity["fit_eligible"] = True
+                    validity.setdefault("warning_codes", []).append(
+                        "dynamic_reconstruction_requires_review"
+                    )
+                elif (
+                    native_status == "indeterminate"
                     or dynamic_result.get("quality_pass") is not True
-                ) and validity.get("status") == "pass":
+                ) and not generation_validity_review_state(validity)["hard_failure"]:
                     validity["status"] = "indeterminate"
                     validity["fit_eligible"] = False
                     validity.setdefault("warning_codes", []).append(
@@ -787,9 +877,8 @@ def run_physics_job(
                 trajectory,
                 reconstruction_metadata=dynamic_result,
             )
-            hard_validity_failure = bool(
-                validity.get("status") == "fail" or validity.get("failure_codes")
-            )
+            review_state = generation_validity_review_state(validity)
+            hard_validity_failure = bool(review_state["hard_failure"])
             dynamic_evidence_usable = dynamic_3d_inclusion.get("decision") == "include"
             trajectory_fit_eligibility = {
                 "eligible": bool(trajectory and not hard_validity_failure and dynamic_evidence_usable),
@@ -806,6 +895,9 @@ def run_physics_job(
                     else "dynamic_3d_measurement_x"
                 ),
                 "dynamic_3d_inclusion": dynamic_3d_inclusion,
+                "generation_review_provisional": review_state["provisional_review"],
+                "generation_hard_failure": review_state["hard_failure"],
+                "generation_review_codes": review_state["review_codes"],
             }
         else:
             raise ValueError(f"unknown reconstruction route: {reconstruction_route}")
@@ -922,6 +1014,7 @@ def run_physics_job(
         "trajectory_csv": str(trajectory_path) if trajectory else None,
         "pipeline": pipeline,
         "video_generation_validity": validity,
+        "generation_review": generation_validity_review_state(validity),
         "trajectory_fit_eligibility": trajectory_fit_eligibility,
         "dynamic_3d_inclusion": dynamic_3d_inclusion,
         "fit_attempted": fit_attempted,
@@ -942,6 +1035,24 @@ def _summary_row(result: Mapping[str, Any]) -> dict[str, Any]:
     metrics = result["metrics"]
     tracking = result.get("pipeline", {}).get("tracking", {})
     validity = result.get("video_generation_validity", {})
+    review_state = generation_validity_review_state(validity)
+    fit_validity = fit.get("fit_validity", {}) if isinstance(fit.get("fit_validity"), Mapping) else {}
+    rule_family = (
+        fit.get("rule_family_evaluation", {})
+        if isinstance(fit.get("rule_family_evaluation"), Mapping)
+        else {}
+    )
+    segmentation = fit.get("segmentation", {}) if isinstance(fit.get("segmentation"), Mapping) else {}
+    parameter_attribution = (
+        fit.get("parameter_attribution", {})
+        if isinstance(fit.get("parameter_attribution"), Mapping)
+        else {}
+    )
+    raw_parameter_estimates = (
+        fit.get("raw_parameter_estimates", {})
+        if isinstance(fit.get("raw_parameter_estimates"), Mapping)
+        else {}
+    )
     dynamic_3d = result.get("dynamic_3d_inclusion")
     dynamic_decision = (
         str(dynamic_3d.get("decision"))
@@ -989,10 +1100,47 @@ def _summary_row(result: Mapping[str, Any]) -> dict[str, Any]:
         "generation_validity_status": validity.get("status"),
         "generation_failure_codes": ";".join(validity.get("failure_codes", [])),
         "generation_warning_codes": ";".join(validity.get("warning_codes", [])),
+        "generation_review_provisional": review_state["provisional_review"],
+        "generation_hard_failure": review_state["hard_failure"],
+        "generation_review_codes": ";".join(review_state["review_codes"]),
         "trajectory_fit_eligibility": result.get("trajectory_fit_eligibility", {}).get("status"),
         "trajectory_fit_eligible": result.get("trajectory_fit_eligibility", {}).get("eligible"),
         "fit_attempted": result.get("fit_attempted"),
         "fit_status": fit.get("status"),
+        "fit_validity_status": fit_validity.get("status"),
+        "fit_validity_category": fit_validity.get("category"),
+        "fit_validity_primary_reason": fit_validity.get("primary_reason_code"),
+        "rule_family_status": rule_family.get("status"),
+        "rule_family_name": rule_family.get("rule_family"),
+        "rule_family_reason_codes": ";".join(
+            str(value) for value in rule_family.get("reason_codes", [])
+        ),
+        "segmentation_status": segmentation.get("status"),
+        "segmentation_algorithm": segmentation.get("algorithm"),
+        "segmentation_events_json": json.dumps(
+            _json_safe(segmentation.get("events", [])),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+        "segmentation_segments_json": json.dumps(
+            _json_safe(segmentation.get("segments", [])),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+        "parameter_attribution_json": json.dumps(
+            _json_safe(parameter_attribution),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+        "raw_parameter_estimates_json": json.dumps(
+            _json_safe(raw_parameter_estimates),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
         "fit_complete": metrics.get("fit_complete"),
         "tracked_fraction": tracking.get("tracked_fraction"),
         "experiment_nmae": metrics.get("experiment_nmae"),
@@ -1004,6 +1152,14 @@ def _summary_row(result: Mapping[str, Any]) -> dict[str, Any]:
         row[f"{name}__estimate"] = item.get("estimate_raw")
         row[f"{name}__nae"] = item.get("normalized_absolute_error")
         row[f"{name}__score"] = item.get("score_0_100")
+    for name, item in parameter_attribution.items():
+        if not isinstance(item, Mapping):
+            continue
+        row[f"{name}__attribution_status"] = item.get("status")
+        row[f"{name}__attribution_reason_codes"] = ";".join(
+            str(value) for value in item.get("reason_codes", [])
+        )
+        row[f"{name}__raw_estimate"] = raw_parameter_estimates.get(name)
     return row
 
 

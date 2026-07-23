@@ -45,6 +45,29 @@ def _freefall_rows() -> list[dict]:
     ]
 
 
+def _bounce_rows() -> list[dict]:
+    time = np.linspace(0.0, 5.0, 121)
+    z = 0.82 + np.abs(time - 2.5)
+    return [
+        {
+            "frame_index": index,
+            "source_frame_index": index,
+            "time_s": float(t),
+            "x_m": 0.0,
+            "y_m": 0.0,
+            "z_m": float(height),
+            "fit_x_m": 0.0,
+            "fit_y_m": 0.0,
+            "fit_z_m": float(height),
+            "measurement_valid": True,
+            "physics_fit_used": True,
+            "fit_eligible": True,
+            "interpolated": False,
+        }
+        for index, (t, height) in enumerate(zip(time, z))
+    ]
+
+
 def _fit_series(*, nrmse: float = 0.01, r2: float = 0.99, points: int = 73) -> dict:
     return {
         "fit_points": points,
@@ -190,6 +213,90 @@ class VideoAdmissionAdversarialTests(unittest.TestCase):
         self.assertEqual(grade["g0_generation_validity"]["status"], "pass")
         self.assertEqual(grade["g0_contact_geometry"]["status"], "pass")
 
+    def test_partial_multi_parameter_fit_admits_identified_parameter(self) -> None:
+        result = _video_result()
+        result["job"].update(
+            {
+                "experiment_id": "v2_E",
+                "parameter_tuple_id": "g9p80_e0p76",
+                "video_name": "partial-v2e.mp4",
+            }
+        )
+        result["fit"] = {
+            "status": "partial",
+            "parameter_estimates": {"gravity_g": 9.8, "restitution_e": None},
+            "raw_parameter_estimates": {"gravity_g": 9.8, "restitution_e": None},
+            "parameter_observed": {"gravity_g": True, "restitution_e": False},
+            "parameter_attribution": {
+                "gravity_g": {"status": "pass", "reason_codes": []},
+                "restitution_e": {
+                    "status": "indeterminate",
+                    "reason_codes": ["too_few_reliable_impacts"],
+                },
+            },
+            "rule_family_evaluation": {
+                "status": "pass",
+                "reason_codes": [],
+                "target_parameters_used": False,
+            },
+            "fit_validity": {
+                "status": "partially_accepted",
+                "category": "parameter_specific_identifiability",
+                "target_free": True,
+            },
+            "target_not_used_for_fit": True,
+            "diagnostics": _fit_series(points=121),
+        }
+        result["metrics"] = {"fit_complete": False}
+        grade = grade_video_result(
+            result,
+            _bounce_rows(),
+            policy=self.policy,
+            motion_profile=self.motion,
+        )
+        self.assertEqual(grade["video_stage"], "PASS_TO_SCAN", grade)
+        evidence = grade["inverse_fit_evidence"]
+        self.assertEqual(evidence["fit_completeness_scope"], "partial_parameters")
+        self.assertEqual(evidence["admissible_parameters"], ["gravity_g"])
+        self.assertTrue(evidence["parameter_evidence"]["gravity_g"]["scan_ready"])
+        self.assertFalse(evidence["parameter_evidence"]["restitution_e"]["admissible"])
+
+    def test_reliable_rule_family_mismatch_is_model_failure_not_u(self) -> None:
+        result = _video_result()
+        result["fit"].update(
+            {
+                "status": "model_mismatch",
+                "parameter_estimates": {"gravity_g": None},
+                "parameter_observed": {"gravity_g": False},
+                "rule_family_evaluation": {
+                    "status": "fail",
+                    "reason_codes": ["ballistic_curvature_not_constant"],
+                    "target_parameters_used": False,
+                },
+                "fit_validity": {
+                    "status": "rejected",
+                    "category": "rule_family_mismatch",
+                    "primary_reason_code": "ballistic_curvature_not_constant",
+                    "target_free": True,
+                },
+            }
+        )
+        result["metrics"] = {"fit_complete": False}
+        grade = grade_video_result(
+            result,
+            self.rows,
+            policy=self.policy,
+            motion_profile=self.motion,
+        )
+        self.assertEqual(grade["video_stage"], "G1", grade)
+        self.assertEqual(grade["inverse_fit_evidence"]["status"], "model_mismatch")
+        self.assertEqual(
+            grade["inverse_fit_evidence"]["classification"],
+            "model_physics_failure",
+        )
+        self.assertIn("inverse_rule_family_model_mismatch", grade["reason_codes"])
+        self.assertIn("ballistic_curvature_not_constant", grade["reason_codes"])
+
 
 class ScanConstructionAdversarialTests(unittest.TestCase):
     @classmethod
@@ -325,6 +432,86 @@ class ScanConstructionAdversarialTests(unittest.TestCase):
         for level in scans[0]["levels"]:
             self.assertEqual(level["usable_job_count"], 0)
             self.assertTrue(level["scan_admission_rejected_job_ids"])
+
+    def test_partial_fit_does_not_discard_identified_target_parameter(self) -> None:
+        registry = {
+            "experiments": [
+                {
+                    "id": "x",
+                    "hidden_parameters": [
+                        {"name": "p", "unit": "1", "valid_range": [0.0, 1.0]},
+                        {"name": "q", "unit": "1", "valid_range": [0.0, 1.0]},
+                    ],
+                    "anchor_tuples": [
+                        {"id": "low", "p": 0.2, "q": 0.5},
+                        {"id": "high", "p": 0.8, "q": 0.5},
+                    ],
+                }
+            ]
+        }
+        manifest = [
+            {
+                "job_id": tuple_id,
+                "experiment_id": "x",
+                "seed": 1,
+                "factors": {
+                    "parameter_tuple_id": tuple_id,
+                    "scene_id": "baseline",
+                    "object_id": "standard_ball",
+                    "camera": "CAM_Side",
+                },
+            }
+            for tuple_id in ("low", "high")
+        ]
+        results = {}
+        grades = {}
+        for tuple_id, estimate in (("low", 0.35), ("high", 0.95)):
+            results[tuple_id] = {
+                "fit": {
+                    "status": "partial",
+                    "parameter_estimates": {"p": estimate, "q": None},
+                    "parameter_observed": {"p": True, "q": False},
+                    "parameter_attribution": {
+                        "p": {"status": "pass", "reason_codes": []},
+                        "q": {
+                            "status": "indeterminate",
+                            "reason_codes": ["q_not_identifiable"],
+                        },
+                    },
+                    "rule_family_evaluation": {"status": "pass", "reason_codes": []},
+                    "target_not_used_for_fit": True,
+                    "diagnostics": {"fit_nrmse": 0.01},
+                },
+                "metrics": {"fit_complete": False},
+            }
+            grades[tuple_id] = {
+                "video_stage": "PASS_TO_SCAN",
+                "inverse_fit_evidence": {
+                    "status": "pass",
+                    "parameter_evidence": {
+                        "p": {"admissible": True},
+                        "q": {"admissible": False},
+                    },
+                    "per_job_worst_fit_nrmse": 0.01,
+                },
+            }
+        scans = build_parameter_scan_grades(
+            manifest_rows=manifest,
+            results_by_id=results,
+            grades_by_id=grades,
+            registry=registry,
+            policy=self.policy,
+        )
+        p_scan = next(scan for scan in scans if scan["target_parameter"] == "p")
+        self.assertEqual(p_scan["response_grade"], "G3", p_scan)
+        self.assertEqual([level["usable_job_count"] for level in p_scan["levels"]], [1, 1])
+        self.assertEqual(
+            [level["median_estimate"] for level in p_scan["levels"]],
+            [0.35, 0.95],
+        )
+        self.assertTrue(
+            all(not level["scan_admission_rejected_job_ids"] for level in p_scan["levels"])
+        )
 
 
 class CrossSceneAdversarialTests(unittest.TestCase):

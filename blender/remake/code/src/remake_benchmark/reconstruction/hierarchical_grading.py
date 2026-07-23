@@ -200,6 +200,122 @@ def _fit_series_records(value: Any, *, path: str = "diagnostics") -> list[dict[s
     return records
 
 
+def _parameter_fit_evidence(
+    fit: Mapping[str, Any],
+    metrics: Mapping[str, Any],
+) -> dict[str, dict[str, Any]]:
+    """Normalize new parameter-specific fit evidence with a legacy fallback.
+
+    ``metrics.fit_complete`` describes the whole experiment fit.  It cannot be
+    used as the admission flag for a single target in a multi-parameter
+    experiment: one identifiable parameter must not be discarded merely
+    because another parameter is unavailable.  New fitters persist
+    ``parameter_attribution``; old result JSON is interpreted from the
+    historical ``parameter_observed`` contract.
+    """
+
+    estimates = fit.get("parameter_estimates", {})
+    raw_estimates = fit.get("raw_parameter_estimates", {})
+    observed = fit.get("parameter_observed", {})
+    attribution = fit.get("parameter_attribution", {})
+    metric_parameters = metrics.get("parameters", {})
+    mappings = [
+        value
+        for value in (estimates, raw_estimates, observed, attribution, metric_parameters)
+        if isinstance(value, Mapping)
+    ]
+    names = sorted({str(name) for value in mappings for name in value})
+    output: dict[str, dict[str, Any]] = {}
+    accepted_statuses = {"pass", "ok", "accepted"}
+    for name in names:
+        estimate = _number(estimates.get(name)) if isinstance(estimates, Mapping) else None
+        raw_estimate = _number(raw_estimates.get(name)) if isinstance(raw_estimates, Mapping) else None
+        observed_declared = isinstance(observed, Mapping) and name in observed
+        observed_value = observed.get(name) is True if observed_declared else False
+        metric_entry = metric_parameters.get(name, {}) if isinstance(metric_parameters, Mapping) else {}
+        if not observed_declared and isinstance(metric_entry, Mapping) and "observed" in metric_entry:
+            observed_declared = True
+            observed_value = metric_entry.get("observed") is True
+
+        attribution_entry = attribution.get(name, {}) if isinstance(attribution, Mapping) else {}
+        attribution_declared = isinstance(attribution_entry, Mapping) and bool(attribution_entry)
+        attribution_status = (
+            str(attribution_entry.get("status", "")).strip().lower()
+            if attribution_declared
+            else None
+        )
+        # Some early result files have only parameter_observed.  Preserve that
+        # contract unless the newer attribution field explicitly rejects it.
+        attribution_accepted = (
+            attribution_status in accepted_statuses
+            if attribution_declared and attribution_status
+            else True
+        )
+        reason_codes = []
+        if attribution_declared:
+            values = attribution_entry.get("reason_codes", [])
+            if isinstance(values, str):
+                values = [values]
+            reason_codes = [str(value) for value in values if str(value)]
+        admissible = bool(observed_value and attribution_accepted)
+        output[name] = {
+            "parameter_name": name,
+            "observed": bool(observed_value),
+            "observed_declared": bool(observed_declared),
+            "estimate_available": estimate is not None,
+            "raw_estimate_available": raw_estimate is not None,
+            "attribution_status": attribution_status,
+            "attribution_declared": attribution_declared,
+            "attribution_reason_codes": reason_codes,
+            "admissible": admissible,
+            "scan_ready": bool(admissible and estimate is not None),
+        }
+    return output
+
+
+def _inverse_model_mismatch_evidence(fit: Mapping[str, Any]) -> dict[str, Any]:
+    """Identify an explicit dynamics-rule mismatch, not missing evidence."""
+
+    fit_status = str(fit.get("status", "")).strip().lower()
+    family = fit.get("rule_family_evaluation", {})
+    family = family if isinstance(family, Mapping) else {}
+    family_status = str(family.get("status", "")).strip().lower()
+    validity = fit.get("fit_validity", {})
+    validity = validity if isinstance(validity, Mapping) else {}
+    validity_status = str(validity.get("status", "")).strip().lower()
+    validity_category = str(validity.get("category", "")).strip().lower()
+    explicit_mismatch = (
+        fit_status == "model_mismatch"
+        or family_status == "fail"
+        or (
+            validity_status in {"fail", "failed", "rejected"}
+            and validity_category in {"model_mismatch", "rule_family_mismatch"}
+        )
+    )
+    family_reasons = family.get("reason_codes", [])
+    if isinstance(family_reasons, str):
+        family_reasons = [family_reasons]
+    reasons = ["inverse_rule_family_model_mismatch"] if explicit_mismatch else []
+    reasons.extend(str(value) for value in family_reasons if str(value))
+    primary = validity.get("primary_reason_code")
+    if explicit_mismatch and primary:
+        reasons.append(str(primary))
+    secondary = validity.get("secondary_reason_codes", [])
+    if isinstance(secondary, str):
+        secondary = [secondary]
+    if explicit_mismatch:
+        reasons.extend(str(value) for value in secondary if str(value))
+    return {
+        "is_model_mismatch": explicit_mismatch,
+        "status": "model_mismatch" if explicit_mismatch else "not_detected",
+        "reason_codes": list(dict.fromkeys(reasons)),
+        "fit_status": fit.get("status"),
+        "rule_family_status": family.get("status"),
+        "fit_validity_status": validity.get("status"),
+        "fit_validity_category": validity.get("category"),
+    }
+
+
 def _assess_inverse_fit_evidence(
     result: Mapping[str, Any],
     trajectory_rows: Sequence[Mapping[str, Any]],
@@ -215,7 +331,13 @@ def _assess_inverse_fit_evidence(
     reasons: list[str] = []
     if fit.get("target_not_used_for_fit") is not True:
         reasons.append("inverse_fit_target_independence_not_proven")
-    if metrics.get("fit_complete") is not True:
+    parameter_evidence = _parameter_fit_evidence(fit, metrics)
+    admissible_parameters = sorted(
+        name for name, evidence in parameter_evidence.items() if evidence.get("admissible") is True
+    )
+    # A global incomplete flag is expected for a valid partial fit.  It blocks
+    # admission only when no individual parameter has usable evidence.
+    if metrics.get("fit_complete") is not True and not admissible_parameters:
         reasons.append("inverse_fit_incomplete")
 
     total_rows = len(trajectory_rows)
@@ -269,6 +391,15 @@ def _assess_inverse_fit_evidence(
         "reason_codes": list(dict.fromkeys(reasons)),
         "target_not_used_for_fit": fit.get("target_not_used_for_fit"),
         "fit_complete": metrics.get("fit_complete"),
+        "fit_completeness_scope": (
+            "complete"
+            if metrics.get("fit_complete") is True
+            else "partial_parameters"
+            if admissible_parameters
+            else "none"
+        ),
+        "parameter_evidence": parameter_evidence,
+        "admissible_parameters": admissible_parameters,
         "fit_measurement_count": fit_measurements,
         "trajectory_row_count": total_rows,
         "fit_eligible_fraction": fit_fraction,
@@ -457,18 +588,36 @@ def grade_video_result(
             stage = "U"
             reasons.extend(str(value) for value in motion.get("indeterminate_codes", []))
         else:
-            fit_evidence = _assess_inverse_fit_evidence(
-                result,
-                trajectory_rows,
-                experiment_id=experiment_id,
-                policy=policy,
-            )
-            if fit_evidence.get("status") != "pass":
-                stage = "U"
-                reasons.extend(str(value) for value in fit_evidence.get("reason_codes", []))
+            fit = dict(result.get("fit", {}))
+            mismatch = _inverse_model_mismatch_evidence(fit)
+            if mismatch.get("is_model_mismatch") is True:
+                # At this point G0, contact geometry, trajectory eligibility and
+                # the coarse motion family have all passed.  An explicit
+                # rule-family rejection is therefore observed model behaviour,
+                # not an absence of evaluable evidence.
+                stage = "G1"
+                reasons.extend(str(value) for value in mismatch.get("reason_codes", []))
+                fit_evidence = {
+                    **mismatch,
+                    "parameter_evidence": _parameter_fit_evidence(
+                        fit,
+                        dict(result.get("metrics", {})),
+                    ),
+                    "classification": "model_physics_failure",
+                }
             else:
-                stage = "PASS_TO_SCAN"
-                reasons.append("g0_g1_and_inverse_fit_evidence_pass")
+                fit_evidence = _assess_inverse_fit_evidence(
+                    result,
+                    trajectory_rows,
+                    experiment_id=experiment_id,
+                    policy=policy,
+                )
+                if fit_evidence.get("status") != "pass":
+                    stage = "U"
+                    reasons.extend(str(value) for value in fit_evidence.get("reason_codes", []))
+                else:
+                    stage = "PASS_TO_SCAN"
+                    reasons.append("g0_g1_and_inverse_fit_evidence_pass")
 
     fit = dict(result.get("fit", {}))
     metrics = dict(result.get("metrics", {}))
@@ -491,6 +640,9 @@ def grade_video_result(
         "inverse_fit": {
             "status": fit.get("status"),
             "parameter_observed": fit.get("parameter_observed", {}),
+            "parameter_attribution": fit.get("parameter_attribution", {}),
+            "fit_validity": fit.get("fit_validity", {}),
+            "rule_family_evaluation": fit.get("rule_family_evaluation", {}),
             "fit_complete": metrics.get("fit_complete"),
             "target_not_used_for_fit": fit.get("target_not_used_for_fit"),
         },
@@ -972,14 +1124,25 @@ def _level_summary(
         # response stage.
         if fit.get("target_not_used_for_fit") is not True:
             admission_reasons.append("inverse_fit_target_independence_not_proven")
-        if metrics.get("fit_complete") is not True:
-            admission_reasons.append("inverse_fit_incomplete")
-        if fit.get("parameter_observed", {}).get(parameter_name) is not True:
+        mismatch = _inverse_model_mismatch_evidence(fit)
+        if mismatch.get("is_model_mismatch") is True:
+            admission_reasons.append("inverse_rule_family_model_mismatch")
+        parameter_evidence = _parameter_fit_evidence(fit, metrics)
+        target_evidence = parameter_evidence.get(parameter_name, {})
+        if target_evidence.get("observed") is not True:
             admission_reasons.append("target_parameter_not_observed")
-        if video_grade.get("inverse_fit_evidence", {}).get("status") != "pass":
+        elif target_evidence.get("admissible") is not True:
+            admission_reasons.append("target_parameter_quality_not_accepted")
+        persisted_evidence = video_grade.get("inverse_fit_evidence", {})
+        if persisted_evidence.get("status") not in {"pass", "partial"}:
             admission_reasons.append("inverse_fit_evidence_gate_not_passed")
+        persisted_parameters = persisted_evidence.get("parameter_evidence", {})
+        if isinstance(persisted_parameters, Mapping) and parameter_name in persisted_parameters:
+            persisted_target = persisted_parameters.get(parameter_name, {})
+            if not isinstance(persisted_target, Mapping) or persisted_target.get("admissible") is not True:
+                admission_reasons.append("target_parameter_evidence_gate_not_passed")
         if admission_reasons:
-            scan_admission_rejections[job_id] = admission_reasons
+            scan_admission_rejections[job_id] = list(dict.fromkeys(admission_reasons))
             continue
         estimate = _number(fit.get("parameter_estimates", {}).get(parameter_name))
         if estimate is None:
@@ -1001,6 +1164,9 @@ def _level_summary(
             per_job_worst_fit_nrmse.append(max(job_nrmse))
         fitted_parameters = result.get("fit", {}).get("parameter_estimates", {})
         for name in off_target_specs:
+            off_target_evidence = parameter_evidence.get(name, {})
+            if off_target_evidence.get("admissible") is not True:
+                continue
             off_target = _number(fitted_parameters.get(name))
             if off_target is not None:
                 off_target_estimates[name].append(off_target)

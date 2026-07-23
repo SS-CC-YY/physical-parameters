@@ -96,6 +96,40 @@ class EvidenceReportBuildTests(unittest.TestCase):
         self.assertTrue(builder._measurement_evaluable(row))
         self.assertEqual(builder._row_status_label(row), "生成可用且已有拟合")
 
+    def test_automatic_hard_failure_is_review_before_generic_x_but_soft_review_is_usable(self) -> None:
+        builder = object.__new__(EvidenceReportBuilder)
+        builder.video_gate = {
+            "hard": {"grade": "X", "reason_codes": ["automatic_failure_pending_manual_confirmation"]},
+            "soft": {"grade": "X", "reason_codes": ["generation_validity_evidence_unrecognized"]},
+        }
+        builder.dynamic_gate_by_job = {}
+        hard = {
+            "video_name": "hard.mp4",
+            "generation_validity_status": "fail",
+            "generation_failure_codes": "confirmed_object_disappearance",
+            "trajectory_fit_eligible": False,
+            "fit_complete": False,
+            "fit_status": "not_attempted",
+            "reconstruction_route": "calibrated_static_sphere",
+        }
+        soft = {
+            "video_name": "soft.mp4",
+            "generation_validity_status": "review",
+            "generation_warning_codes": "shape_outlier_requires_review",
+            "trajectory_fit_eligible": True,
+            "fit_complete": True,
+            "fit_status": "ok",
+            "reconstruction_route": "calibrated_static_sphere",
+        }
+
+        decision = builder._unusable_decision(hard)
+        self.assertIsNotNone(decision)
+        self.assertEqual(decision["category"], "REVIEW")
+        self.assertIn("confirmed_object_disappearance", decision["reason_codes"])
+        self.assertIsNone(builder._unusable_decision(soft))
+        self.assertTrue(builder._measurement_evaluable(soft))
+        self.assertIn("软 REVIEW 暂按有效", builder._row_status_label(soft))
+
     def test_representative_view_tuple_maximizes_coverage_with_registry_tie_break(self) -> None:
         builder = object.__new__(EvidenceReportBuilder)
         builder.experiments = {
@@ -113,6 +147,17 @@ class EvidenceReportBuildTests(unittest.TestCase):
             ("vX", "third", "baseline"): {"CAM_Side": {}, "CAM_Main": {}, "CAM_Top": {}},
         }
         self.assertEqual(builder._representative_view_tuple("vX", grouped), "second")
+
+    def test_collision_reason_groups_cover_current_fitter_reversal_codes(self) -> None:
+        groups = EvidenceReportBuilder._collision_reason_groups(
+            [
+                "wall_velocity_reversal_not_found",
+                "impact_velocity_reversal_missing",
+                "impact_sticking_detected",
+            ]
+        )
+        self.assertEqual(len(groups["invalid_velocity_reversal"]), 2)
+        self.assertEqual(groups["impact_sticking"], ["impact_sticking_detected"])
 
     def test_builds_human_entrypoints_without_regrading(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -142,6 +187,22 @@ class EvidenceReportBuildTests(unittest.TestCase):
                                 "status": "ok",
                                 "method": "robust_airborne_quadratic",
                                 "parameter_estimates": {"gravity_g": 3.0},
+                                "raw_parameter_estimates": {"gravity_g": 3.0},
+                                "fit_validity": {"status": "accepted", "category": "ok"},
+                                "rule_family_evaluation": {
+                                    "status": "pass",
+                                    "rule_family": "first_free_fall_to_first_contact",
+                                    "reason_codes": [],
+                                },
+                                "segmentation": {
+                                    "status": "ok",
+                                    "algorithm": "first_sustained_motion_to_contact",
+                                    "events": [{"name": "first_floor_contact", "index": 8, "time_s": 0.32}],
+                                    "segments": [{"name": "first_free_fall", "start_index": 0, "end_index": 8}],
+                                },
+                                "parameter_attribution": {
+                                    "gravity_g": {"status": "pass", "reason_codes": []}
+                                },
                                 "diagnostics": {},
                                 "target_not_used_for_fit": True,
                             },
@@ -252,6 +313,20 @@ class EvidenceReportBuildTests(unittest.TestCase):
             self.assertTrue((output / "index.html").is_file())
             self.assertTrue((output / "01_unusable" / "X" / bad / "index.html").is_file())
             self.assertTrue((output / "02_parameter_scans" / "v1_A" / "gravity_g" / "FIT_PROCESS_ZH.md").is_file())
+            diagnostic = output / "02_parameter_scans" / "v1_A" / "gravity_g" / "levels" / "g2p00" / "fit_diagnostics.html"
+            self.assertTrue(diagnostic.is_file())
+            diagnostic_text = diagnostic.read_text(encoding="utf-8")
+            self.assertIn("first_free_fall_to_first_contact", diagnostic_text)
+            self.assertIn("first_floor_contact", diagnostic_text)
+            self.assertIn("逐参数归因", diagnostic_text)
+            self.assertTrue((output / "02_parameter_scans" / "collision_rule_chain" / "index.html").is_file())
+            collision_summary = json.loads(
+                (output / "02_parameter_scans" / "collision_rule_chain" / "summary.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertFalse(collision_summary["chain_conclusion_supported"])
+            self.assertIn("不足以支持", collision_summary["conclusion"])
             self.assertIn("13 个实验系统", (output / "index.html").read_text(encoding="utf-8"))
             self.assertIn("target_not_used_for_fit=true", (output / "02_parameter_scans" / "v1_A" / "gravity_g" / "FIT_PROCESS_ZH.md").read_text(encoding="utf-8"))
 

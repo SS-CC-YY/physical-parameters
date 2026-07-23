@@ -7,6 +7,7 @@ from unittest import mock
 
 from remake_benchmark.reconstruction.physics_evaluation import (
     _is_trusted_measurement,
+    _summary_row,
     aggregate_results,
     assess_trajectory_fit_eligibility,
     benchmark_split,
@@ -118,6 +119,87 @@ class PhysicsEvaluationValidityTests(unittest.TestCase):
         }
         eligibility = assess_trajectory_fit_eligibility(validity, _tracks(False))
         self.assertFalse(eligibility["eligible"])
+
+    def test_soft_review_can_fit_but_review_with_hard_failure_cannot(self) -> None:
+        soft = assess_trajectory_fit_eligibility(
+            {
+                "status": "review",
+                "fit_eligible": True,
+                "failure_codes": [],
+                "warning_codes": ["persistent_shape_outlier_requires_review"],
+            },
+            _tracks(False),
+        )
+        self.assertTrue(soft["eligible"])
+        self.assertEqual(soft["status"], "provisional_generation_review")
+        self.assertTrue(soft["generation_review_provisional"])
+
+        hard = assess_trajectory_fit_eligibility(
+            {
+                "status": "review",
+                "fit_eligible": True,
+                "failure_codes": ["confirmed_object_disappearance"],
+                "warning_codes": ["requires_review"],
+            },
+            _tracks(False),
+        )
+        self.assertFalse(hard["eligible"])
+        self.assertTrue(hard["generation_hard_failure"])
+
+    def test_summary_row_propagates_rule_segmentation_and_parameter_attribution(self) -> None:
+        result = {
+            "job": {
+                "video_name": "case.mp4",
+                "experiment_id": "v1_A",
+                "parameter_tuple_id": "g9p81",
+                "scene_id": "baseline",
+                "camera_name": "CAM_Side",
+                "seed": 341867882,
+            },
+            "benchmark_split": "side_primary",
+            "reconstruction_route": "calibrated_static_sphere",
+            "video_generation_validity": {
+                "status": "review",
+                "failure_codes": [],
+                "warning_codes": ["shape_requires_review"],
+            },
+            "trajectory_fit_eligibility": {"status": "provisional_generation_review", "eligible": True},
+            "fit_attempted": True,
+            "fit": {
+                "status": "partial",
+                "fit_validity": {"status": "partially_accepted", "category": "parameter_specific_identifiability"},
+                "raw_parameter_estimates": {"gravity_g": 9.7},
+                "parameter_attribution": {"gravity_g": {"status": "pass", "reason_codes": []}},
+                "rule_family_evaluation": {"status": "pass", "rule_family": "first_free_fall", "reason_codes": []},
+                "segmentation": {
+                    "status": "ok",
+                    "algorithm": "first_contact",
+                    "events": [{"name": "contact", "index": 8}],
+                    "segments": [{"name": "flight", "start_index": 0, "end_index": 8}],
+                },
+            },
+            "metrics": {
+                "fit_complete": True,
+                "parameters": {
+                    "gravity_g": {
+                        "gt": 9.81,
+                        "estimate_raw": 9.7,
+                        "normalized_absolute_error": 0.01,
+                        "score_0_100": 99.0,
+                    }
+                },
+            },
+            "pipeline": {"tracking": {"tracked_fraction": 0.9}},
+            "error": None,
+        }
+
+        row = _summary_row(result)
+
+        self.assertTrue(row["generation_review_provisional"])
+        self.assertEqual(row["rule_family_name"], "first_free_fall")
+        self.assertEqual(row["segmentation_algorithm"], "first_contact")
+        self.assertEqual(row["gravity_g__attribution_status"], "pass")
+        self.assertEqual(row["gravity_g__raw_estimate"], 9.7)
 
     def test_obvious_deformation_never_calls_physics_fitter(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

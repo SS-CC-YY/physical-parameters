@@ -14,9 +14,11 @@ an ``include`` decision from the target-independent metric motion-manifold
 gate.  The route is retained in every evidence row.
 
 Tracking or inverse-measurement insufficiency is reported as ``X`` and is not
-counted as a model failure.  No trajectory NRMSE or R2 threshold is used here.
-All functions use only the Python standard library and accept already-loaded
-CSV rows and experiment-registry JSON data.
+counted as a model failure.  This layer does not recompute trajectory NRMSE or
+R2; it consumes the target-independent, experiment-specific rule-family and
+per-parameter gates produced by the inverse fitter.  All functions use only
+the Python standard library and accept already-loaded CSV rows and
+experiment-registry JSON data.
 """
 
 from __future__ import annotations
@@ -29,7 +31,7 @@ from statistics import median
 from typing import Any, Mapping, Sequence
 
 
-SCHEMA_VERSION = "1.1.0"
+SCHEMA_VERSION = "1.2.0"
 DEFAULT_PRIMARY_SEED = 341867882
 PRIMARY_SCENE_ID = "baseline"
 PRIMARY_CAMERA_NAME = "CAM_Side"
@@ -52,6 +54,7 @@ DEFAULT_THRESHOLDS = {
 
 _PASS = {"pass", "passed", "ok", "success", "succeeded", "valid", "true", "1"}
 _FAIL = {"fail", "failed", "invalid", "g0", "g1"}
+_REVIEW = {"review", "needs_review", "provisional_review", "soft_review"}
 _INDETERMINATE = {
     "",
     "unknown",
@@ -64,6 +67,7 @@ _INDETERMINATE = {
     "x",
 }
 _FIT_SUCCESS = {"ok", "pass", "passed", "success", "succeeded", "complete", "completed"}
+_FIT_EVIDENCE_AVAILABLE = _FIT_SUCCESS | {"partial", "model_mismatch"}
 _DYNAMIC_ROUTE = "spatialtrackerv2_dynamic"
 
 
@@ -149,7 +153,7 @@ def _generation_status(row: Mapping[str, Any]) -> tuple[str, str]:
     """
 
     manual = _status(row.get("manual_generation_validity_status"))
-    if manual in _PASS | _FAIL:
+    if manual in _PASS | _FAIL | _REVIEW:
         return manual, "manual"
     automatic_values = [
         (_status(row.get(key)), key)
@@ -175,6 +179,34 @@ def _generation_status(row: Mapping[str, Any]) -> tuple[str, str]:
     if stage in {"pass_to_scan", "g1"}:
         return "pass", "automatic_hierarchical_gate"
     return "", "missing"
+
+
+def _generation_review_state(
+    row: Mapping[str, Any],
+    generation: str,
+    generation_source: str,
+) -> dict[str, Any]:
+    """Keep soft REVIEW usable while retaining hard-failure fail-closed logic."""
+
+    failure_codes = _codes(row.get("generation_failure_codes"))
+    warning_codes = _codes(row.get("generation_warning_codes"))
+    review_codes = [value for value in warning_codes if "review" in value.lower()]
+    manual_pass = generation_source == "manual" and generation in _PASS
+    hard_failure = bool(
+        not manual_pass
+        and (generation in _FAIL or failure_codes)
+    )
+    provisional_review = bool(
+        not hard_failure
+        and not manual_pass
+        and (generation in _REVIEW or review_codes)
+    )
+    return {
+        "hard_failure": hard_failure,
+        "provisional_review": provisional_review,
+        "failure_codes": failure_codes,
+        "review_codes": list(dict.fromkeys(review_codes)),
+    }
 
 
 def _motion_status(row: Mapping[str, Any]) -> tuple[str, str]:
@@ -208,6 +240,72 @@ def _parameter_estimate(row: Mapping[str, Any], parameter_name: str) -> float | 
     return None
 
 
+def _mapping(value: Any) -> Mapping[str, Any]:
+    if isinstance(value, Mapping):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = json.loads(value)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return {}
+        return parsed if isinstance(parsed, Mapping) else {}
+    return {}
+
+
+def _parameter_fit_evidence(
+    row: Mapping[str, Any],
+    parameter_name: str,
+    estimate: float | None,
+) -> dict[str, Any]:
+    """Normalize target-parameter evidence from new and legacy result rows."""
+
+    status = _status(row.get(f"{parameter_name}__attribution_status"))
+    reasons = _codes(row.get(f"{parameter_name}__attribution_reason_codes"))
+    attribution = _mapping(row.get("parameter_attribution"))
+    if not attribution:
+        attribution = _mapping(row.get("parameter_attribution_json"))
+    fit = _mapping(row.get("fit"))
+    if not attribution:
+        attribution = _mapping(fit.get("parameter_attribution"))
+    item = _mapping(attribution.get(parameter_name))
+    if not status:
+        status = _status(item.get("status"))
+    if not reasons:
+        reasons = _codes(item.get("reason_codes"))
+
+    family_status = _status(
+        row.get("rule_family_status")
+        or _mapping(fit.get("rule_family_evaluation")).get("status")
+    )
+    family_reasons = _codes(row.get("rule_family_reason_codes"))
+    if not family_reasons:
+        family_reasons = _codes(
+            _mapping(fit.get("rule_family_evaluation")).get("reason_codes")
+        )
+    fit_status = _status(row.get("fit_status") or fit.get("status"))
+
+    if family_status in _FAIL | {"rejected", "model_mismatch"}:
+        normalized = "model_mismatch"
+        reasons = reasons or family_reasons
+    elif status in _PASS | {"accepted"}:
+        normalized = "accepted" if estimate is not None else "indeterminate"
+    elif status in _FAIL | {"rejected", "model_mismatch"}:
+        normalized = "model_mismatch"
+    elif estimate is not None:
+        normalized = "accepted"
+    elif fit_status == "model_mismatch":
+        normalized = "model_mismatch"
+    else:
+        normalized = "indeterminate"
+    return {
+        "status": normalized,
+        "attribution_status": status or None,
+        "reason_codes": list(dict.fromkeys(reasons or family_reasons)),
+        "rule_family_status": family_status or None,
+        "fit_status": fit_status or None,
+    }
+
+
 def _classify_row(
     row: Mapping[str, Any],
     parameter_name: str,
@@ -215,12 +313,13 @@ def _classify_row(
     row_id: str,
 ) -> dict[str, Any]:
     generation, generation_source = _generation_status(row)
+    generation_review = _generation_review_state(row, generation, generation_source)
     motion, motion_source = _motion_status(row)
     video_stage = _status(row.get("video_stage"))
     generation_codes = _codes(row.get("generation_failure_codes"))
     dynamic_decision, dynamic_reasons = _dynamic_3d_decision(row)
     dynamic_measurement_substitute = bool(
-        dynamic_decision == "include" and generation not in _FAIL
+        dynamic_decision == "include" and not generation_review["hard_failure"]
     )
 
     failure_reasons: list[str] = []
@@ -235,6 +334,8 @@ def _classify_row(
             "reason_codes": failure_reasons + [f"generation_failure:{code}" for code in generation_codes],
             "generation_status": generation or None,
             "generation_status_source": generation_source,
+            "generation_review_provisional": False,
+            "generation_hard_failure": True,
             "motion_status": motion or None,
             "motion_status_source": motion_source,
             "estimate": None,
@@ -244,11 +345,14 @@ def _classify_row(
     insufficiency: list[str] = []
     if dynamic_decision == "X":
         insufficiency.extend(dynamic_reasons)
-    if generation in _FAIL and generation_source != "manual":
+    if generation_review["hard_failure"] and generation_source != "manual":
         insufficiency.append("automatic_failure_pending_manual_confirmation")
     if motion in _FAIL and motion_source != "manual":
         insufficiency.append("automatic_motion_failure_pending_manual_confirmation")
-    if generation not in _PASS and not dynamic_measurement_substitute:
+    generation_accepted = bool(
+        generation in _PASS or generation_review["provisional_review"]
+    )
+    if not generation_accepted and not dynamic_measurement_substitute:
         insufficiency.append(
             "generation_validity_evidence_indeterminate"
             if generation in _INDETERMINATE
@@ -257,20 +361,14 @@ def _classify_row(
     if motion in _INDETERMINATE - {""}:
         insufficiency.append("motion_type_evidence_indeterminate")
 
-    fit_complete = _bool(row.get("fit_complete"))
-    fit_status = _status(row.get("fit_status"))
-    if fit_complete is False:
-        insufficiency.append("inverse_measurement_incomplete")
-    elif fit_complete is None and fit_status not in _FIT_SUCCESS:
-        insufficiency.append("inverse_measurement_completion_unproven")
-
     trajectory_eligible = _bool(row.get("trajectory_fit_eligible"))
     if trajectory_eligible is False:
         insufficiency.append("trajectory_not_fit_eligible")
 
     estimate = _parameter_estimate(row, parameter_name)
-    if estimate is None:
-        insufficiency.append("target_parameter_estimate_missing")
+    parameter_evidence = _parameter_fit_evidence(row, parameter_name, estimate)
+    fit_complete = _bool(row.get("fit_complete"))
+    fit_status = _status(row.get("fit_status"))
     if insufficiency:
         return {
             "row_id": row_id,
@@ -278,9 +376,53 @@ def _classify_row(
             "reason_codes": list(dict.fromkeys(insufficiency)),
             "generation_status": generation or None,
             "generation_status_source": generation_source,
+            "generation_review_provisional": generation_review["provisional_review"],
+            "generation_hard_failure": generation_review["hard_failure"],
             "motion_status": motion or None,
             "motion_status_source": motion_source,
             "fit_status": fit_status or None,
+            "parameter_fit_evidence": parameter_evidence,
+            "estimate": estimate,
+            "measurement_route": _text(row.get("simple_measurement_route")) or None,
+        }
+
+    if parameter_evidence["status"] == "model_mismatch":
+        return {
+            "row_id": row_id,
+            "state": "clear_parameter_rule_failure",
+            "reason_codes": parameter_evidence["reason_codes"] or [
+                "target_parameter_rule_family_mismatch"
+            ],
+            "generation_status": generation or None,
+            "generation_status_source": generation_source,
+            "generation_review_provisional": generation_review["provisional_review"],
+            "generation_hard_failure": generation_review["hard_failure"],
+            "motion_status": motion or None,
+            "motion_status_source": motion_source,
+            "fit_status": fit_status or None,
+            "parameter_fit_evidence": parameter_evidence,
+            "estimate": None,
+            "measurement_route": _text(row.get("simple_measurement_route")) or None,
+        }
+
+    if parameter_evidence["status"] != "accepted" or estimate is None:
+        reasons = ["target_parameter_evidence_indeterminate"]
+        if fit_complete is False:
+            reasons.append("inverse_measurement_incomplete_for_target_parameter")
+        elif fit_complete is None and fit_status not in _FIT_EVIDENCE_AVAILABLE:
+            reasons.append("inverse_measurement_completion_unproven")
+        return {
+            "row_id": row_id,
+            "state": "measurement_or_tracking_insufficient",
+            "reason_codes": reasons,
+            "generation_status": generation or None,
+            "generation_status_source": generation_source,
+            "generation_review_provisional": generation_review["provisional_review"],
+            "generation_hard_failure": generation_review["hard_failure"],
+            "motion_status": motion or None,
+            "motion_status_source": motion_source,
+            "fit_status": fit_status or None,
+            "parameter_fit_evidence": parameter_evidence,
             "estimate": estimate,
             "measurement_route": _text(row.get("simple_measurement_route")) or None,
         }
@@ -288,12 +430,19 @@ def _classify_row(
     return {
         "row_id": row_id,
         "state": "usable",
-        "reason_codes": [],
+        "reason_codes": (
+            ["soft_review_provisionally_accepted"]
+            if generation_review["provisional_review"]
+            else []
+        ),
         "generation_status": generation,
         "generation_status_source": generation_source,
+        "generation_review_provisional": generation_review["provisional_review"],
+        "generation_hard_failure": generation_review["hard_failure"],
         "motion_status": motion or "not_explicitly_reported",
         "motion_status_source": motion_source,
         "fit_status": fit_status or None,
+        "parameter_fit_evidence": parameter_evidence,
         "estimate": estimate,
         "measurement_route": _text(row.get("simple_measurement_route")) or "calibrated_2d",
     }
@@ -303,10 +452,11 @@ def _classify_video_row(row: Mapping[str, Any], *, row_id: str) -> dict[str, Any
     """Paper-facing video gate independent of any target parameter column."""
 
     generation, generation_source = _generation_status(row)
+    generation_review = _generation_review_state(row, generation, generation_source)
     motion, motion_source = _motion_status(row)
     dynamic_decision, dynamic_reasons = _dynamic_3d_decision(row)
     dynamic_measurement_substitute = bool(
-        dynamic_decision == "include" and generation not in _FAIL
+        dynamic_decision == "include" and not generation_review["hard_failure"]
     )
     reasons: list[str] = []
     if generation_source == "manual" and generation in _FAIL:
@@ -318,28 +468,43 @@ def _classify_video_row(row: Mapping[str, Any], *, row_id: str) -> dict[str, Any
     elif dynamic_decision == "X":
         grade = "X"
         reasons.extend(dynamic_reasons)
-    elif generation in _FAIL:
+    elif generation_review["hard_failure"]:
         grade = "X"
         reasons.append("automatic_failure_pending_manual_confirmation")
     elif motion in _FAIL:
         grade = "X"
         reasons.append("automatic_motion_failure_pending_manual_confirmation")
-    elif generation not in _PASS and not dynamic_measurement_substitute:
+    elif (
+        generation not in _PASS
+        and not generation_review["provisional_review"]
+        and not dynamic_measurement_substitute
+    ):
         grade = "X"
         reasons.append("generation_validity_evidence_insufficient")
     else:
         fit_complete = _bool(row.get("fit_complete"))
         fit_status = _status(row.get("fit_status"))
         trajectory_eligible = _bool(row.get("trajectory_fit_eligible"))
-        if fit_complete is False or trajectory_eligible is False:
+        if trajectory_eligible is False:
             grade = "X"
             reasons.append("trajectory_or_inverse_measurement_unavailable")
-        elif fit_complete is None and fit_status not in _FIT_SUCCESS:
+        elif fit_complete is False and fit_status not in _FIT_EVIDENCE_AVAILABLE:
+            grade = "X"
+            reasons.append("inverse_measurement_unavailable")
+        elif fit_complete is None and fit_status not in _FIT_EVIDENCE_AVAILABLE:
             grade = "X"
             reasons.append("inverse_measurement_completion_unproven")
         else:
             grade = "PASS_TO_SCAN"
-            reasons.append("motion_generated_and_inverse_measurement_available")
+            reasons.append(
+                "soft_review_provisionally_accepted"
+                if generation_review["provisional_review"]
+                else (
+                    "motion_generated_and_rule_failure_evidence_available"
+                    if fit_status == "model_mismatch"
+                    else "motion_generated_and_inverse_measurement_available"
+                )
+            )
     return {
         "schema_version": SCHEMA_VERSION,
         "row_id": row_id,
@@ -353,6 +518,8 @@ def _classify_video_row(row: Mapping[str, Any], *, row_id: str) -> dict[str, Any
         "reason_codes": reasons,
         "generation_status": generation or None,
         "generation_status_source": generation_source,
+        "generation_review_provisional": generation_review["provisional_review"],
+        "generation_hard_failure": generation_review["hard_failure"],
         "motion_status": motion or None,
         "motion_status_source": motion_source,
         "measurement_route": _text(row.get("simple_measurement_route")) or (
@@ -504,6 +671,7 @@ def _grade_scan(
 ) -> dict[str, Any]:
     levels: list[dict[str, Any]] = []
     clear_failures: list[dict[str, Any]] = []
+    parameter_rule_failures: list[dict[str, Any]] = []
     insufficient_rows: list[dict[str, Any]] = []
     for target, anchor_ids in sorted(level_map.items()):
         row_evidence: list[dict[str, Any]] = []
@@ -526,6 +694,8 @@ def _grade_scan(
                 row_evidence.append(evidence)
                 if evidence["state"] == "clear_model_failure":
                     clear_failures.append(evidence)
+                elif evidence["state"] == "clear_parameter_rule_failure":
+                    parameter_rule_failures.append(evidence)
                 elif evidence["state"] == "measurement_or_tracking_insufficient":
                     insufficient_rows.append(evidence)
         estimates = [
@@ -540,6 +710,10 @@ def _grade_scan(
                 "planned_row_count": len(anchor_ids),
                 "observed_row_count": sum(not item["row_id"].startswith("missing:") for item in row_evidence),
                 "usable_row_count": len(estimates),
+                "parameter_rule_failure_row_count": sum(
+                    item["state"] == "clear_parameter_rule_failure"
+                    for item in row_evidence
+                ),
                 "estimates": estimates,
                 "median_estimate": float(median(estimates)) if estimates else None,
                 "rows": row_evidence,
@@ -549,20 +723,37 @@ def _grade_scan(
     low, high = (float(value) for value in parameter_spec["valid_range"])
     valid_span = high - low
     usable_levels = [level for level in levels if level["median_estimate"] is not None]
+    evidenced_levels = [
+        level for level in levels
+        if level["median_estimate"] is not None
+        or level["parameter_rule_failure_row_count"] > 0
+    ]
     metrics = _response_metrics(levels, valid_span) if valid_span > 0.0 else {}
     reasons: list[str]
     if valid_span <= 0.0:
         grade = "X"
         reasons = ["parameter_valid_range_is_not_positive"]
-    elif len(usable_levels) < int(thresholds["minimum_usable_levels"]):
+    elif len(evidenced_levels) < int(thresholds["minimum_usable_levels"]):
         grade = "X"
-        reasons = ["fewer_than_two_usable_parameter_levels"]
+        reasons = ["fewer_than_two_levels_with_measurement_or_rule_failure_evidence"]
         reasons.extend(
             reason
             for item in insufficient_rows
             for reason in item.get("reason_codes", [])
         )
         reasons = list(dict.fromkeys(reasons))
+    elif parameter_rule_failures:
+        grade = "L2"
+        reasons = ["one_or_more_parameter_levels_fail_the_target_rule_family"]
+        reasons.extend(
+            reason
+            for item in parameter_rule_failures
+            for reason in item.get("reason_codes", [])
+        )
+        reasons = list(dict.fromkeys(reasons))
+    elif len(usable_levels) < int(thresholds["minimum_usable_levels"]):
+        grade = "X"
+        reasons = ["fewer_than_two_numerically_usable_parameter_levels"]
     else:
         concordance = metrics["pairwise_direction_concordance"]
         slope = metrics["theil_sen_slope"]
@@ -609,6 +800,7 @@ def _grade_scan(
             "planned_level_count": len(levels),
             "usable_level_count": len(usable_levels),
             "clear_failure_row_count": len(clear_failures),
+            "parameter_rule_failure_row_count": len(parameter_rule_failures),
             "measurement_or_tracking_insufficient_row_count": len(insufficient_rows),
             "levels": levels,
             **metrics,
@@ -723,7 +915,7 @@ def grade_simple_paper_benchmark(
     video_grade_counts.update(Counter(str(row["grade"]) for row in per_video_rows))
     summary = {
         "schema_version": SCHEMA_VERSION,
-        "grading_scheme": "simple_paper_four_level_v1",
+        "grading_scheme": "simple_paper_four_level_v2_segmented_parameters",
         "scope": {
             "scene_id": PRIMARY_SCENE_ID,
             "camera_name": PRIMARY_CAMERA_NAME,

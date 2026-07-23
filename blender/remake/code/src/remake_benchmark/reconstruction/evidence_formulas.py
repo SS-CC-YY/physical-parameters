@@ -20,7 +20,27 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
+
+
+# This is the frozen experiment-system order used by the benchmark and its
+# reports.  A system may expose more than one independently scanned parameter
+# channel; it must still appear exactly once in an experiment-level figure.
+EXPERIMENT_ORDER: tuple[str, ...] = (
+    "v1_A",
+    "v1_B",
+    "v1_C",
+    "v1_D",
+    "v2_A",
+    "v2_B",
+    "v2_C",
+    "v2_D",
+    "v2_E",
+    "v3_A",
+    "v3_B",
+    "v3_C",
+    "v3_D",
+)
 
 
 def _parameter(
@@ -78,8 +98,8 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
         "z(tau) = c0 + c1*tau + c2*tau^2",
         r"z(\tau)=c_0+c_1\tau+c_2\tau^2",
         "_fit_v1a",
-        "robust_airborne_quadratic",
-        "只取第一次连续腾空段，对高度作稳健二次回归。",
+        "first_motion_to_first_contact_quadratic",
+        "从首次持续向下运动截取到第一次地面接触，并只在这段轨迹上作稳健二次回归。",
         {
             "gravity_g": _parameter(
                 "重力加速度",
@@ -89,9 +109,9 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
                 "g_hat = -2*c2",
                 r"\hat g=-2c_2",
                 (
-                    "按接触高度截取第一次连续腾空段。",
-                    "以首个有效时刻为零点，将 z 对 tau 作稳健二次拟合。",
-                    "由二次项系数 c2 计算 g_hat=-2*c2。",
+                    "先跳过释放前的静止前缀，定位首次持续向下运动和第一次地面接触。",
+                    "仅使用“运动开始—首次接触”段，以该段首时刻为零点，对 z(tau) 作稳健二次拟合。",
+                    "由二次项系数 c2 计算 g_hat=-2*c2；方向、残差、加速度稳定性和 g>0 是独立可信度门控。",
                 ),
             )
         },
@@ -103,8 +123,8 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
         "x(t) is piecewise linear around one velocity reversal",
         r"x(t)=\begin{cases}a_-+v_-t,&t<t_c\\a_++v_+t,&t\ge t_c\end{cases}",
         "_fit_v1b",
-        "robust_piecewise_linear_velocity_ratio",
-        "搜索一次速度反向点，并分别回归碰撞前后的水平速度。",
+        "single_impact_segmented_velocity_ratio_with_consistency_gate",
+        "定位已知墙面附近的单次显著反向，排除接触邻域后分别回归碰撞前后的近似匀速段。",
         {
             "restitution_e": _parameter(
                 "恢复系数",
@@ -114,9 +134,9 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
                 "e_hat = abs(v_post/v_pre)",
                 r"\hat e=\left|v_{\mathrm{post}}/v_{\mathrm{pre}}\right|",
                 (
-                    "搜索靠近已知墙面的最佳分段点。",
-                    "分别拟合碰撞前后的直线斜率 v_pre 与 v_post。",
-                    "用反向速度幅值比得到 e_hat。",
+                    "跳过起始静止段，在已知墙面附近定位唯一显著速度反向，并在接触点两侧保留保护间隔。",
+                    "对保护间隔外的碰撞前、后轨迹分别作线性拟合，得到 v_pre>0 与 v_post<0。",
+                    "用 e_hat=|v_post/v_pre| 反推恢复系数，并检查墙面位置、分段匀速性、接触停留、物理范围及局部/全局估计一致性。",
                 ),
             )
         },
@@ -128,8 +148,8 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
         "x(tau) = c0 + c1*tau + c2*tau^2; a = 2*c2",
         r"x(\tau)=c_0+c_1\tau+c_2\tau^2,\quad a=2c_2",
         "_fit_v1c",
-        "robust_pre_stop_quadratic",
-        "在停止前的运动段上作稳健二次回归，并使用已知重力。",
+        "first_motion_fixed_initial_velocity_pre_stop",
+        "截取首次持续正向运动到首次静止尾段，以独立估计并固定的初速度拟合恒减速度。",
         {
             "kinetic_friction_mu": _parameter(
                 "动摩擦系数",
@@ -139,9 +159,9 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
                 "mu_hat = -a/g_known = -2*c2/g_known",
                 r"\hat\mu_k=-a/g_{\mathrm{known}}=-2c_2/g_{\mathrm{known}}",
                 (
-                    "根据正向速度截取停止前运动段。",
-                    "对 x(tau) 作稳健二次拟合并取 a=2*c2。",
-                    "由 a=-mu*g_known 反解动摩擦系数。",
+                    "定位首次持续正向运动和首次静止尾段，只保留中间的第一段摩擦滑行。",
+                    "由运动开始后的短区间稳健估计初速度，固定该速度后拟合 x-x0-v0*tau=0.5*a*tau^2。",
+                    "由 mu_hat=-a/g_known 反解摩擦系数，并检查单向减速、恒加速度、残差及 mu>=0。",
                 ),
             )
         },
@@ -153,8 +173,8 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
         "theta(tau) = exp(-beta*tau)*(A*cos(omega*tau)+B*sin(omega*tau)); omega=2*pi/T0",
         r"\theta(\tau)=e^{-\beta\tau}[A\cos(\omega\tau)+B\sin(\omega\tau)],\quad\omega=2\pi/T_0",
         "_fit_v1d",
-        "fixed_period_bounded_decay_search",
-        "由已知枢轴换算摆角，在固定周期下搜索最小残差的衰减率。",
+        "first_complete_cycle_fixed_period_decay_search",
+        "由已知枢轴换算摆角，只在首个完整周期内按固定周期搜索最小残差的衰减率。",
         {
             "amplitude_decay_beta": _parameter(
                 "振幅衰减率",
@@ -164,9 +184,9 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
                 "beta_hat = argmin_beta MSE(theta, theta_model(beta))",
                 r"\hat\beta=\arg\min_{\beta}\operatorname{MSE}(\theta,\theta_{\mathrm{model}}(\beta))",
                 (
-                    "用球心与已知枢轴计算并展开角度 theta。",
-                    "固定 omega=2*pi/T0，对 beta 作有界网格搜索。",
-                    "每个 beta 下最小二乘求 A、B，选择残差最小者。",
+                    "用球心与已知枢轴计算展开角 theta，并用同相位极值定位完整周期。",
+                    "只选择第一个完整周期，固定 omega=2*pi/T0，对 beta 作有界网格搜索。",
+                    "每个 beta 下最小二乘求 A、B；以轨迹残差、包络下降和 beta 物理域共同判断可信度。",
                 ),
             )
         },
@@ -178,8 +198,8 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
         "x(t) is fitted by three harmonics of omega; omega^2 = g/(4*a)",
         r"x(t)\approx c_0+\sum_{k=1}^{3}[a_k\cos(k\omega t)+b_k\sin(k\omega t)],\quad\omega^2=g/(4a)",
         "_fit_v2a",
-        "three_harmonic_bounded_period_search",
-        "用三阶谐波模型搜索主频，再利用已知摆线尺度反解重力。",
+        "per_complete_cycle_three_harmonic_period_search",
+        "按同相位极值切出完整摆线周期，逐周期搜索三阶谐波主频并汇总重力估计。",
         {
             "gravity_g": _parameter(
                 "重力加速度",
@@ -189,9 +209,9 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
                 "g_hat = 4*a*omega_hat^2",
                 r"\hat g=4a\hat\omega^2",
                 (
-                    "在由有效重力范围限定的频率区间内搜索 omega。",
-                    "每个频率下拟合三阶谐波并选择轨迹残差最小者。",
-                    "使用已知摆线尺度 a 计算 g_hat=4*a*omega_hat^2。",
+                    "跳过静止前缀，用同相位极值将轨迹切成一个或多个完整摆线周期。",
+                    "每个周期在有效重力限定的频率区间搜索 omega，并拟合三阶谐波。",
+                    "逐周期计算 g_i=4*a*omega_i^2，取中位数并检查周期内残差与跨周期一致性。",
                 ),
             )
         },
@@ -200,23 +220,23 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
         "双墙重复碰撞",
         "Repeated two-wall impacts",
         ("time_s", "x_m"),
-        "each between-impact x segment is linear; e_i = abs(v_(i+1)/v_i)",
-        r"x_i(t)\approx a_i+v_it,\quad e_i=|v_{i+1}/v_i|",
+        "each guarded between-impact x segment is linear; e_i = abs(v_post_i/v_pre_i)",
+        r"x_i(t)\approx a_i+v_it,\quad e_i=|v_{i,+}/v_{i,-}|",
         "_fit_v2b",
-        "piecewise_line_geometric_mean_ratio",
-        "按转向点切分直线运动段，用多次碰撞速度比的几何平均估计恢复系数。",
+        "per_wall_impact_guarded_velocity_ratios",
+        "用冻结的左右墙位置定位交替碰撞，在线性墙间段上逐次计算速度比并取中位数。",
         {
             "restitution_e": _parameter(
                 "恢复系数",
                 "Coefficient of restitution",
                 "e",
                 "1",
-                "e_hat = exp(mean(log(e_i)))",
-                r"\hat e=\exp\left(\frac{1}{N}\sum_i\log e_i\right)",
+                "e_hat = median(e_i), where e_i = abs(v_post_i/v_pre_i)",
+                r"\hat e=\operatorname{median}_i|v_{i,+}/v_{i,-}|",
                 (
-                    "从 x(t) 的转向点切分墙间运动段。",
-                    "对每段作线性拟合得到速度 v_i。",
-                    "取相邻反向速度比 e_i 的几何平均。",
+                    "用冻结的左右墙面筛选真实反向事件，并排除每次碰撞附近的保护帧。",
+                    "对各墙间运动段作线性拟合，逐碰撞取得 v_pre、v_post 与 e_i。",
+                    "取有效 e_i 的中位数，并检查墙面交替、段内匀速、瞬时接触、物理域和跨碰撞一致性。",
                 ),
             )
         },
@@ -228,8 +248,8 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
         "x_j(tau) = c_j0 + c_j1*tau + c_j2*tau^2; a_j = 2*c_j2",
         r"x_j(\tau)=c_{j0}+c_{j1}\tau+c_{j2}\tau^2,\quad a_j=2c_{j2},\ j\in\{A,B\}",
         "_fit_v2c",
-        "two_segment_robust_quadratic",
-        "按已知表面分界把轨迹切成 A、B 两段，并分别拟合减速度。",
+        "two_surface_segmented_quadratic_with_velocity_continuity",
+        "以带滞回的唯一表面跨越切出 A、B 两段，去除静止尾段后分别拟合减速度并检查速度连续。",
         {
             "kinetic_friction_mu_A": _parameter(
                 "表面 A 动摩擦系数",
@@ -239,9 +259,9 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
                 "mu_A_hat = -2*c_A2/(N/m)",
                 r"\hat\mu_A=-2c_{A2}/(N/m)",
                 (
-                    "用已知 x 分界选择表面 A 的轨迹点。",
+                    "用带滞回的已知 x 分界确认恰好一次 A→B 跨越，并选择表面 A 的运动段。",
                     "对 A 段作稳健二次拟合，得到 a_A=2*c_A2。",
-                    "用已知 N/m 从 a_A=-(N/m)*mu_A 反解。",
+                    "用已知 N/m 从 a_A=-(N/m)*mu_A 反解，并检查残差、恒减速、mu_A>=0 和跨界速度连续。",
                 ),
             ),
             "kinetic_friction_mu_B": _parameter(
@@ -252,9 +272,9 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
                 "mu_B_hat = -2*c_B2/(N/m)",
                 r"\hat\mu_B=-2c_{B2}/(N/m)",
                 (
-                    "用已知 x 分界选择表面 B，并去除停止后的静止尾段。",
+                    "从唯一 A→B 跨越后选择表面 B，并去除停止后的静止尾段。",
                     "对 B 段作稳健二次拟合，得到 a_B=2*c_B2。",
-                    "用已知 N/m 从 a_B=-(N/m)*mu_B 反解。",
+                    "用已知 N/m 从 a_B=-(N/m)*mu_B 反解，并检查残差、恒减速、mu_B>=0 和跨界速度连续。",
                 ),
             ),
         },
@@ -266,8 +286,8 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
         "theta_ddot + 2*beta*theta_dot + (g/L)*sin(theta) = 0",
         r"\ddot\theta+2\beta\dot\theta+(g/L)\sin\theta=0",
         "_fit_v2d",
-        "double_integral_robust_regression",
-        "将摆方程双积分后，对重力基与阻尼基进行稳健线性回归。",
+        "segmented_integral_regression_with_forward_trajectory_validation",
+        "只使用一个或多个完整摆动周期做双积分稳健回归，并用前向积分轨迹复核重力与阻尼。",
         {
             "gravity_g": _parameter(
                 "重力加速度",
@@ -277,9 +297,9 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
                 "g_hat = coefficient of the double-integrated gravity basis",
                 r"\hat g=c_g",
                 (
-                    "由已知枢轴和摆长把 x,z 转为展开摆角 theta。",
-                    "构造 -(1/L) double_integral(sin(theta)) 的重力基。",
-                    "与阻尼基联合稳健回归，取重力基系数。",
+                    "由已知枢轴和摆长把 x,z 转为展开摆角，并截取完整摆动周期。",
+                    "在完整周期上构造 -(1/L) double_integral(sin(theta)) 的重力基并与阻尼基联合回归。",
+                    "取重力基系数，并用该 g、beta 前向积分验证整段 theta(t) 与周期稳定性。",
                 ),
             ),
             "linear_damping_beta": _parameter(
@@ -290,9 +310,9 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
                 "beta_hat = coefficient of the -2*integral(theta-theta0) damping basis",
                 r"\hat\beta=c_\beta",
                 (
-                    "由 x,z 计算展开摆角 theta。",
-                    "构造 -2*integral(theta-theta0) 的阻尼基。",
-                    "与重力基联合稳健回归，取阻尼基系数。",
+                    "由 x,z 计算展开摆角并仅保留完整摆动周期。",
+                    "构造 -2*integral(theta-theta0) 的阻尼基，与重力基联合稳健回归。",
+                    "取阻尼系数，并检查衰减支持、物理域以及前向积分轨迹残差。",
                 ),
             ),
         },
@@ -304,8 +324,8 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
         "z_j(tau) = z_j0 + v_j0*tau - 0.5*g*tau^2",
         r"z_j(\tau)=z_{j0}+v_{j0}\tau-\tfrac12g\tau^2",
         "_fit_v2e",
-        "shared_ballistic_curvature_and_impact_velocity_ratio",
-        "检测着地点，在多个腾空段间共享重力曲率，再由碰撞速度比估计恢复系数。",
+        "per_flight_ballistic_curvature_and_per_impact_velocity_ratio",
+        "用地面接触状态机划分逐段弹道，对各腾空段作弹道检查并逐碰撞估计恢复系数。",
         {
             "gravity_g": _parameter(
                 "重力加速度",
@@ -315,9 +335,9 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
                 "g_hat = shared ballistic curvature across all flight segments",
                 r"\hat g=c_{\mathrm{shared}}",
                 (
-                    "用高度局部极小值识别着地事件并划分腾空段。",
-                    "为每段保留独立初始位置、速度，同时共享重力曲率。",
-                    "对全部腾空点联合稳健回归得到 g_hat。",
+                    "用地面接触状态机识别着地事件并切出相邻碰撞之间的腾空段。",
+                    "每段保留独立初始位置、速度，在所有有效腾空段间共享重力曲率。",
+                    "联合回归得到 g_hat，并分别检查每段弹道残差、恒加速度及共享重力的物理域。",
                 ),
             ),
             "restitution_e": _parameter(
@@ -328,9 +348,9 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
                 "e_hat = median(-v_post/v_pre) over valid impacts",
                 r"\hat e=\operatorname{median}_i(-v_{i,\mathrm{post}}/v_{i,\mathrm{pre}})",
                 (
-                    "由联合弹道模型计算每次着地前后的竖直速度。",
-                    "仅保留下落 v_pre<0 且反弹 v_post>0 的事件。",
-                    "取所有有效速度比的中位数。",
+                    "由相邻的碰撞前、后腾空段计算每次着地前后的竖直速度。",
+                    "仅保留下落 v_pre<0、反弹 v_post>0 且没有过长接触停留的事件。",
+                    "取有效速度比中位数，并检查 0<=e<=1 与跨碰撞一致性。",
                 ),
             ),
         },
@@ -342,8 +362,8 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
         "x(tau)=c0+c1*(1-exp(-beta*tau)); vertical flights share the same beta",
         r"x(\tau)=c_0+c_1(1-e^{-\beta\tau})",
         "_fit_v3a",
-        "horizontal_exponential_plus_shared_drag_flights",
-        "先由水平指数衰减搜索阻力率，再将该阻力率用于竖直分段弹道和碰撞估计。",
+        "separate_horizontal_drag_and_vertical_gravity_restitution_components",
+        "按坐标轴拆分证据：水平运动估计线性阻力，竖直腾空段估计重力，地面碰撞估计恢复系数。",
         {
             "gravity_g": _parameter(
                 "重力加速度",
@@ -393,8 +413,8 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
         "x_j(tau)=x_j0+v_j0*tau-0.5*mu*g*sign(v_j)*tau^2",
         r"x_j(\tau)=x_{j0}+v_{j0}\tau-\tfrac12\mu_k g\,\operatorname{sign}(v_j)\tau^2",
         "_fit_v3b",
-        "shared_segment_deceleration_and_wall_specific_ratios",
-        "对全部墙间运动段共享摩擦减速度，并按左右墙分别汇总碰撞速度比。",
+        "per_run_friction_and_per_wall_impact_restitution",
+        "按冻结墙面碰撞切分墙间运动段，逐段估计摩擦并分别汇总左右墙恢复系数。",
         {
             "kinetic_friction_mu_k": _parameter(
                 "动摩擦系数",
@@ -404,9 +424,9 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
                 "mu_hat = shared signed-deceleration coefficient with known g",
                 r"\hat\mu_k=c_\mu",
                 (
-                    "按 x 转向点划分左右运动段。",
-                    "为各段设置独立位置和初速度，并共享 mu*g 的减速度项。",
-                    "对所有运动段联合稳健回归得到 mu_hat。",
+                    "只保留靠近冻结左右墙的真实碰撞，并据此切分各墙间运动段。",
+                    "每段独立作二次拟合，由减速度反解一个 mu_j。",
+                    "对通过残差、恒减速和物理域检查的 mu_j 取中位数，并检查跨段一致性。",
                 ),
             ),
             "left_restitution_e_L": _parameter(
@@ -417,9 +437,9 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
                 "e_L_hat = median(abs(v_after/v_before)) for left-wall impacts",
                 r"\hat e_L=\operatorname{median}_{i\in L}|v_{i,+}/v_{i,-}|",
                 (
-                    "从分段模型得到各次碰撞前后的速度。",
-                    "按碰撞位置将事件归入左墙。",
-                    "取左墙事件速度幅值比的中位数。",
+                    "由左墙相邻两侧的独立运动段得到碰撞前后速度。",
+                    "仅保留左墙位置、接触停留和 0<=e<=1 都通过的事件。",
+                    "取左墙有效速度幅值比的中位数，并检查跨事件一致性。",
                 ),
             ),
             "right_restitution_e_R": _parameter(
@@ -430,9 +450,9 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
                 "e_R_hat = median(abs(v_after/v_before)) for right-wall impacts",
                 r"\hat e_R=\operatorname{median}_{i\in R}|v_{i,+}/v_{i,-}|",
                 (
-                    "从分段模型得到各次碰撞前后的速度。",
-                    "按碰撞位置将事件归入右墙。",
-                    "取右墙事件速度幅值比的中位数。",
+                    "由右墙相邻两侧的独立运动段得到碰撞前后速度。",
+                    "仅保留右墙位置、接触停留和 0<=e<=1 都通过的事件。",
+                    "取右墙有效速度幅值比的中位数，并检查跨事件一致性。",
                 ),
             ),
         },
@@ -444,8 +464,8 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
         "a_ramp=g*sin(alpha)-mu*g*cos(alpha); a_floor=mu*g; e=abs(v_post/v_pre)",
         r"a_r=g\sin\alpha-\mu g\cos\alpha,\quad a_f=\mu g,\quad e=|v_+/v_-|",
         "_fit_v3c",
-        "ramp_floor_acceleration_decomposition_and_wall_ratio",
-        "分别拟合斜坡和水平地面加速度，再用墙面碰撞速度比估计恢复系数。",
+        "separate_ramp_prewall_floor_wall_impact_and_postwall_floor",
+        "按装置几何依次切出斜坡、撞墙前地面、墙面碰撞和撞墙后地面，分别构造三个参数证据。",
         {
             "gravity_g": _parameter(
                 "重力加速度",
@@ -456,8 +476,8 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
                 r"\hat g=(a_r+a_f\cos\alpha)/\sin\alpha",
                 (
                     "沿已知斜坡方向投影轨迹并二次拟合得到 a_ramp。",
-                    "对水平地面正向运动段二次拟合得到减速度 a_floor。",
-                    "联立两段动力学方程反解 g_hat。",
+                    "分别拟合撞墙前、后的地面减速度，并以两者中位数得到共享 a_floor。",
+                    "由 a_ramp=g*sin(alpha)-mu*g*cos(alpha) 与 a_floor=mu*g 联立反解 g_hat。",
                 ),
             ),
             "kinetic_friction_mu": _parameter(
@@ -468,9 +488,9 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
                 "mu_hat = a_floor/g_hat",
                 r"\hat\mu_k=a_f/\hat g",
                 (
-                    "从水平地面段二次拟合得到减速度 a_floor。",
-                    "由斜坡和地面加速度联合反解 g_hat。",
-                    "使用 a_floor=mu*g 计算 mu_hat。",
+                    "分别从撞墙前、后的地面段二次拟合减速度并检查两段一致性。",
+                    "使用共享 a_floor 与斜坡段联合反解 g_hat。",
+                    "由 mu_hat=a_floor/g_hat 得到摩擦系数。",
                 ),
             ),
             "restitution_e": _parameter(
@@ -481,9 +501,9 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
                 "e_hat = abs(v_post/v_pre) at the known wall",
                 r"\hat e=|v_{\mathrm{post}}/v_{\mathrm{pre}}|",
                 (
-                    "在已知墙面附近定位水平速度反向事件。",
-                    "分别用碰撞前后局部多项式导数估计速度。",
-                    "取反向速度幅值比得到 e_hat。",
+                    "在斜坡→地面之后、已知右墙附近定位一次水平速度反向事件。",
+                    "排除接触邻域后用局部轨迹导数估计 v_pre 与 v_post，并检查接触停留。",
+                    "取 e_hat=|v_post/v_pre| 并检查 0<=e<=1。",
                 ),
             ),
         },
@@ -495,8 +515,8 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
         "theta_ddot=-(g/L)*sin(theta)-2*beta*theta_dot+kappa*h(theta); h=-u*exp(-u^2/2)",
         r"\ddot\theta=-(g/L)\sin\theta-2\beta\dot\theta+\kappa h(\theta),\quad h=-u e^{-u^2/2}",
         "_fit_v3d",
-        "three_basis_double_integral_robust_regression",
-        "将重力、线性阻尼和已知形状的磁力项双积分后进行三基稳健回归。",
+        "complete_cycles_three_basis_regression_with_forward_identifiability_gate",
+        "只在完整磁摆周期上做重力、阻尼、磁力三基稳健回归，并以前向轨迹和可辨识性门复核。",
         {
             "gravity_g": _parameter(
                 "重力加速度",
@@ -506,9 +526,9 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
                 "g_hat = coefficient of the double-integrated gravity basis",
                 r"\hat g=c_g",
                 (
-                    "由已知枢轴和摆长计算展开摆角 theta。",
-                    "构造重力、阻尼和磁力三个双积分基。",
-                    "联合稳健回归并取重力基系数。",
+                    "由已知枢轴和摆长计算展开摆角，并只保留一个或多个完整磁摆周期。",
+                    "在完整周期上构造重力、阻尼和磁力三个双积分基。",
+                    "联合稳健回归取重力系数，并以前向轨迹残差、周期稳定性和设计矩阵可辨识性复核。",
                 ),
             ),
             "linear_damping_beta": _parameter(
@@ -519,9 +539,9 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
                 "beta_hat = coefficient of the double-integrated damping basis",
                 r"\hat\beta=c_\beta",
                 (
-                    "由轨迹计算展开摆角 theta。",
+                    "由轨迹计算展开摆角并只保留完整磁摆周期。",
                     "构造 -2*integral(theta-theta0) 的阻尼基。",
-                    "与重力、磁力基联合回归并取阻尼系数。",
+                    "与重力、磁力基联合回归取阻尼系数，并检查物理域、前向轨迹和可辨识性。",
                 ),
             ),
             "magnetic_kappa": _parameter(
@@ -532,9 +552,9 @@ FORMULA_REGISTRY: dict[str, dict[str, Any]] = {
                 "kappa_hat = coefficient of the double-integrated known magnetic profile h(theta)",
                 r"\hat\kappa=c_\kappa",
                 (
-                    "按已知磁体中心和宽度计算 u 与磁力形状 h(theta)。",
+                    "在完整周期内按已知磁体中心和宽度计算 u 与局部磁力形状 h(theta)。",
                     "对 h(theta) 构造双积分磁力基。",
-                    "与重力、阻尼基联合回归并取磁力基系数。",
+                    "与重力、阻尼基联合回归取磁力系数，并要求实际穿越磁区且三基可辨识。",
                 ),
             ),
         },
@@ -570,10 +590,70 @@ def get_formula_spec(experiment_id: str, parameter_name: str) -> dict[str, Any]:
     )
 
 
-def scan_axis_count() -> int:
-    """Return the frozen number of experiment-parameter response axes."""
+def experiment_system_count() -> int:
+    """Return the number of distinct frozen physical experiment systems."""
 
-    return sum(len(experiment["parameters"]) for experiment in FORMULA_REGISTRY.values())
+    return len(EXPERIMENT_ORDER)
+
+
+def parameter_channel_manifest() -> list[dict[str, Any]]:
+    """Return the ordered experiment-parameter response-channel manifest.
+
+    The unit represented by one row is an OAT response channel, not a new
+    experiment.  For example, V2_D contributes one experiment system and two
+    channels (``gravity_g`` and ``linear_damping_beta``).
+    """
+
+    channels: list[dict[str, Any]] = []
+    for experiment_index, experiment_id in enumerate(EXPERIMENT_ORDER, start=1):
+        experiment = FORMULA_REGISTRY[experiment_id]
+        for parameter_name, parameter in experiment["parameters"].items():
+            channels.append(
+                {
+                    "channel_index": len(channels) + 1,
+                    "channel_id": f"{experiment_id}/{parameter_name}",
+                    "experiment_index": experiment_index,
+                    "experiment_id": experiment_id,
+                    "experiment_title_zh": experiment["experiment_title_zh"],
+                    "experiment_title_en": experiment["experiment_title_en"],
+                    "parameter_name": parameter_name,
+                    "parameter_title_zh": parameter["parameter_title_zh"],
+                    "parameter_title_en": parameter["parameter_title_en"],
+                    "symbol": parameter["symbol"],
+                    "unit": parameter["unit"],
+                }
+            )
+    return copy.deepcopy(channels)
+
+
+def benchmark_scope_summary() -> dict[str, Any]:
+    """Return explicit counting units for report headers and metadata."""
+
+    channels = parameter_channel_manifest()
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "experiment_system_count": experiment_system_count(),
+        "parameter_response_channel_count": len(channels),
+        "counting_rule_zh": (
+            "13 表示不同的物理实验系统；24 表示“实验系统 × 单个待扫描参数”的 OAT 参数响应通道。"
+            "24 不是实验数量；多参数系统贡献多个通道，但不会因此被重复计为多个实验。"
+        ),
+        "counting_rule_en": (
+            "13 counts distinct physical experiment systems; 24 counts one-at-a-time "
+            "experiment-parameter response channels. A multi-parameter system contributes "
+            "multiple channels but remains one experiment."
+        ),
+        "parameter_channels_per_experiment": {
+            experiment_id: len(FORMULA_REGISTRY[experiment_id]["parameters"])
+            for experiment_id in EXPERIMENT_ORDER
+        },
+    }
+
+
+def scan_axis_count() -> int:
+    """Return the frozen number of OAT parameter-response channels."""
+
+    return len(parameter_channel_manifest())
 
 
 def _finite_number(value: Any) -> int | float | None:
@@ -692,12 +772,16 @@ def summarize_fit_diagnostics(
 
 
 __all__ = [
+    "EXPERIMENT_ORDER",
     "FORMULA_REGISTRY",
     "READABLE_INTERMEDIATE_KEYS",
     "SCHEMA_VERSION",
+    "benchmark_scope_summary",
+    "experiment_system_count",
     "extract_fit_quality_records",
     "extract_readable_intermediates",
     "get_formula_spec",
+    "parameter_channel_manifest",
     "scan_axis_count",
     "summarize_fit_diagnostics",
 ]

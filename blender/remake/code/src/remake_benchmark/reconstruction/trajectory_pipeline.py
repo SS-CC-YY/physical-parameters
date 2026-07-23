@@ -37,6 +37,7 @@ from .fixed_camera_ball import (
 from .generation_validity import evaluate_generation_validity
 from .physics_evaluation import (
     benchmark_split,
+    generation_validity_review_state,
     load_experiment_registry,
     write_trajectory_plot,
     write_validity_visuals,
@@ -980,6 +981,7 @@ def _extract_static_job(payload: Mapping[str, Any]) -> tuple[str, dict[str, Any]
         "overlay_properties": overlay_properties,
         "position_summary": summary,
         "video_generation_validity": validity,
+        "generation_review": generation_validity_review_state(validity),
         # This is a trajectory-quality statement only.  Video-generation
         # validity is applied later by the independent evaluation stage.
         "trajectory_fit_eligible": summary["fit_eligible_count"] >= 3,
@@ -1098,6 +1100,7 @@ def _extract_dynamic_result(
     native_status = str(native_validity.get("status", "indeterminate")).lower()
     if native_status == "failed":
         native_validity["status"] = "fail"
+    native_review = generation_validity_review_state(native_validity)
     trajectory_fit_eligible = bool(
         native_result.get("status") == "succeeded"
         and native_result.get("quality_pass") is True
@@ -1142,6 +1145,7 @@ def _extract_dynamic_result(
         "overlay_properties": overlay_properties,
         "position_summary": summary,
         "video_generation_validity": native_validity,
+        "generation_review": native_review,
         "trajectory_fit_eligible": trajectory_fit_eligible,
         "pipeline": {"dynamic_reconstruction": native_result},
         "camera_motion_evidence": dict(camera_motion_evidence),
@@ -1174,6 +1178,12 @@ def _refresh_extraction_summary(output_root: Path, manifest_rows: Sequence[Mappi
                     "fit_eligible_fraction": summary.get("fit_eligible_fraction"),
                     "trajectory_fit_eligible": result.get("trajectory_fit_eligible"),
                     "generation_validity_status": result.get("video_generation_validity", {}).get("status"),
+                    "generation_review_provisional": result.get("generation_review", {}).get(
+                        "provisional_review"
+                    ),
+                    "generation_hard_failure": result.get("generation_review", {}).get(
+                        "hard_failure"
+                    ),
                     "trajectory_frames_csv": result.get("trajectory_frames_csv"),
                     "object_track_overlay": result.get("object_track_overlay"),
                     "error": (
@@ -1444,15 +1454,46 @@ def _assess_frozen_trajectory_eligibility(
 ) -> dict[str, Any]:
     """Apply the established partial-track policy without touching a video."""
 
-    status = str(validity.get("status", "indeterminate")).lower()
-    if status == "pass" and validity.get("fit_eligible") is True:
+    review_state = generation_validity_review_state(validity)
+    status = str(review_state["status"])
+    if review_state["hard_failure"]:
+        return {
+            "eligible": False,
+            "status": "blocked",
+            "reason": "generation_validity_fail",
+            "generation_review_provisional": False,
+            "generation_hard_failure": True,
+            "generation_review_codes": review_state["review_codes"],
+        }
+    if (
+        status == "pass" or review_state["provisional_review"]
+    ) and validity.get("fit_eligible") is True:
+        provisional = bool(review_state["provisional_review"])
         return {
             "eligible": True,
-            "status": "full_generation_validity",
-            "reason": "generation_validity_pass",
+            "status": (
+                "provisional_generation_review"
+                if provisional
+                else "full_generation_validity"
+            ),
+            "reason": (
+                "soft_generation_review_provisionally_accepted"
+                if provisional
+                else "generation_validity_pass"
+            ),
+            "generation_review_provisional": provisional,
+            "generation_hard_failure": False,
+            "generation_review_codes": review_state["review_codes"],
         }
-    if status in {"fail", "failed"} or validity.get("failure_codes"):
-        return {"eligible": False, "status": "blocked", "reason": "generation_validity_fail"}
+    if review_state["provisional_review"]:
+        return {
+            "eligible": False,
+            "status": "blocked",
+            "reason": "soft_generation_review_without_fit_eligible_measurements",
+            "generation_review_provisional": True,
+            "generation_hard_failure": False,
+            "generation_review_codes": review_state["review_codes"],
+        }
     indeterminate_codes = set(str(value) for value in validity.get("indeterminate_codes", []))
     if not indeterminate_codes or not indeterminate_codes.issubset(
         {"insufficient_reliable_object_tracking"}
@@ -1462,6 +1503,9 @@ def _assess_frozen_trajectory_eligibility(
             "status": "blocked",
             "reason": "indeterminate_for_more_than_late_tracking_coverage",
             "blocking_codes": sorted(indeterminate_codes),
+            "generation_review_provisional": False,
+            "generation_hard_failure": False,
+            "generation_review_codes": review_state["review_codes"],
         }
     checks = validity.get("checks", {})
     identity = checks.get("object_identity", {})
@@ -1478,6 +1522,9 @@ def _assess_frozen_trajectory_eligibility(
             "status": "blocked",
             "reason": "partial_track_safety_checks_failed",
             "safety_checks": safety_checks,
+            "generation_review_provisional": False,
+            "generation_hard_failure": False,
+            "generation_review_codes": review_state["review_codes"],
         }
     trusted = sorted(
         int(row.get("source_frame_index", row.get("frame_index", index)))
@@ -1501,6 +1548,9 @@ def _assess_frozen_trajectory_eligibility(
             "reason": "insufficient_contiguous_metric_anchor_segment",
             "trusted_segment_frame_count": len(anchored),
             "required_frame_count": required,
+            "generation_review_provisional": False,
+            "generation_hard_failure": False,
+            "generation_review_codes": review_state["review_codes"],
         }
     return {
         "eligible": True,
@@ -1511,6 +1561,9 @@ def _assess_frozen_trajectory_eligibility(
         "trusted_segment_frame_count": len(anchored),
         "required_frame_count": required,
         "safety_checks": safety_checks,
+        "generation_review_provisional": False,
+        "generation_hard_failure": False,
+        "generation_review_codes": review_state["review_codes"],
     }
 
 
@@ -1620,16 +1673,14 @@ def evaluate_extracted_seedance978(
         if route == STATIC_ROUTE:
             validity_eligibility = _assess_frozen_trajectory_eligibility(validity, fit_rows)
         else:
-            validity_status = str(validity.get("status", "indeterminate")).lower()
+            review_state = generation_validity_review_state(validity)
+            validity_status = str(review_state["status"])
             dynamic_3d_inclusion = assess_dynamic_3d_trajectory(
                 experiment_id,
                 rows,
                 reconstruction_metadata=extraction,
             )
-            hard_validity_failure = bool(
-                validity_status in {"fail", "failed"}
-                or validity.get("failure_codes")
-            )
+            hard_validity_failure = bool(review_state["hard_failure"])
             dynamic_evidence_usable = dynamic_3d_inclusion.get("decision") == "include"
             validity_eligibility = {
                 # Moving-camera rigidity may remain formally indeterminate in
@@ -1649,6 +1700,9 @@ def evaluate_extracted_seedance978(
                     else "dynamic_3d_measurement_x"
                 ),
                 "original_generation_validity_status": validity_status,
+                "generation_review_provisional": review_state["provisional_review"],
+                "generation_hard_failure": review_state["hard_failure"],
+                "generation_review_codes": review_state["review_codes"],
                 "dynamic_3d_inclusion": dynamic_3d_inclusion,
             }
         eligible = bool(track_quality_ok and validity_eligibility.get("eligible"))
@@ -1719,6 +1773,7 @@ def evaluate_extracted_seedance978(
             "evaluation_reads_video": False,
             "evaluation_invokes_tracker": False,
             "video_generation_validity": validity,
+            "generation_review": generation_validity_review_state(validity),
             "trajectory_fit_eligibility": {
                 "eligible": eligible,
                 "status": validity_eligibility.get("status", "blocked") if track_quality_ok else "blocked",

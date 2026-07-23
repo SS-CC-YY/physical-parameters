@@ -313,12 +313,15 @@ def _paper_video_state(row: Mapping[str, Any]) -> str:
     """
 
     manual = str(row.get("manual_generation_validity_status") or "").strip().lower()
+    failure_codes = str(row.get("generation_failure_codes") or "").strip()
     if manual in {"fail", "failed"}:
         return "clear_failure"
     if manual in {"pass", "passed", "ok"}:
         return "success"
+    if manual in {"review", "needs_review", "provisional_review"} and not failure_codes:
+        return "success"
     automatic = str(row.get("generation_validity_status") or "").strip().lower()
-    if automatic in {"fail", "failed", "invalid"}:
+    if automatic in {"fail", "failed", "invalid"} or failure_codes:
         return "measurement_unavailable"
     if (
         str(row.get("reconstruction_route") or "") == DYNAMIC_ROUTE
@@ -326,6 +329,8 @@ def _paper_video_state(row: Mapping[str, Any]) -> str:
     ):
         return "success"
     if automatic in {"pass", "passed", "ok"}:
+        return "success"
+    if automatic in {"review", "needs_review", "provisional_review"}:
         return "success"
     return "measurement_unavailable"
 
@@ -878,7 +883,7 @@ def build(
     )
 
     summary = {
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "policy_id": policy.get("policy_id"),
         "input": {
             "all_jobs_csv": str(all_jobs_csv),
@@ -898,6 +903,8 @@ def build(
             "dynamic_3d": "eligible_after_target_independent_metric_motion_manifold_gate",
             "mixed_measurement_routes_are_explicitly_labeled": True,
             "measurement_unavailable_is_model_failure": False,
+            "soft_review_without_failure_codes_is_provisionally_usable": True,
+            "rule_family_mismatch_with_reliable_trajectory_is_parameter_failure": True,
         },
     }
     _write_json(output / "summary.json", summary)
@@ -916,7 +923,7 @@ def main() -> None:
     parser.add_argument(
         "--policy",
         type=Path,
-        default=CODE_ROOT / "configs" / "evaluations" / "physparambench_simple_paper_v1.json",
+        default=CODE_ROOT / "configs" / "evaluations" / "physparambench_simple_paper_v2.json",
     )
     parser.add_argument(
         "--evaluation-root",

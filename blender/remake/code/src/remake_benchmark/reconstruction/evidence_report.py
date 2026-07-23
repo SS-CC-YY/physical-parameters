@@ -43,6 +43,7 @@ PRIMARY_SEED = 341867882
 GOOD_FIT_STATUS = {"ok", "pass", "passed", "success", "succeeded", "complete", "completed"}
 PASS_STATUS = {"pass", "passed", "ok", "success", "succeeded", "valid", "true", "1"}
 FAIL_STATUS = {"fail", "failed", "invalid", "g0", "g1", "false", "0"}
+REVIEW_STATUS = {"review", "needs_review", "provisional_review", "soft_review"}
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
@@ -156,6 +157,69 @@ def _codes(value: Any) -> list[str]:
         if isinstance(parsed, list):
             return [str(item) for item in parsed]
     return [part.strip() for part in re.split(r"[;,|]", text) if part.strip()]
+
+
+def _json_mapping(value: Any) -> dict[str, Any]:
+    if isinstance(value, Mapping):
+        return dict(value)
+    text = str(value or "").strip()
+    if not text:
+        return {}
+    try:
+        parsed = json.loads(text)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    return dict(parsed) if isinstance(parsed, Mapping) else {}
+
+
+def _generation_review_flags(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Resolve manual adjudication, soft REVIEW and hard automatic failures."""
+
+    manual = _status(row.get("manual_generation_validity_status"))
+    automatic = _status(row.get("generation_validity_status"))
+    failure_codes = _codes(row.get("generation_failure_codes"))
+    warning_codes = _codes(row.get("generation_warning_codes"))
+    review_codes = [value for value in warning_codes if "review" in value.lower()]
+    manual_pass = manual in PASS_STATUS
+    manual_fail = manual in FAIL_STATUS
+    hard_failure = bool(
+        manual_fail
+        or (
+            not manual_pass
+            and (automatic in FAIL_STATUS or failure_codes)
+        )
+    )
+    provisional_review = bool(
+        not hard_failure
+        and not manual_pass
+        and (manual in REVIEW_STATUS or automatic in REVIEW_STATUS or review_codes)
+    )
+    return {
+        "manual_pass": manual_pass,
+        "manual_fail": manual_fail,
+        "hard_failure": hard_failure,
+        "provisional_review": provisional_review,
+        "failure_codes": failure_codes,
+        "review_codes": list(dict.fromkeys(review_codes)),
+    }
+
+
+def _collect_reason_codes(value: Any) -> list[str]:
+    """Collect nested fitter reason codes without treating prose as a code."""
+
+    output: list[str] = []
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            if key in {"reason_codes", "secondary_reason_codes"}:
+                output.extend(_codes(item))
+            elif key in {"reason", "reason_code", "primary_reason_code"} and item:
+                output.append(str(item))
+            elif isinstance(item, (Mapping, list, tuple)):
+                output.extend(_collect_reason_codes(item))
+    elif isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        for item in value:
+            output.extend(_collect_reason_codes(item))
+    return list(dict.fromkeys(code for code in output if code))
 
 
 def _parameter_specs(registry: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]:
@@ -449,6 +513,178 @@ class EvidenceReportBuilder:
         )
         return assets
 
+    def _fit_diagnostic_payload(
+        self,
+        job_id: str,
+        result: Mapping[str, Any],
+        *,
+        parameter: str | None = None,
+    ) -> dict[str, Any]:
+        """Extract target-free fitter checks in a small, readable schema."""
+
+        row = self.row_by_job.get(job_id, {})
+        fit = result.get("fit", {}) if isinstance(result.get("fit"), Mapping) else {}
+        fit_validity = (
+            dict(fit.get("fit_validity", {}))
+            if isinstance(fit.get("fit_validity"), Mapping)
+            else {
+                "status": row.get("fit_validity_status"),
+                "category": row.get("fit_validity_category"),
+                "primary_reason_code": row.get("fit_validity_primary_reason"),
+            }
+        )
+        rule_family = (
+            dict(fit.get("rule_family_evaluation", {}))
+            if isinstance(fit.get("rule_family_evaluation"), Mapping)
+            else {
+                "status": row.get("rule_family_status"),
+                "rule_family": row.get("rule_family_name"),
+                "reason_codes": _codes(row.get("rule_family_reason_codes")),
+            }
+        )
+        segmentation = (
+            dict(fit.get("segmentation", {}))
+            if isinstance(fit.get("segmentation"), Mapping)
+            else {
+                "status": row.get("segmentation_status"),
+                "algorithm": row.get("segmentation_algorithm"),
+            }
+        )
+        attribution = (
+            dict(fit.get("parameter_attribution", {}))
+            if isinstance(fit.get("parameter_attribution"), Mapping)
+            else _json_mapping(row.get("parameter_attribution_json"))
+        )
+        raw = (
+            dict(fit.get("raw_parameter_estimates", {}))
+            if isinstance(fit.get("raw_parameter_estimates"), Mapping)
+            else _json_mapping(row.get("raw_parameter_estimates_json"))
+        )
+        accepted = (
+            dict(fit.get("parameter_estimates", {}))
+            if isinstance(fit.get("parameter_estimates"), Mapping)
+            else {}
+        )
+        if parameter:
+            names = [parameter]
+        else:
+            names = sorted(set(raw) | set(accepted) | set(attribution))
+        parameter_rows = []
+        for name in names:
+            item = attribution.get(name, {})
+            item = dict(item) if isinstance(item, Mapping) else {}
+            parameter_rows.append(
+                {
+                    "parameter": name,
+                    "raw_estimate": raw.get(name),
+                    "accepted_estimate": accepted.get(name),
+                    "status": item.get("status") or row.get(f"{name}__attribution_status"),
+                    "reason_codes": _codes(
+                        item.get("reason_codes")
+                        or row.get(f"{name}__attribution_reason_codes")
+                    ),
+                }
+            )
+        events = segmentation.get("events", [])
+        segments = segmentation.get("segments", [])
+        return {
+            "job_id": job_id,
+            "fit_status": fit.get("status") or row.get("fit_status"),
+            "fit_method": fit.get("method"),
+            "fit_validity": fit_validity,
+            "rule_family": rule_family,
+            "segmentation": {
+                "status": segmentation.get("status"),
+                "algorithm": segmentation.get("algorithm"),
+                "events": [dict(value) for value in events if isinstance(value, Mapping)],
+                "segments": [dict(value) for value in segments if isinstance(value, Mapping)],
+            },
+            "parameters": parameter_rows,
+            "target_parameters_used": fit.get("target_not_used_for_fit") is False,
+            "diagnostics_recorded": bool(
+                fit_validity or rule_family or segmentation or parameter_rows
+            ),
+        }
+
+    @staticmethod
+    def _diagnostic_markdown_lines(payload: Mapping[str, Any]) -> list[str]:
+        validity = payload.get("fit_validity", {})
+        family = payload.get("rule_family", {})
+        segmentation = payload.get("segmentation", {})
+        lines = [
+            f"- 拟合状态：`{payload.get('fit_status') or 'unknown'}`；方法：`{payload.get('fit_method') or 'unknown'}`。",
+            f"- 规则族：`{family.get('rule_family') or 'not recorded'}`；状态：`{family.get('status') or 'not recorded'}`；原因：`{_format_list(_codes(family.get('reason_codes')))}`。",
+            f"- 拟合有效性：`{validity.get('status') or 'not recorded'}` / `{validity.get('category') or 'not recorded'}`；主原因：`{validity.get('primary_reason_code') or 'none'}`。",
+            f"- 分段：`{segmentation.get('algorithm') or 'not recorded'}`；状态：`{segmentation.get('status') or 'not recorded'}`。",
+        ]
+        events = segmentation.get("events", [])
+        if events:
+            lines.append(
+                "- 事件："
+                + "；".join(
+                    f"{item.get('name', 'event')}@frame {item.get('index', '?')} (t={_fmt(item.get('time_s'))}s)"
+                    for item in events
+                )
+                + "。"
+            )
+        segments = segmentation.get("segments", [])
+        if segments:
+            lines.append(
+                "- 使用分段："
+                + "；".join(
+                    f"{item.get('name', 'segment')}[{item.get('start_index', '?')},{item.get('end_index', '?')}]"
+                    for item in segments
+                )
+                + "。"
+            )
+        for item in payload.get("parameters", []):
+            lines.append(
+                f"- 参数 `{item.get('parameter')}`：候选值 `{_fmt(item.get('raw_estimate'))}`；纳入评分值 `{_fmt(item.get('accepted_estimate'))}`；归因状态 `{item.get('status') or 'not recorded'}`；原因 `{_format_list(_codes(item.get('reason_codes')))}`。"
+            )
+        return lines
+
+    def _write_fit_diagnostic_page(
+        self,
+        job_id: str,
+        result_path: Path | None,
+        destination: Path,
+        *,
+        parameter: str | None = None,
+        root_prefix: str = "",
+    ) -> dict[str, Any]:
+        result = _read_json(result_path) if result_path is not None else {}
+        payload = self._fit_diagnostic_payload(job_id, result, parameter=parameter)
+        family = payload["rule_family"]
+        validity = payload["fit_validity"]
+        segmentation = payload["segmentation"]
+        event_rows = "".join(
+            f"<tr><td>{escape(str(item.get('name') or 'event'))}</td><td>{escape(str(item.get('index') if item.get('index') is not None else 'N/A'))}</td><td>{_fmt(item.get('time_s'))}</td></tr>"
+            for item in segmentation.get("events", [])
+        ) or "<tr><td colspan='3'>旧版结果未记录事件。</td></tr>"
+        segment_rows = "".join(
+            f"<tr><td>{escape(str(item.get('name') or 'segment'))}</td><td>{escape(str(item.get('start_index') if item.get('start_index') is not None else 'N/A'))}</td><td>{escape(str(item.get('end_index') if item.get('end_index') is not None else 'N/A'))}</td></tr>"
+            for item in segmentation.get("segments", [])
+        ) or "<tr><td colspan='3'>旧版结果未记录使用分段。</td></tr>"
+        parameter_rows = "".join(
+            f"<tr><td>{escape(str(item.get('parameter')))}</td><td>{_fmt(item.get('raw_estimate'))}</td><td>{_fmt(item.get('accepted_estimate'))}</td><td>{escape(str(item.get('status') or 'not recorded'))}</td><td>{escape(_format_list(_codes(item.get('reason_codes'))))}</td></tr>"
+            for item in payload.get("parameters", [])
+        ) or "<tr><td colspan='5'>旧版结果未记录逐参数归因。</td></tr>"
+        body = (
+            f"<h1>{escape(job_id)} · 规则/分段/逐参数诊断</h1>"
+            "<div class='card'><p>这里展示的是目标参数无关的拟合有效性检查。候选值若被规则族或逐参数检查拒绝，不会冒充最终反演值。</p>"
+            f"<p>拟合：<code>{escape(str(payload.get('fit_status') or 'unknown'))}</code>；方法 <code>{escape(str(payload.get('fit_method') or 'unknown'))}</code></p>"
+            f"<p>规则族：<code>{escape(str(family.get('rule_family') or 'not recorded'))}</code>；状态 <code>{escape(str(family.get('status') or 'not recorded'))}</code>；原因 {escape(_format_list(_codes(family.get('reason_codes'))))}</p>"
+            f"<p>fit validity：<code>{escape(str(validity.get('status') or 'not recorded'))}</code> / <code>{escape(str(validity.get('category') or 'not recorded'))}</code>；主原因 <code>{escape(str(validity.get('primary_reason_code') or 'none'))}</code></p></div>"
+            f"<div class='card'><h2>运动事件分段</h2><p>算法 <code>{escape(str(segmentation.get('algorithm') or 'not recorded'))}</code>；状态 <code>{escape(str(segmentation.get('status') or 'not recorded'))}</code></p><table><tr><th>事件</th><th>帧</th><th>时间(s)</th></tr>{event_rows}</table><table><tr><th>分段</th><th>起始帧</th><th>结束帧</th></tr>{segment_rows}</table></div>"
+            f"<div class='card'><h2>逐参数归因</h2><table><tr><th>参数</th><th>候选值</th><th>纳入评分值</th><th>状态</th><th>原因</th></tr>{parameter_rows}</table></div>"
+        )
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(
+            _html_page(f"{job_id} fitter diagnostics", body, root_prefix=root_prefix),
+            encoding="utf-8",
+        )
+        return payload
+
     def _unusable_decision(self, row: Mapping[str, Any]) -> dict[str, Any] | None:
         job_id = _job_id(row.get("video_name") or row.get("job_id"))
         gate = self.video_gate.get(job_id, {})
@@ -456,6 +692,7 @@ class EvidenceReportBuilder:
         reasons = _codes(gate.get("reason_codes"))
         manual_generation = _status(row.get("manual_generation_validity_status"))
         generation = _status(row.get("generation_validity_status"))
+        review = _generation_review_flags(row)
         fit_eligible = _truth(row.get("trajectory_fit_eligible"))
         fit_complete = _truth(row.get("fit_complete"))
         fit_status = _status(row.get("fit_status"))
@@ -466,13 +703,16 @@ class EvidenceReportBuilder:
             category = "L1"
             headline = "人工确认的生成/运动有效性失败"
             reasons += ["manual_generation_or_motion_failure"]
-        elif gate_grade == "X":
+        # Automatic hard failures must be exposed as REVIEW before the compact
+        # gate's generic X branch.  The previous order made every such case X
+        # and hid the fact that human adjudication was still pending.
+        elif review["hard_failure"] and not review["manual_fail"]:
+            category = "REVIEW"
+            headline = "自动有效性检查记录硬异常；阻断拟合并等待视频复核"
+            reasons += review["failure_codes"] or ["automatic_generation_validity_failure"]
+        elif gate_grade == "X" and not review["provisional_review"]:
             category = "X"
             headline = "主评测的轨迹/反演证据不足（不计作模型失败）"
-        elif manual_generation not in PASS_STATUS and generation in FAIL_STATUS:
-            category = "REVIEW"
-            headline = "自动有效性检查标记异常，需看视频复核"
-            reasons += _codes(row.get("generation_failure_codes")) or ["automatic_generation_validity_failure"]
         elif fit_eligible is False:
             category = "X"
             headline = "轨迹不满足当前拟合输入要求（不计作模型失败）"
@@ -507,6 +747,13 @@ class EvidenceReportBuilder:
             case_root = root / category / job_id
             case_root.mkdir(parents=True, exist_ok=True)
             result = _read_json(assets["result"]) if assets.get("result") else {}
+            diagnostic_page = case_root / "fit_diagnostics.html"
+            diagnostic_payload = self._write_fit_diagnostic_page(
+                job_id,
+                assets.get("result"),
+                diagnostic_page,
+                root_prefix="../../../",
+            )
             dynamic = result.get("dynamic_3d_inclusion", {}) if isinstance(result.get("dynamic_3d_inclusion"), Mapping) else {}
             camera = result.get("camera_motion_evidence", {}) if isinstance(result.get("camera_motion_evidence"), Mapping) else {}
             explanation = [
@@ -534,7 +781,11 @@ class EvidenceReportBuilder:
                 f"- 3D 门控：`{dynamic.get('decision') or row.get('simple_dynamic_3d_decision') or 'not applicable'}`",
                 "",
                 "轨迹图中出现断点、离群或错误深度时，原因属于测量链路；只有原视频本身出现消失、明显形变、穿模或运动类型错误并经人工确认时，才归入 L1。",
+                "",
+                "## 规则族 / 分段 / 逐参数诊断",
+                "",
             ]
+            explanation += self._diagnostic_markdown_lines(diagnostic_payload)
             (case_root / "WHY_UNUSABLE_ZH.md").write_text("\n".join(explanation) + "\n", encoding="utf-8")
             page = case_root / "index.html"
             body = [
@@ -546,6 +797,7 @@ class EvidenceReportBuilder:
                 _media_block("2. 实验物体检测与轨迹 overlay", assets.get("overlay"), page, "video"),
                 _media_block("3. 逐帧 2D / 公制 / 3D 轨迹", assets.get("trajectory"), page, "image"),
                 _media_block("4. SpatialTrackerV2 原生 3D 图（若适用）", assets.get("native_3d"), page, "image"),
+                _document_block("5. 规则族、事件分段与逐参数归因", diagnostic_page, page),
                 "</div><p class='muted'>判断来自冻结 result/CSV；本页面只整理证据，不重跑检测，也不改判分。</p>",
             ]
             page.write_text(_html_page(job_id, "".join(body), root_prefix="../../../"), encoding="utf-8")
@@ -626,6 +878,169 @@ class EvidenceReportBuilder:
         svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}"><rect width="100%" height="100%" fill="white"/><text x="{left}" y="28" font-family="sans-serif" font-size="21" font-weight="700">{escape(title)}</text><line x1="{left}" y1="{top+ph}" x2="{left+pw}" y2="{top}" stroke="#98a2b3" stroke-dasharray="6 5"/><line x1="{left}" y1="{top+ph}" x2="{left+pw}" y2="{top+ph}" stroke="#344054"/><line x1="{left}" y1="{top}" x2="{left}" y2="{top+ph}" stroke="#344054"/>{f'<polyline points="{polyline}" fill="none" stroke="#165dff" stroke-width="3"/>' if polyline else ''}{circles}<text x="{left+pw/2}" y="{height-48}" text-anchor="middle" font-family="sans-serif">prompt requested parameter</text><text x="22" y="{top+ph/2}" text-anchor="middle" transform="rotate(-90 22 {top+ph/2})" font-family="sans-serif">trajectory-inferred parameter</text><text x="{left}" y="{height-18}" font-family="sans-serif" font-size="12" fill="#667085">Missing estimate: {escape(missing_text)} · diagonal = exact numerical recovery</text></svg>'''
         path.write_text(svg, encoding="utf-8")
 
+    @staticmethod
+    def _collision_reason_groups(codes: Sequence[str]) -> dict[str, list[str]]:
+        groups = {
+            "persistent_nonuniform_speed": [],
+            "impact_sticking": [],
+            "invalid_velocity_reversal": [],
+        }
+        for code in codes:
+            lowered = str(code).lower()
+            if "persistent_nonuniform_speed" in lowered or "persistent_speed_nonuniform" in lowered:
+                groups["persistent_nonuniform_speed"].append(str(code))
+            if "impact_sticking" in lowered or "sticking_after_impact" in lowered:
+                groups["impact_sticking"].append(str(code))
+            if (
+                "invalid_velocity_reversal" in lowered
+                or "velocity_reversal_invalid" in lowered
+                or "missing_velocity_reversal" in lowered
+                or "velocity_reversal_not_found" in lowered
+                or "velocity_reversal_missing" in lowered
+            ):
+                groups["invalid_velocity_reversal"].append(str(code))
+        return {name: list(dict.fromkeys(values)) for name, values in groups.items()}
+
+    def _build_collision_rule_chain(self, root: Path) -> dict[str, Any]:
+        """Conditionally summarize the V1_B→V2_B→V3_B restitution chain."""
+
+        chain_root = root / "collision_rule_chain"
+        chain_root.mkdir(parents=True, exist_ok=True)
+        experiment_ids = ("v1_B", "v2_B", "v3_B")
+        experiment_rows: list[dict[str, Any]] = []
+        evidence_cases: list[dict[str, Any]] = []
+        for experiment_id in experiment_ids:
+            candidates = [
+                row
+                for row in self.rows
+                if str(row.get("experiment_id")) == experiment_id
+                and str(row.get("scene_id")) == "baseline"
+                and str(row.get("camera_name")) == "CAM_Side"
+                and _number(row.get("seed")) == self.primary_seed
+            ]
+            denominator = 0
+            failed = 0
+            reason_counts = Counter()
+            for row in candidates:
+                job_id = _job_id(row.get("video_name") or row.get("job_id"))
+                located = self.locator.locate(job_id)
+                result = _read_json(located.result_json) if located.result_json else {}
+                fit = result.get("fit", {}) if isinstance(result.get("fit"), Mapping) else {}
+                fit_status = _status(fit.get("status") or row.get("fit_status"))
+                fit_attempted = _truth(result.get("fit_attempted"))
+                if fit_attempted is None:
+                    fit_attempted = _truth(row.get("fit_attempted"))
+                trajectory_eligible = _truth(row.get("trajectory_fit_eligible"))
+                trackable = bool(
+                    not _generation_review_flags(row)["hard_failure"]
+                    and trajectory_eligible is not False
+                    and (
+                        fit_attempted is True
+                        or fit_status
+                        not in {"", "not_attempted", "skipped_trajectory_not_eligible", "skipped_video_generation_validity"}
+                    )
+                )
+                if not trackable:
+                    continue
+                denominator += 1
+                codes = list(
+                    dict.fromkeys(
+                        _collect_reason_codes(fit)
+                        + _codes(row.get("rule_family_reason_codes"))
+                        + _collect_reason_codes(
+                            _json_mapping(row.get("parameter_attribution_json"))
+                        )
+                    )
+                )
+                groups = self._collision_reason_groups(codes)
+                matched = {name: values for name, values in groups.items() if values}
+                if not matched:
+                    continue
+                failed += 1
+                for name in matched:
+                    reason_counts[name] += 1
+                assets = self._materialize_job(job_id)
+                case_root = chain_root / "cases" / job_id
+                case_root.mkdir(parents=True, exist_ok=True)
+                page = case_root / "index.html"
+                body = (
+                    f"<h1>{escape(job_id)}</h1><div class='card'><p>该视频已进入可追踪分母，但碰撞规则检查记录：<code>{escape(_format_list(codes))}</code>。</p>"
+                    "<p>这里只呈现冻结规则证据；不会仅凭单条视频推断模型整体失败。</p></div><div class='grid'>"
+                    + _media_block("原始生成视频", assets.get("original"), page, "video")
+                    + _media_block("物体检测与轨迹", assets.get("overlay"), page, "video")
+                    + _media_block("2D/3D 轨迹", assets.get("trajectory"), page, "image")
+                    + "</div>"
+                )
+                page.write_text(
+                    _html_page(job_id, body, root_prefix="../../../../"),
+                    encoding="utf-8",
+                )
+                evidence_cases.append(
+                    {
+                        "experiment_id": experiment_id,
+                        "job_id": job_id,
+                        "reason_groups": sorted(matched),
+                        "reason_codes": codes,
+                        "page": str(page),
+                    }
+                )
+            majority = bool(denominator > 0 and failed > denominator / 2.0)
+            experiment_rows.append(
+                {
+                    "experiment_id": experiment_id,
+                    "trackable_denominator": denominator,
+                    "rule_failure_count": failed,
+                    "rule_failure_fraction": failed / denominator if denominator else None,
+                    "reason_counts": dict(reason_counts),
+                    "majority_rule_failure": majority,
+                    "conclusion": (
+                        "该实验多数可追踪视频触发碰撞/恢复系数规则失败"
+                        if majority
+                        else "未达到多数阈值，不下模型未理解的结论"
+                    ),
+                }
+            )
+        chain_conclusion_supported = bool(
+            len(experiment_rows) == len(experiment_ids)
+            and all(item["trackable_denominator"] > 0 for item in experiment_rows)
+            and all(item["majority_rule_failure"] for item in experiment_rows)
+        )
+        conclusion = (
+            "V1_B→V2_B→V3_B 均有多数可追踪视频触发规则失败：模型尚未稳定理解碰撞/恢复系数。"
+            if chain_conclusion_supported
+            else "当前分母/失败比例不足以支持‘模型尚未稳定理解碰撞/恢复系数’这一统一结论。"
+        )
+        table_rows = "".join(
+            f"<tr><td>{item['experiment_id']}</td><td>{item['trackable_denominator']}</td><td>{item['rule_failure_count']}</td><td>{_fmt(item['rule_failure_fraction'])}</td><td>{item['reason_counts'].get('persistent_nonuniform_speed', 0)}</td><td>{item['reason_counts'].get('impact_sticking', 0)}</td><td>{item['reason_counts'].get('invalid_velocity_reversal', 0)}</td><td>{escape(item['conclusion'])}</td></tr>"
+            for item in experiment_rows
+        )
+        case_links = "".join(
+            f"<li><a href='{escape(Path(os.path.relpath(item['page'], chain_root)).as_posix())}'>{escape(item['job_id'])}</a> · {escape(', '.join(item['reason_groups']))}</li>"
+            for item in evidence_cases
+        ) or "<li>没有命中指定规则原因的可追踪视频。</li>"
+        body = (
+            "<h1>V1_B → V2_B → V3_B 碰撞/恢复系数规则链</h1>"
+            "<div class='card'><p>固定统计范围：baseline + CAM_Side + 主 seed。分母只包含已经有可追踪轨迹且实际尝试拟合的视频；硬生成失败不进入分母。</p>"
+            "<p>失败只计 <code>persistent_nonuniform_speed</code>、<code>impact_sticking</code>、<code>invalid/missing velocity reversal</code>。单个实验需严格超过 50%，三项实验都达到多数后才允许写统一模型结论。</p>"
+            f"<p class='{'bad' if chain_conclusion_supported else 'muted'}'><b>{escape(conclusion)}</b></p></div>"
+            f"<table><tr><th>实验</th><th>可追踪分母</th><th>规则失败</th><th>比例</th><th>持续非匀速</th><th>撞击粘滞</th><th>速度反向无效</th><th>条件结论</th></tr>{table_rows}</table>"
+            f"<div class='card'><h2>命中案例的视频/轨迹证据</h2><ul>{case_links}</ul></div>"
+        )
+        page = chain_root / "index.html"
+        page.write_text(
+            _html_page("碰撞/恢复系数规则链", body, root_prefix="../../"),
+            encoding="utf-8",
+        )
+        payload = {
+            "experiments": experiment_rows,
+            "chain_conclusion_supported": chain_conclusion_supported,
+            "conclusion": conclusion,
+            "evidence_case_count": len(evidence_cases),
+            "page": str(page),
+        }
+        _write_json(chain_root / "summary.json", payload)
+        return payload
+
     def build_parameter_scans(self) -> dict[str, Any]:
         root = self.output / "02_parameter_scans"
         root.mkdir(parents=True, exist_ok=True)
@@ -643,7 +1058,9 @@ class EvidenceReportBuilder:
             overlay_sources: list[Path] = []
             raw_labels: list[str] = []
             overlay_labels: list[str] = []
-            level_cards: list[tuple[dict[str, Any], dict[str, Path | None], Path | None]] = []
+            level_cards: list[
+                tuple[dict[str, Any], dict[str, Path | None], Path | None, Path]
+            ] = []
             spec = get_formula_spec(experiment_id, parameter)
             for level in levels:
                 assets = self._materialize_job(str(level["job_id"]))
@@ -664,7 +1081,16 @@ class EvidenceReportBuilder:
                         fit_card.write_text("<!doctype html><meta charset='utf-8'><h1>拟合过程不可用</h1><p>冻结 result.json 无法读取；没有补造曲线。</p>", encoding="utf-8")
                 else:
                     fit_card.write_text("<!doctype html><meta charset='utf-8'><h1>没有冻结拟合结果</h1><p>该参数档位保留在扫描设计中，但没有 result.json；没有补造系数或曲线。</p>", encoding="utf-8")
-                level_cards.append((level, assets, fit_card))
+                diagnostic_page = fit_card.parent / "fit_diagnostics.html"
+                diagnostic_payload = self._write_fit_diagnostic_page(
+                    str(level["job_id"]),
+                    result_path,
+                    diagnostic_page,
+                    parameter=parameter,
+                    root_prefix="../../../../../",
+                )
+                level["fit_diagnostics"] = diagnostic_payload
+                level_cards.append((level, assets, fit_card, diagnostic_page))
             raw_montage = scan_root / "raw_parameter_comparison.mp4"
             overlay_montage = scan_root / "track_parameter_comparison.mp4"
             raw_status = {"available": False, "reason": "montages disabled"}
@@ -699,6 +1125,14 @@ class EvidenceReportBuilder:
             ]
             for level in levels:
                 formula_lines.append(f"|{level['parameter_tuple_id']}|{_fmt(level['target'])}|{_fmt(level['estimate'])}|{level['state']}|{_format_list(level['reason_codes'])}|")
+            formula_lines += ["", "## 规则族 / 分段 / 逐参数诊断", ""]
+            for level in levels:
+                formula_lines += [
+                    f"### {level['parameter_tuple_id']} 的规则族 / 分段 / 逐参数诊断",
+                    "",
+                    *self._diagnostic_markdown_lines(level.get("fit_diagnostics", {})),
+                    "",
+                ]
             formula_lines += [
                 "",
                 "## 扫描级判定",
@@ -718,8 +1152,9 @@ class EvidenceReportBuilder:
                 _media_block("原视频", assets.get("original"), page, "video") +
                 _media_block("检测轨迹视频", assets.get("overlay"), page, "video") +
                 _media_block("2D/3D 轨迹", assets.get("trajectory"), page, "image") +
-                _document_block("公式拟合过程", card, page) + "</div></div>"
-                for level, assets, card in level_cards
+                _document_block("公式拟合过程", card, page) +
+                _document_block("规则族、事件分段与逐参数归因", diagnostic, page) + "</div></div>"
+                for level, assets, card, diagnostic in level_cards
             )
             raw_path = raw_montage if raw_montage.is_file() else None
             overlay_path = overlay_montage if overlay_montage.is_file() else None
@@ -736,6 +1171,7 @@ class EvidenceReportBuilder:
                     "overlay_montage": overlay_status,
                 }
             )
+        collision_chain = self._build_collision_rule_chain(root)
         page = root / "index.html"
         counts = Counter(item["grade"] for item in rendered)
         l2_l4_count = sum(counts[grade] for grade in ("L2", "L3", "L4"))
@@ -743,29 +1179,34 @@ class EvidenceReportBuilder:
             f"<tr><td>{escape(item['experiment_id'])}</td><td>{escape(item['parameter'])}</td><td><b>{escape(item['grade'])}</b></td><td>{item['level_count']}</td><td><a href='{escape(Path(os.path.relpath(item['page'], root)).as_posix())}'>原视频 + 轨迹视频 + 公式拟合</a></td></tr>"
             for item in rendered
         )
-        body = f"<h1>13 个实验系统，24 个参数响应轴</h1><div class='card'><p>13 是物理实验设计数量；24 是所有实验的隐藏参数维度总和。V1 为 4 轴，V2 为 8 轴，V3 为 12 轴。多参数实验会产生多个 OAT 扫描，但并没有被重复称作新实验。</p><p>当前 24 轴中，L2–L4 共 {l2_l4_count} 个：L2={counts['L2']}、L3={counts['L3']}、L4={counts['L4']}；扫描级 X={counts['X']}。X 也保留同样的原视频、overlay、轨迹与缺失原因页，但不计作模型失败。</p></div><table><thead><tr><th>实验</th><th>被扫描参数</th><th>等级</th><th>档位</th><th>证据</th></tr></thead><tbody>{rows_html}</tbody></table>"
+        collision_rel = Path(os.path.relpath(collision_chain["page"], root)).as_posix()
+        body = f"<h1>13 个实验系统，24 个参数响应轴</h1><div class='card'><p>13 是物理实验设计数量；24 是所有实验的隐藏参数维度总和。V1 为 4 轴，V2 为 8 轴，V3 为 12 轴。多参数实验会产生多个 OAT 扫描，但并没有被重复称作新实验。</p><p>当前 24 轴中，L2–L4 共 {l2_l4_count} 个：L2={counts['L2']}、L3={counts['L3']}、L4={counts['L4']}；扫描级 X={counts['X']}。X 也保留同样的原视频、overlay、轨迹与缺失原因页，但不计作模型失败。</p><p><a href='{escape(collision_rel)}'>打开 V1_B→V2_B→V3_B 碰撞/恢复系数规则链（含分母、失败数和条件式结论）</a></p></div><table><thead><tr><th>实验</th><th>被扫描参数</th><th>等级</th><th>档位</th><th>证据</th></tr></thead><tbody>{rows_html}</tbody></table>"
         page.write_text(_html_page("参数扫描证据", body, root_prefix="../"), encoding="utf-8")
         return {
             "rendered_scan_count": len(rendered),
             "l2_l4_scan_count": l2_l4_count,
             "x_scan_count": counts["X"],
             "grade_counts": dict(counts),
+            "collision_rule_chain": collision_chain,
             "scans": rendered,
         }
 
     def _row_status_label(self, row: Mapping[str, Any]) -> str:
         manual = _status(row.get("manual_generation_validity_status"))
         generation = _status(row.get("generation_validity_status"))
+        review = _generation_review_flags(row)
         if manual in FAIL_STATUS:
             return "人工确认生成有效性失败"
-        if manual not in PASS_STATUS and generation in FAIL_STATUS:
-            return "生成有效性异常/待复核"
+        if review["hard_failure"]:
+            return "自动硬异常已阻断/待人工复核"
         if not self._measurement_evaluable(row):
             if _truth(row.get("trajectory_fit_eligible")) is False:
                 return "轨迹不可用于拟合"
             if str(row.get("reconstruction_route") or "") == "spatialtrackerv2_dynamic":
                 return "动态 3D 证据门未通过"
             return "拟合未完成或测量不可用"
+        if review["provisional_review"]:
+            return "软 REVIEW 暂按有效，已有拟合（保留复核标记）"
         return "生成可用且已有拟合"
 
     def _measurement_evaluable(self, row: Mapping[str, Any]) -> bool:
@@ -773,9 +1214,8 @@ class EvidenceReportBuilder:
 
         manual = _status(row.get("manual_generation_validity_status"))
         automatic = _status(row.get("generation_validity_status"))
-        if manual in FAIL_STATUS:
-            return False
-        if manual not in PASS_STATUS and automatic in FAIL_STATUS:
+        review = _generation_review_flags(row)
+        if review["hard_failure"]:
             return False
         if _truth(row.get("trajectory_fit_eligible")) is False:
             return False

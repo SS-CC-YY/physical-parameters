@@ -126,6 +126,30 @@ class TrajectoryPipelineTests(unittest.TestCase):
         # The rejected 0.95 estimate must not inflate dispersion.
         self.assertAlmostEqual(stability["mean_parameter_range_normalized_std"], 2 ** -0.5 * 0.2)
 
+    def test_frozen_soft_review_is_eligible_while_failure_code_blocks(self) -> None:
+        soft = pipeline._assess_frozen_trajectory_eligibility(
+            {
+                "status": "review",
+                "fit_eligible": True,
+                "failure_codes": [],
+                "warning_codes": ["shape_requires_review"],
+            },
+            [],
+        )
+        self.assertTrue(soft["eligible"])
+        self.assertTrue(soft["generation_review_provisional"])
+
+        hard = pipeline._assess_frozen_trajectory_eligibility(
+            {
+                "status": "review",
+                "fit_eligible": True,
+                "failure_codes": ["confirmed_object_disappearance"],
+            },
+            [],
+        )
+        self.assertFalse(hard["eligible"])
+        self.assertTrue(hard["generation_hard_failure"])
+
     def test_standard_headline_is_baseline_side_only(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary)

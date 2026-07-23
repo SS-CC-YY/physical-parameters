@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-import importlib.util
 import sys
 import unittest
 from pathlib import Path
@@ -10,13 +9,12 @@ import numpy as np
 
 
 CODE_ROOT = Path(__file__).resolve().parents[1]
-MODULE_PATH = CODE_ROOT / "src" / "remake_benchmark" / "reconstruction" / "physics_parameters.py"
-SPEC = importlib.util.spec_from_file_location("physics_parameters_under_test", MODULE_PATH)
-assert SPEC is not None and SPEC.loader is not None
-MODULE = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(MODULE)
-fit_physics_parameters = MODULE.fit_physics_parameters
-score_parameter_fit = MODULE.score_parameter_fit
+sys.path.insert(0, str(CODE_ROOT / "src"))
+
+from remake_benchmark.reconstruction.physics_parameters import (  # noqa: E402
+    fit_physics_parameters,
+    score_parameter_fit,
+)
 
 
 def _rows(t: np.ndarray, x: np.ndarray, z: np.ndarray) -> list[dict[str, float]]:
@@ -85,7 +83,7 @@ class PhysicsParameterTests(unittest.TestCase):
         self.assertEqual(short_fit["status"], "insufficient_evidence")
         self.assertEqual(
             short_fit["reason"],
-            "fewer_than_8_points_in_first_contiguous_airborne_run",
+            "fewer_than_8_points_from_motion_start_to_first_contact",
         )
 
         impact_time = 3.0

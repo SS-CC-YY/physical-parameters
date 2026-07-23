@@ -5,8 +5,24 @@
 ## 统计单位
 
 - 13：实验系统数量；
-- 24：`实验 × 待扫描参数` 的 OAT 参数响应轴数量；
+- 24：`实验系统 × 单个待扫描参数` 的 OAT 参数响应通道数量；
 - 一次多参数实验会产生 2–3 个响应轴，但并没有被重复计为新实验。
+
+具体分解为：V1 的 4 个单参数系统贡献 4 个通道；V2 的 5 个系统依次贡献
+1、1、2、2、2 个通道，共 8 个；V3 的 4 个三参数系统贡献 12 个通道。因此
+`4 + 8 + 12 = 24`。这不是 24 个实验，也不是要求为同一视频重复执行 24 次轨迹检测。
+
+命名以 `evidence_formulas.py` 的冻结注册表为准。特别需要避免以下误写：
+
+- V2_A 是“摆线轨道周期运动 / Cycloid-track periodic motion”，不是抛射运动；
+- V2_B 是“双墙重复碰撞 / Repeated two-wall impacts”，不是斜碰撞；
+- V2_D 是“重力—阻尼摆 / Gravity-damping pendulum”，不是带阻力抛射。
+
+公式卡中的 `method` 与数值 fitter 返回值保持一致。当前 V1_A 使用
+`first_motion_to_first_contact_quadratic`：跳过释放前静止段，只拟合首次持续向下运动到
+首次地面接触；V1_B 使用
+`single_impact_segmented_velocity_ratio_with_consistency_gate`：定位已知墙面附近的单次反向，
+排除接触保护帧后分别拟合碰撞前后速度，并检查匀速性、停留时间、物理范围和局部/全局估计一致性。
 
 ## 服务器运行
 
@@ -17,11 +33,11 @@ REPO=/root/data/heyuanyu/yefei/chenyu/remake/data
 REMAKE_ROOT="$REPO/blender/remake"
 
 EVAL_ROOT="$REMAKE_ROOT/analysis/seedance978_physics_v2"
-SIMPLE_ROOT="$EVAL_ROOT/simple_paper_v1"
+SIMPLE_ROOT="$EVAL_ROOT/simple_paper_v2"
 TRACK_ROOT="$REMAKE_ROOT/outputs/seedance978_tracks_v1"
 VIDEOS="$REMAKE_ROOT/outputs/seedance978/seedance20_factorized978_480p_20260719_140052/videos"
 ALL_JOBS="$EVAL_ROOT/all_jobs.csv"
-REPORT_ROOT="$EVAL_ROOT/human_evidence_v1"
+REPORT_ROOT="$EVAL_ROOT/human_evidence_v2"
 
 cd "$REMAKE_ROOT"
 export PYTHONPATH="$REMAKE_ROOT/code/src${PYTHONPATH:+:$PYTHONPATH}"
@@ -77,7 +93,7 @@ $REPORT_ROOT/index.html
 
 ```text
 01_unusable/          L1、X 和自动异常待复核案例
-02_parameter_scans/   全部 24 个响应轴；当前 23 个 L2–L4 与 1 个扫描级 X 都有证据页
+02_parameter_scans/   全部 24 个响应轴；L2–L4/X 数量从本次 simple report 动态读取
 03_background/        同参数 baseline / indoor / outdoor 对照
 04_views/             同设定 Side / Main / Top 对照
 05_camera_drift/      Side/非 Side 相机漂移与动态 3D 门控
@@ -109,11 +125,11 @@ cd "$REPORT_ROOT"
 python -m http.server 8787 --bind 127.0.0.1
 ```
 
-然后使用 VS Code 的 Ports 面板转发 `8787`，打开转发后的地址。若要下载，需下载整个 `human_evidence_v1` 目录，不能只拿 `index.html`，因为视频和图片使用相对链接。
+然后使用 VS Code 的 Ports 面板转发 `8787`，打开转发后的地址。若要下载，需下载整个 `human_evidence_v2` 目录，不能只拿 `index.html`，因为视频和图片使用相对链接。
 
 ## 解释限制
 
 - X 是轨迹、重建或拟合证据不足，不等于模型生成失败；
-- REVIEW 是自动有效性门提示异常，必须看原视频后才能人工定为 L1；
+- REVIEW 是保留复核来源的软状态：在没有 `failure_codes` 且轨迹测量合格时暂按有效进入拟合；若存在明确硬失败仍会阻断，并保留原视频供人工复核；
 - Side 发生明显漂移时，报告首先明确标注严重相机漂移，再展示 3D 门控和拟合；
 - Main/Top 漂移报告比较整条轨迹的有效参数与 Side，不声称参数在每个时刻都连续恒定；逐时刻结论需要另做滑窗拟合。
