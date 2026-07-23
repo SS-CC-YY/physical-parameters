@@ -355,6 +355,8 @@ class DeadlineReportTests(unittest.TestCase):
             self.assertEqual(rows[0]["candidate_estimate"], 0.51)
             self.assertIsNone(rows[0]["accepted_estimate"])
             self.assertEqual(rows[0]["simple_status"], "CANDIDATE_REJECTED")
+            self.assertEqual(rows[0]["parameter_attribution_status"], "fail")
+            self.assertEqual(rows[0]["parameter_attribution_reason_codes"], [])
 
     def test_frozen_channel_remains_insufficient_when_levels_are_missing(self) -> None:
         rows = [

@@ -62,7 +62,7 @@ from .seedance978 import (
 
 
 TRACK_SCHEMA_VERSION = "1.0.0"
-EVALUATOR_VERSION = "1.2.0"
+EVALUATOR_VERSION = "1.3.0"
 STATIC_ROUTE = "calibrated_static_sphere"
 DYNAMIC_ROUTE = "spatialtrackerv2_dynamic"
 DYNAMIC_MIN_ANCHOR_INLIER_FRACTION = 0.50
@@ -1451,6 +1451,8 @@ def _not_scored(reason: str) -> dict[str, Any]:
 def _assess_frozen_trajectory_eligibility(
     validity: Mapping[str, Any],
     rows: Sequence[Mapping[str, Any]],
+    *,
+    allow_static_scene_rigidity_warning: bool = False,
 ) -> dict[str, Any]:
     """Apply the established partial-track policy without touching a video."""
 
@@ -1495,9 +1497,10 @@ def _assess_frozen_trajectory_eligibility(
             "generation_review_codes": review_state["review_codes"],
         }
     indeterminate_codes = set(str(value) for value in validity.get("indeterminate_codes", []))
-    if not indeterminate_codes or not indeterminate_codes.issubset(
-        {"insufficient_reliable_object_tracking"}
-    ):
+    allowed_codes = {"insufficient_reliable_object_tracking"}
+    if allow_static_scene_rigidity_warning:
+        allowed_codes.add("static_scene_rigidity_unresolved")
+    if not indeterminate_codes or not indeterminate_codes.issubset(allowed_codes):
         return {
             "eligible": False,
             "status": "blocked",
@@ -1514,7 +1517,11 @@ def _assess_frozen_trajectory_eligibility(
         "camera_motion": checks.get("camera_motion", {}).get("status") == "pass",
         "object_shape_2d": checks.get("object_shape_2d", {}).get("status") == "pass",
         "object_scale_2d": checks.get("object_scale_2d", {}).get("status") != "fail",
-        "scene_rigidity_2d": checks.get("scene_rigidity_2d", {}).get("status") == "pass",
+        "scene_rigidity_2d": (
+            checks.get("scene_rigidity_2d", {}).get("status") != "fail"
+            if allow_static_scene_rigidity_warning
+            else checks.get("scene_rigidity_2d", {}).get("status") == "pass"
+        ),
     }
     if not all(safety_checks.values()):
         return {
@@ -1555,7 +1562,11 @@ def _assess_frozen_trajectory_eligibility(
     return {
         "eligible": True,
         "status": "partial_verified_trajectory",
-        "reason": "only_late_tracking_coverage_is_unresolved",
+        "reason": (
+            "baseline_static_scene_warning_does_not_block_object_trajectory"
+            if "static_scene_rigidity_unresolved" in indeterminate_codes
+            else "only_late_tracking_coverage_is_unresolved"
+        ),
         "trusted_segment_start_frame": int(anchored[0]),
         "trusted_segment_end_frame": int(anchored[-1]),
         "trusted_segment_frame_count": len(anchored),
@@ -1665,13 +1676,38 @@ def evaluate_extracted_seedance978(
         validity = extraction.get("video_generation_validity", {})
         route = str(extraction.get("reconstruction_route"))
         fit_measurement_count = sum(_truth(row.get("physics_fit_used")) for row in fit_rows)
+        baseline_side_static = bool(
+            route == STATIC_ROUTE
+            and str(source.get("scene_id") or "") == "baseline"
+            and str(source.get("camera_name") or "") == "CAM_Side"
+        )
+        direct_measurement_fraction = (
+            fit_measurement_count / len(fit_rows) if fit_rows else 0.0
+        )
+        baseline_side_track_override = bool(
+            baseline_side_static
+            and fit_measurement_count >= 12
+            and direct_measurement_fraction >= 0.90
+        )
         track_quality_ok = bool(
-            extraction.get("trajectory_fit_eligible")
+            (
+                extraction.get("trajectory_fit_eligible")
+                or baseline_side_track_override
+            )
             and fit_measurement_count >= 3
         )
         dynamic_3d_inclusion = None
         if route == STATIC_ROUTE:
-            validity_eligibility = _assess_frozen_trajectory_eligibility(validity, fit_rows)
+            validity_eligibility = _assess_frozen_trajectory_eligibility(
+                validity,
+                fit_rows,
+                allow_static_scene_rigidity_warning=baseline_side_static,
+            )
+            if baseline_side_track_override:
+                validity_eligibility["baseline_side_track_override"] = True
+                validity_eligibility[
+                    "baseline_side_direct_measurement_fraction"
+                ] = direct_measurement_fraction
         else:
             review_state = generation_validity_review_state(validity)
             validity_status = str(review_state["status"])

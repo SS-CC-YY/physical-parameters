@@ -150,6 +150,40 @@ class TrajectoryPipelineTests(unittest.TestCase):
         self.assertFalse(hard["eligible"])
         self.assertTrue(hard["generation_hard_failure"])
 
+    def test_frozen_baseline_scene_warning_can_be_refit(self) -> None:
+        validity = {
+            "status": "indeterminate",
+            "fit_eligible": False,
+            "failure_codes": [],
+            "indeterminate_codes": ["static_scene_rigidity_unresolved"],
+            "checks": {
+                "camera_motion": {"status": "pass"},
+                "object_identity": {"trusted_first_frame": True},
+                "object_shape_2d": {"status": "pass"},
+                "object_scale_2d": {"status": "pass"},
+                "scene_rigidity_2d": {"status": "indeterminate"},
+            },
+        }
+        rows = [
+            {
+                "source_frame_index": index,
+                "fit_eligible": True,
+                "measurement_valid": True,
+                "interpolated": False,
+            }
+            for index in range(12)
+        ]
+        allowed = pipeline._assess_frozen_trajectory_eligibility(
+            validity,
+            rows,
+            allow_static_scene_rigidity_warning=True,
+        )
+        self.assertTrue(allowed["eligible"])
+        self.assertEqual(
+            allowed["reason"],
+            "baseline_static_scene_warning_does_not_block_object_trajectory",
+        )
+
     def test_standard_headline_is_baseline_side_only(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary)

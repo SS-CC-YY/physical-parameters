@@ -120,6 +120,33 @@ class PhysicsEvaluationValidityTests(unittest.TestCase):
         eligibility = assess_trajectory_fit_eligibility(validity, _tracks(False))
         self.assertFalse(eligibility["eligible"])
 
+    def test_baseline_scene_warning_can_be_separated_from_object_fit(self) -> None:
+        validity = {
+            "status": "indeterminate",
+            "fit_eligible": False,
+            "failure_codes": [],
+            "indeterminate_codes": ["static_scene_rigidity_unresolved"],
+            "checks": {
+                "camera_motion": {"status": "pass"},
+                "object_identity": {"trusted_first_frame": True},
+                "object_shape_2d": {"status": "pass"},
+                "object_scale_2d": {"status": "pass"},
+                "scene_rigidity_2d": {"status": "indeterminate"},
+            },
+        }
+        blocked = assess_trajectory_fit_eligibility(validity, _tracks(False))
+        self.assertFalse(blocked["eligible"])
+        allowed = assess_trajectory_fit_eligibility(
+            validity,
+            _tracks(False),
+            allow_static_scene_rigidity_warning=True,
+        )
+        self.assertTrue(allowed["eligible"])
+        self.assertEqual(
+            allowed["reason"],
+            "baseline_static_scene_warning_does_not_block_object_trajectory",
+        )
+
     def test_soft_review_can_fit_but_review_with_hard_failure_cannot(self) -> None:
         soft = assess_trajectory_fit_eligibility(
             {

@@ -699,6 +699,24 @@ def load_parameter_rows(
             candidate_estimate, accepted_estimate, estimate_source = _parameter_estimates(
                 source, result, parameter_name
             )
+            attribution_mapping = (
+                fit.get("parameter_attribution", {})
+                if isinstance(fit.get("parameter_attribution"), Mapping)
+                else {}
+            )
+            attribution_item = (
+                attribution_mapping.get(parameter_name, {})
+                if isinstance(attribution_mapping.get(parameter_name), Mapping)
+                else {}
+            )
+            attribution_status = (
+                str(attribution_item.get("status") or "").lower() or None
+            )
+            attribution_reason_codes = attribution_item.get("reason_codes", [])
+            if not isinstance(attribution_reason_codes, Sequence) or isinstance(
+                attribution_reason_codes, (str, bytes, bytearray)
+            ):
+                attribution_reason_codes = []
             estimate = accepted_estimate
             absolute_error = abs(estimate - target) if estimate is not None else None
             relative_error = (
@@ -767,6 +785,10 @@ def load_parameter_rows(
                     ),
                     "nuisance_signature": nuisance_signature,
                     "fit_status": fit_status or None,
+                    "parameter_attribution_status": attribution_status,
+                    "parameter_attribution_reason_codes": [
+                        str(code) for code in attribution_reason_codes
+                    ],
                     "rule_family_status": (
                         fit.get("rule_family_evaluation", {}).get("status")
                         if isinstance(fit.get("rule_family_evaluation"), Mapping)

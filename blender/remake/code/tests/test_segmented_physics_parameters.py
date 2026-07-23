@@ -57,7 +57,103 @@ class SegmentedPhysicsParameterTests(unittest.TestCase):
         self.assertGreater(fit["diagnostics"]["observed_initial_velocity_m_s"], 3.0)
         self.assertEqual(
             fit["diagnostics"]["initial_velocity_assumption"],
-            "equal_to_first_moving_frame_interval",
+            "robust_local_quadratic_derivative_with_first_interval_fallback",
+        )
+        self.assertEqual(
+            fit["diagnostics"]["initial_velocity_estimation"]["method"],
+            "robust_local_quadratic_initial_derivative",
+        )
+
+    def test_v1c_short_smoothing_rejects_isolated_tracking_spikes(self) -> None:
+        time = np.arange(0.0, 4.0 + 1e-9, 1.0 / 24.0)
+        release = 0.35
+        mu = 0.18
+        initial_velocity = 3.2
+        move_time = initial_velocity / (mu * 9.81)
+        tau = np.clip(time - release, 0.0, move_time)
+        clean_x = -4.35 + initial_velocity * tau - 0.5 * mu * 9.81 * tau**2
+        observed_x = clean_x.copy()
+        moving = np.flatnonzero(time >= release)
+        observed_x[moving[12]] += 0.24
+        observed_x[moving[27]] -= 0.20
+        observed_x[moving[41]] += 0.18
+
+        fit = fit_physics_parameters(
+            "v1_C",
+            _rows(time, observed_x, np.full_like(time, 0.44)),
+        )
+
+        self.assertAlmostEqual(
+            fit["parameter_estimates"]["kinetic_friction_mu"],
+            mu,
+            delta=0.03,
+        )
+        preprocessing = fit["diagnostics"]["trajectory_preprocessing"]
+        self.assertEqual(preprocessing["window_frames"], 5)
+        self.assertTrue(preprocessing["applied_after_motion_segmentation"])
+        self.assertFalse(preprocessing["target_parameters_used"])
+        self.assertEqual(
+            len(preprocessing["raw_x_m"]),
+            fit["diagnostics"]["moving_fit_points"],
+        )
+        self.assertEqual(
+            len(preprocessing["raw_x_m"]),
+            len(preprocessing["smoothed_x_m"]),
+        )
+        self.assertEqual(
+            len(fit["diagnostics"]["raw_residual_m"]),
+            len(fit["diagnostics"]["smoothed_residual_m"]),
+        )
+        self.assertGreater(
+            fit["diagnostics"]["raw_trajectory_fit"]["fit_rmse"],
+            fit["diagnostics"]["smoothed_trajectory_fit"]["fit_rmse"],
+        )
+        self.assertEqual(
+            fit["rule_family_evaluation"]["checks"]["raw_trajectory_model"]["status"],
+            "pass",
+        )
+
+    def test_v1c_uses_longest_gap_free_motion_support(self) -> None:
+        first = np.arange(0.0, 1.0, 1.0 / 24.0)
+        second = np.arange(1.5, 4.0 + 1e-9, 1.0 / 24.0)
+        time = np.r_[first, second]
+        mu = 0.08
+        initial_velocity = 4.0
+        x = -4.35 + initial_velocity * time - 0.5 * mu * 9.81 * time**2
+
+        fit = fit_physics_parameters(
+            "v1_C",
+            _rows(time, x, np.full_like(time, 0.44)),
+        )
+
+        self.assertAlmostEqual(
+            fit["parameter_estimates"]["kinetic_friction_mu"],
+            mu,
+            delta=0.015,
+        )
+        continuity = fit["diagnostics"]["continuous_observation_selection"]
+        self.assertEqual(continuity["candidate_run_count"], 2)
+        self.assertEqual(continuity["selected_run_index"], 1)
+        self.assertGreater(continuity["discarded_points_outside_selected_run"], 0)
+
+    def test_v1c_does_not_clip_unphysical_negative_friction(self) -> None:
+        time = np.arange(0.0, 2.0 + 1e-9, 1.0 / 24.0)
+        x = -4.35 + 1.2 * time + 0.5 * 0.8 * time**2
+
+        fit = fit_physics_parameters(
+            "v1_C",
+            _rows(time, x, np.full_like(time, 0.44)),
+        )
+
+        self.assertEqual(fit["status"], "model_mismatch")
+        self.assertIsNone(fit["parameter_estimates"]["kinetic_friction_mu"])
+        self.assertLess(
+            fit["raw_parameter_estimates"]["kinetic_friction_mu"],
+            0.0,
+        )
+        self.assertNotEqual(
+            fit["raw_parameter_estimates"]["kinetic_friction_mu"],
+            0.0,
         )
 
     def test_v1b_nonuniform_speed_is_rule_family_failure(self) -> None:
