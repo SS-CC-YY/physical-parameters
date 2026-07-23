@@ -62,7 +62,7 @@ from .seedance978 import (
 
 
 TRACK_SCHEMA_VERSION = "1.0.0"
-EVALUATOR_VERSION = "1.1.0"
+EVALUATOR_VERSION = "1.2.0"
 STATIC_ROUTE = "calibrated_static_sphere"
 DYNAMIC_ROUTE = "spatialtrackerv2_dynamic"
 DYNAMIC_MIN_ANCHOR_INLIER_FRACTION = 0.50

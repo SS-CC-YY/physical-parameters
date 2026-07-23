@@ -77,6 +77,22 @@ class Trajectory3DInclusionTests(unittest.TestCase):
         self.assertEqual(result["decision"], "X")
         self.assertIn("X_EXCESS_OFF_MANIFOLD_DRIFT", result["reason_codes"])
 
+    def test_depth_y_drift_is_diagnostic_but_does_not_block_planar_physics(self) -> None:
+        rows = _rows(
+            lambda index, _t: (
+                index / 24.0,
+                4.0 * index / 24.0,
+                0.002 * math.sin(index),
+            )
+        )
+        result = assess_dynamic_3d_trajectory("v1_C", rows, reconstruction_metadata=_native())
+
+        self.assertEqual(result["decision"], "include")
+        self.assertEqual(result["metrics"]["physics_projection_axes"], ["x", "z"])
+        self.assertEqual(result["metrics"]["ignored_depth_axis"], "y")
+        self.assertIn("W_DEPTH_AXIS_UNSTABLE_IGNORED", result["warning_codes"])
+        self.assertGreater(result["metrics"]["depth_axis_range_m_diagnostic_only"], 1.0)
+
     def test_xz_plane_motion_with_small_y_drift_is_included(self) -> None:
         rows = _rows(
             lambda index, t: (

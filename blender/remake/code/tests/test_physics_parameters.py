@@ -282,7 +282,11 @@ class PhysicsParameterTests(unittest.TestCase):
             "hidden_parameters": [
                 {"name": "a", "unit": "1", "valid_range": [0.0, 2.0]},
                 {"name": "b", "unit": "1", "valid_range": [10.0, 20.0]},
-            ]
+            ],
+            "anchor_tuples": [
+                {"id": "low", "a": 0.5, "b": 12.0},
+                {"id": "high", "a": 1.5, "b": 18.0},
+            ],
         }
         fit = {
             "parameter_estimates": {"a": 1.5, "b": None},
@@ -293,6 +297,38 @@ class PhysicsParameterTests(unittest.TestCase):
         self.assertEqual(metrics["parameters"]["b"]["scoring_normalized_absolute_error"], 1.0)
         self.assertAlmostEqual(metrics["experiment_nmae"], 0.625)
         self.assertAlmostEqual(metrics["experiment_score_0_100"], 37.5)
+        self.assertEqual(metrics["parameters"]["a"]["benchmark_target_range"], [0.5, 1.5])
+        self.assertAlmostEqual(
+            metrics["parameters"]["a"]["benchmark_span_normalized_absolute_error"],
+            0.5,
+        )
+        self.assertEqual(metrics["parameters"]["a"]["target_range_status"], "in_range")
+        self.assertEqual(metrics["parameters"]["b"]["target_range_status"], "not_estimated")
+
+    def test_scoring_retains_large_out_of_target_range_estimate(self) -> None:
+        spec = {
+            "hidden_parameters": [
+                {"name": "gravity_g", "unit": "m/s^2", "valid_range": [2.0, 14.7]},
+            ],
+            "anchor_tuples": [
+                {"id": "g2", "gravity_g": 2.0},
+                {"id": "g9", "gravity_g": 9.81},
+                {"id": "g14", "gravity_g": 14.7},
+            ],
+        }
+        fit = {
+            "parameter_estimates": {"gravity_g": 100.0},
+            "parameter_observed": {"gravity_g": True},
+        }
+        metrics = score_parameter_fit(fit, spec, {"gravity_g": 9.81})
+        gravity = metrics["parameters"]["gravity_g"]
+
+        self.assertEqual(gravity["estimate"], 100.0)
+        self.assertAlmostEqual(gravity["absolute_error"], 90.19)
+        self.assertAlmostEqual(gravity["bnae_aux"], 90.19 / 12.7)
+        self.assertFalse(gravity["in_target_range"])
+        self.assertEqual(gravity["target_range_status"], "out_of_range")
+        self.assertEqual(metrics["out_of_target_range_count"], 1)
 
     def test_reconstruction_rejected_frames_do_not_enter_fit(self) -> None:
         t = np.arange(0.0, 2.0 + 1e-9, 1.0 / 16.0)

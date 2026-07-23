@@ -5,10 +5,11 @@ enough to be consumed by the same inverse-physics code as a calibrated 2-D
 track?  It never compares against the requested parameter and therefore never
 assigns a video-model failure grade.  A rejected track is measurement ``X``.
 
-The frozen Blender experiments move either along one world axis or in the
-world X-Z plane.  After camera compensation and metric alignment, motion away
-from that expected manifold is treated as reconstruction error unless the
-benchmark definition explicitly allows it.
+The frozen Blender experiments are planar.  Physics is fitted in the world
+X-Z motion plane; reconstructed world Y is the camera-depth direction and is
+retained only as diagnostic evidence.  It is deliberately excluded from
+motion range, continuity, and off-manifold decisions so monocular depth noise
+cannot invalidate an otherwise usable planar trajectory.
 """
 
 from __future__ import annotations
@@ -20,8 +21,10 @@ from typing import Any
 import numpy as np
 
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
 DYNAMIC_ROUTE = "spatialtrackerv2_dynamic"
+PHYSICS_PLANE_AXES = ("x", "z")
+IGNORED_DEPTH_AXIS = "y"
 
 # This mapping follows the frozen Blender apparatus and the coordinate columns
 # consumed by physics_parameters.py.  It is deliberately independent of the
@@ -44,8 +47,9 @@ EXPERIMENT_MOTION_MANIFOLDS: dict[str, dict[str, Any]] = {
 
 
 # These are intentionally permissive evidence thresholds.  Their purpose is to
-# exclude plainly unstable depth reconstruction, not to demand a perfect
-# trajectory before the physical model is allowed to explain it.
+# exclude plainly unstable planar reconstruction, not to demand a perfect
+# trajectory before the physical model is allowed to explain it.  Depth Y is
+# retained as a warning-only diagnostic.
 DEFAULT_THRESHOLDS: dict[str, float | bool] = {
     "minimum_direct_points": 12,
     "minimum_valid_fraction": 0.50,
@@ -223,6 +227,8 @@ def assess_dynamic_3d_trajectory(
     if direct_count >= 2:
         times = samples[:, 0]
         xyz = samples[:, 1:]
+        planar_indices = [0, 2]
+        planar = xyz[:, planar_indices]
         time_span = float(times[-1] - times[0])
         deltas_t = np.diff(times)
         positive_dt = deltas_t[deltas_t > 1e-9]
@@ -245,6 +251,9 @@ def assess_dynamic_3d_trajectory(
                 "maximum_missing_gap_s": maximum_missing_gap,
                 "robust_axis_ranges_m": spans,
                 "axis_variances_m2": variances,
+                "physics_projection_axes": list(PHYSICS_PLANE_AXES),
+                "ignored_depth_axis": IGNORED_DEPTH_AXIS,
+                "depth_axis_range_m_diagnostic_only": spans[IGNORED_DEPTH_AXIS],
             }
         )
         if time_span < float(limits["minimum_time_span_s"]):
@@ -254,11 +263,14 @@ def assess_dynamic_3d_trajectory(
 
         if manifold is not None:
             expected_axes = tuple(str(axis) for axis in manifold["axes"])
-            off_axes = tuple(axis for axis in ("x", "y", "z") if axis not in expected_axes)
+            off_axes = tuple(
+                axis for axis in PHYSICS_PLANE_AXES if axis not in expected_axes
+            )
             main_range = math.sqrt(sum(spans[axis] ** 2 for axis in expected_axes))
             off_range = math.sqrt(sum(spans[axis] ** 2 for axis in off_axes))
             off_ratio = off_range / max(main_range, 1e-12)
-            total_variance = sum(variances.values())
+            depth_ratio = spans[IGNORED_DEPTH_AXIS] / max(main_range, 1e-12)
+            total_variance = sum(variances[axis] for axis in PHYSICS_PLANE_AXES)
             expected_variance_fraction = (
                 sum(variances[axis] for axis in expected_axes) / total_variance
                 if total_variance > 1e-12
@@ -268,12 +280,16 @@ def assess_dynamic_3d_trajectory(
                 {
                     "expected_manifold_kind": manifold["kind"],
                     "expected_motion_axes": list(expected_axes),
+                    "off_manifold_planar_axes": list(off_axes),
                     "main_motion_range_m": main_range,
                     "off_manifold_range_m": off_range,
                     "off_manifold_range_ratio": off_ratio,
+                    "ignored_depth_range_ratio": depth_ratio,
                     "expected_variance_fraction": expected_variance_fraction,
                 }
             )
+            if depth_ratio > float(limits["maximum_plane_off_manifold_range_ratio"]):
+                metrics["depth_consistency_warning"] = "W_DEPTH_AXIS_UNSTABLE_IGNORED"
             if main_range < float(limits["minimum_main_motion_range_m"]):
                 reasons.append("X_INSUFFICIENT_MOTION_RANGE")
             ratio_key = (
@@ -292,7 +308,7 @@ def assess_dynamic_3d_trajectory(
                 reasons.append("X_EXPECTED_MOTION_NOT_DOMINANT")
 
             if len(positive_dt) and main_range > 1e-12:
-                step = np.linalg.norm(np.diff(xyz, axis=0), axis=1)
+                step = np.linalg.norm(np.diff(planar, axis=0), axis=1)
                 normalized = (step / main_range) * (median_dt / np.maximum(deltas_t, 1e-12))
                 jump_q95 = float(np.quantile(normalized, 0.95))
                 jump_max = float(np.max(normalized))
@@ -322,10 +338,19 @@ def assess_dynamic_3d_trajectory(
         "experiment_id": str(experiment_id),
         "expected_geometry": None if manifold is None else dict(manifold),
         "reason_codes": reasons,
+        "warning_codes": (
+            [str(metrics["depth_consistency_warning"])]
+            if metrics.get("depth_consistency_warning")
+            else []
+        ),
         "metrics": metrics,
         "thresholds": limits,
         "target_parameters_used": False,
-        "scope_note": "This is a target-independent evidence-usability gate, not a video-model failure grade.",
+        "scope_note": (
+            "This is a target-independent evidence-usability gate, not a "
+            "video-model failure grade. Physics uses the X-Z projection; "
+            "world Y depth is diagnostic only."
+        ),
     }
 
 
@@ -425,6 +450,8 @@ __all__ = [
     "DEFAULT_THRESHOLDS",
     "DYNAMIC_ROUTE",
     "EXPERIMENT_MOTION_MANIFOLDS",
+    "IGNORED_DEPTH_AXIS",
+    "PHYSICS_PLANE_AXES",
     "WORLD_AXIS_COORDINATE_FRAMES",
     "assess_dynamic_3d_trajectory",
     "finalize_dynamic_3d_inclusion",

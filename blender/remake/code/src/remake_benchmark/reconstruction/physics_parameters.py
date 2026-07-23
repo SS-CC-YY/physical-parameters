@@ -1986,6 +1986,9 @@ def fit_physics_parameters(experiment_id: str, trajectory: Sequence[Mapping[str,
         "metric_point_count": int(len(t)),
         "source_frame_indices": [int(value) for value in source_frames],
         "interpolated_points_excluded": True,
+        "coordinate_axes_used": ["x_m", "z_m"],
+        "motion_plane": "blender_world_xz",
+        "ignored_diagnostic_axis": "y_m",
     }
     segmentation = result.get("segmentation")
     if isinstance(segmentation, dict):
@@ -2008,6 +2011,37 @@ def fit_physics_parameters(experiment_id: str, trajectory: Sequence[Mapping[str,
     return result
 
 
+def _benchmark_target_range(
+    experiment_spec: Mapping[str, Any],
+    parameter: Mapping[str, Any],
+) -> tuple[float, float, str]:
+    """Return the pre-registered target sweep used only as a reporting scale.
+
+    The generated video is never constrained to this interval.  Estimates
+    outside the interval are retained and explicitly reported as out of range.
+    ``valid_range`` is a compatibility fallback for synthetic/unit-test specs
+    that do not contain the frozen anchor tuples.
+    """
+
+    name = str(parameter["name"])
+    anchor_values: list[float] = []
+    for anchor in experiment_spec.get("anchor_tuples", []):
+        if not isinstance(anchor, Mapping) or name not in anchor:
+            continue
+        try:
+            value = float(anchor[name])
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(value):
+            anchor_values.append(value)
+    unique = sorted(set(anchor_values))
+    if len(unique) >= 2 and unique[-1] - unique[0] > 1e-12:
+        return unique[0], unique[-1], "anchor_target_sweep"
+
+    lower, upper = (float(value) for value in parameter["valid_range"])
+    return lower, upper, "valid_range_fallback"
+
+
 def score_parameter_fit(
     fit: Mapping[str, Any],
     experiment_spec: Mapping[str, Any],
@@ -2015,9 +2049,10 @@ def score_parameter_fit(
 ) -> dict[str, Any]:
     """Score a completed fit against its registry tuple.
 
-    The primary error is the frozen range-normalized absolute error (NAE).
-    Missing estimates receive scoring NAE=1 and score=0, while their raw NAE
-    remains null.  Raw estimates are never clipped to the valid range.
+    The legacy valid-range NAE fields are retained for compatibility.  The
+    simple paper-facing contract adds target, estimate, absolute error,
+    pre-registered target-sweep range status, and an auxiliary benchmark-span
+    NAE.  Raw estimates are never clipped to either interval.
     """
 
     estimates = fit.get("parameter_estimates", {})
@@ -2025,9 +2060,16 @@ def score_parameter_fit(
     metrics: dict[str, dict[str, Any]] = {}
     scoring_naes: list[float] = []
     raw_naes: list[float] = []
+    benchmark_span_naes: list[float] = []
+    out_of_target_range_count = 0
     for parameter in experiment_spec.get("hidden_parameters", []):
         name = str(parameter["name"])
         lower, upper = (float(value) for value in parameter["valid_range"])
+        target_lower, target_upper, target_range_source = _benchmark_target_range(
+            experiment_spec,
+            parameter,
+        )
+        target_span = target_upper - target_lower
         target = float(target_parameters[name])
         estimate_value = estimates.get(name)
         is_observed = bool(observed.get(name, estimate_value is not None)) and estimate_value is not None
@@ -2036,23 +2078,44 @@ def score_parameter_fit(
             absolute_error = abs(estimate - target)
             relative_error = absolute_error / max(abs(target), 1e-12)
             nae = absolute_error / (upper - lower)
+            benchmark_span_nae = (
+                absolute_error / target_span if target_span > 1e-12 else None
+            )
+            in_target_range = target_lower <= estimate <= target_upper
+            target_range_status = "in_range" if in_target_range else "out_of_range"
+            if not in_target_range:
+                out_of_target_range_count += 1
             scoring_nae = nae
             score = 100.0 * max(0.0, 1.0 - nae)
             raw_naes.append(nae)
+            if benchmark_span_nae is not None:
+                benchmark_span_naes.append(benchmark_span_nae)
         else:
             estimate = None
             absolute_error = relative_error = nae = None
+            benchmark_span_nae = None
+            in_target_range = None
+            target_range_status = "not_estimated"
             scoring_nae = 1.0
             score = 0.0
         scoring_naes.append(scoring_nae)
         metrics[name] = {
             "unit": parameter.get("unit"),
             "valid_range": [lower, upper],
+            "benchmark_target_range": [target_lower, target_upper],
+            "benchmark_target_span": target_span,
+            "benchmark_target_range_source": target_range_source,
             "gt": target,
+            "target": target,
             "estimate_raw": estimate,
+            "estimate": estimate,
             "observed": is_observed,
             "absolute_error": absolute_error,
             "relative_error": relative_error,
+            "in_target_range": in_target_range,
+            "target_range_status": target_range_status,
+            "benchmark_span_normalized_absolute_error": benchmark_span_nae,
+            "bnae_aux": benchmark_span_nae,
             "normalized_absolute_error": nae,
             "scoring_normalized_absolute_error": scoring_nae,
             "score_0_100": score,
@@ -2063,9 +2126,18 @@ def score_parameter_fit(
         "experiment_nmae": experiment_nmae,
         "experiment_score_0_100": None if experiment_nmae is None else 100.0 * max(0.0, 1.0 - experiment_nmae),
         "valid_only_nmae": float(np.mean(raw_naes)) if raw_naes else None,
+        "valid_only_benchmark_span_nmae": (
+            float(np.mean(benchmark_span_naes)) if benchmark_span_naes else None
+        ),
+        "out_of_target_range_count": int(out_of_target_range_count),
         "fit_complete": bool(metrics) and all(item["observed"] for item in metrics.values()),
         "missing_parameter_count": int(sum(not item["observed"] for item in metrics.values())),
         "metric_definition": "NAE=abs(estimate-gt)/(valid_max-valid_min); score=100*max(0,1-NAE)",
+        "simple_metric_definition": (
+            "primary fields: target, estimate, absolute_error, trajectory_R2, "
+            "target_range_status; auxiliary BNAE=absolute_error/"
+            "(max_registered_target-min_registered_target)"
+        ),
     }
 
 
